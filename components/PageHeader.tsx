@@ -1,0 +1,249 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import type { PageFull, PageNode, SpaceWithPages } from "@/lib/types";
+import type { PresenceUser, SaveStatus } from "@/components/CollaborativeEditor";
+
+function relativeTime(iso: string): string {
+  const diffSec = Math.max(
+    0,
+    Math.round((Date.now() - new Date(iso).getTime()) / 1000)
+  );
+  if (diffSec < 60) return `${diffSec}초 전`;
+  const min = Math.round(diffSec / 60);
+  if (min < 60) return `${min}분 전`;
+  const hr = Math.round(min / 60);
+  if (hr < 24) return `${hr}시간 전`;
+  const day = Math.round(hr / 24);
+  return `${day}일 전`;
+}
+
+function formatDateTime(iso: string): string {
+  const d = new Date(iso);
+  const pad = (n: number) => n.toString().padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(
+    d.getHours()
+  )}:${pad(d.getMinutes())}`;
+}
+
+function buildBreadcrumb(
+  page: PageFull,
+  pages: PageNode[]
+): { id: string; title: string }[] {
+  const byId = new Map(pages.map((p) => [p.id, p]));
+  const chain: { id: string; title: string }[] = [];
+  let cursor: PageNode | undefined = byId.get(page.id);
+  while (cursor) {
+    chain.unshift({ id: cursor.id, title: cursor.title });
+    cursor = cursor.parentId ? byId.get(cursor.parentId) : undefined;
+  }
+  return chain;
+}
+
+type Props = {
+  page: PageFull;
+  space: SpaceWithPages | null;
+  saveStatus: SaveStatus;
+  presence: PresenceUser[];
+  editMode: boolean;
+  onEdit: () => void;
+  onDelete: () => void;
+  onSelectAncestor: (id: string) => void;
+  onTitleChange: (title: string) => void;
+};
+
+export default function PageHeader({
+  page,
+  space,
+  saveStatus,
+  presence,
+  editMode,
+  onEdit,
+  onDelete,
+  onSelectAncestor,
+  onTitleChange,
+}: Props) {
+  const crumbs = space ? buildBreadcrumb(page, space.pages) : [];
+  const ancestors = crumbs.slice(0, -1);
+  const [title, setTitle] = useState(page.title);
+
+  useEffect(() => {
+    setTitle(page.title);
+  }, [page.id, page.title]);
+
+  const commitTitle = () => {
+    const next = title.trim();
+    if (next && next !== page.title) onTitleChange(next);
+    else setTitle(page.title);
+  };
+
+  return (
+    <div className="mb-4">
+      <nav className="text-[12px] text-[#6b778c] flex flex-wrap items-center gap-1">
+        {space && <span>{space.name}</span>}
+        {ancestors.map((c) => (
+          <span key={c.id} className="flex items-center gap-1">
+            <span>/</span>
+            <button
+              onClick={() => onSelectAncestor(c.id)}
+              className="hover:text-[#0052cc] hover:underline"
+            >
+              {c.title}
+            </button>
+          </span>
+        ))}
+        <span>/</span>
+        <span className="text-[#172b4d] font-medium">{page.title}</span>
+      </nav>
+
+      <div className="mt-3 flex items-start gap-4">
+        <input
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          onBlur={commitTitle}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              (e.target as HTMLInputElement).blur();
+            }
+          }}
+          placeholder="제목 없음"
+          className="flex-1 text-[32px] leading-tight font-bold text-[#172b4d] bg-transparent outline-none border-b border-transparent focus:border-[#0052cc] py-1"
+        />
+        <div className="flex items-center gap-2 pt-3 shrink-0">
+          <PresenceStrip users={presence} />
+          <SaveStatusBadge status={saveStatus} />
+          {editMode ? (
+            <button
+              onClick={onEdit}
+              className="inline-flex items-center gap-1 px-3 py-1 rounded text-[12px] bg-[#0052cc] text-white hover:bg-[#0747a6]"
+            >
+              완료
+            </button>
+          ) : (
+            <ActionButton icon="✏️" label="편집 (E)" onClick={onEdit} />
+          )}
+          <ActionButton icon="💬" label="댓글" disabled />
+          <ActionButton icon="⭐" label="저장" disabled />
+          <ActionButton icon="👁️" label="지켜보기" disabled />
+          <ActionButton icon="🔗" label="공유" disabled />
+          <MoreMenu onDelete={onDelete} />
+        </div>
+      </div>
+
+      <div className="mt-2 flex items-center gap-2 text-[12px] text-[#6b778c]">
+        <div className="w-5 h-5 rounded-full bg-[#0052cc] text-white flex items-center justify-center text-[10px] font-semibold">
+          U
+        </div>
+        <span>작성자: Unknown</span>
+        <span>|</span>
+        <span>최근 수정: {formatDateTime(page.updatedAt)}</span>
+        <span>|</span>
+        <span>{relativeTime(page.updatedAt)}</span>
+      </div>
+    </div>
+  );
+}
+
+function PresenceStrip({ users }: { users: PresenceUser[] }) {
+  if (!users.length) return null;
+  const visible = users.slice(0, 5);
+  const rest = users.length - visible.length;
+  return (
+    <div className="flex items-center -space-x-1.5">
+      {visible.map((u) => (
+        <div
+          key={u.clientId}
+          title={u.self ? `${u.name} (나)` : u.name}
+          className="w-6 h-6 rounded-full border-2 border-white flex items-center justify-center text-[10px] font-semibold text-white shadow-sm"
+          style={{ background: u.color }}
+        >
+          {u.name.slice(0, 1)}
+        </div>
+      ))}
+      {rest > 0 && (
+        <div className="w-6 h-6 rounded-full border-2 border-white bg-[#6b778c] text-white text-[10px] font-semibold flex items-center justify-center">
+          +{rest}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SaveStatusBadge({ status }: { status: SaveStatus }) {
+  const { text, cls } = (() => {
+    switch (status) {
+      case "saving":
+        return { text: "저장 중...", cls: "text-[#6b778c]" };
+      case "saved":
+        return { text: "저장됨", cls: "text-[#006644]" };
+      case "error":
+        return { text: "저장 실패", cls: "text-[#de350b]" };
+      default:
+        return { text: "", cls: "" };
+    }
+  })();
+  if (!text) return null;
+  return <span className={`text-[12px] ${cls}`}>{text}</span>;
+}
+
+function ActionButton({
+  icon,
+  label,
+  onClick,
+  disabled,
+}: {
+  icon: string;
+  label: string;
+  onClick?: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={`inline-flex items-center gap-1 px-2 py-1 rounded text-[12px] ${
+        disabled
+          ? "text-[#a5adba] cursor-not-allowed"
+          : "text-[#42526e] hover:bg-[#ebecf0]"
+      }`}
+    >
+      <span>{icon}</span>
+      <span>{label}</span>
+    </button>
+  );
+}
+
+function MoreMenu({ onDelete }: { onDelete: () => void }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="inline-flex items-center justify-center w-7 h-7 rounded text-[#42526e] hover:bg-[#ebecf0]"
+        aria-label="더 보기"
+      >
+        ⋯
+      </button>
+      {open && (
+        <>
+          <div
+            className="fixed inset-0 z-10"
+            onClick={() => setOpen(false)}
+          />
+          <div className="absolute right-0 mt-1 w-44 bg-white border border-[#dfe1e6] rounded shadow-lg z-20 py-1 text-sm">
+            <button
+              className="w-full text-left px-3 py-1.5 text-[#de350b] hover:bg-[#ffebe6]"
+              onClick={() => {
+                setOpen(false);
+                onDelete();
+              }}
+            >
+              페이지 삭제
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}

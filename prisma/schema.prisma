@@ -1,0 +1,32 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Space {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+  pages       Page[]
+}
+
+model Page {
+  id        String   @id @default(cuid())
+  title     String
+  content   String   @default("")
+  spaceId   String
+  space     Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  parentId  String?
+  parent    Page?    @relation("PageTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children  Page[]   @relation("PageTree")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([spaceId])
+  @@index([parentId])
+}

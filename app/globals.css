@@ -1,0 +1,129 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --c-primary: #0052cc;
+  --c-primary-hover: #0747a6;
+  --c-navy: #172b4d;
+  --c-text: #172b4d;
+  --c-text-muted: #6b778c;
+  --c-border: #dfe1e6;
+  --c-sidebar-bg: #f4f5f7;
+  --c-hover-bg: #ebecf0;
+  --c-active-bg: #deebff;
+  --c-active-text: #0052cc;
+  --c-success-bg: #e3fcef;
+  --c-success-text: #006644;
+}
+
+html,
+body,
+#__next {
+  height: 100%;
+}
+
+body {
+  color: var(--c-text);
+  background: #ffffff;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue",
+    "Apple SD Gothic Neo", "Noto Sans KR", Arial, sans-serif;
+  font-size: 14px;
+}
+
+.w-md-editor {
+  box-shadow: none !important;
+}
+
+/* Confluence-style article rendering */
+.cf-article {
+  color: var(--c-text);
+  font-size: 16px;
+  line-height: 1.65;
+}
+.cf-article h1 {
+  font-size: 28px;
+  font-weight: 700;
+  margin: 1.4em 0 0.6em;
+  color: var(--c-navy);
+}
+.cf-article h2 {
+  font-size: 22px;
+  font-weight: 700;
+  margin: 1.3em 0 0.5em;
+  color: var(--c-navy);
+}
+.cf-article h3 {
+  font-size: 18px;
+  font-weight: 600;
+  margin: 1.2em 0 0.4em;
+  color: var(--c-navy);
+}
+.cf-article p {
+  margin: 0.6em 0;
+}
+.cf-article a {
+  color: var(--c-primary);
+  text-decoration: none;
+}
+.cf-article a:hover {
+  text-decoration: underline;
+}
+.cf-article ul,
+.cf-article ol {
+  padding-left: 1.5em;
+  margin: 0.6em 0;
+}
+.cf-article ul {
+  list-style: disc;
+}
+.cf-article ol {
+  list-style: decimal;
+}
+.cf-article li {
+  margin: 0.2em 0;
+}
+.cf-article code {
+  background: #f4f5f7;
+  border: 1px solid #dfe1e6;
+  border-radius: 3px;
+  padding: 0.1em 0.35em;
+  font-size: 0.92em;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+}
+.cf-article pre {
+  background: #f4f5f7;
+  border: 1px solid #dfe1e6;
+  border-radius: 4px;
+  padding: 12px 14px;
+  overflow-x: auto;
+  margin: 0.8em 0;
+}
+.cf-article pre code {
+  background: transparent;
+  border: 0;
+  padding: 0;
+}
+.cf-article blockquote {
+  border-left: 3px solid #dfe1e6;
+  padding-left: 12px;
+  color: var(--c-text-muted);
+  margin: 0.8em 0;
+}
+.cf-article hr {
+  border: 0;
+  border-top: 1px solid var(--c-border);
+  margin: 1.4em 0;
+}
+.cf-article table {
+  border-collapse: collapse;
+  margin: 0.8em 0;
+}
+.cf-article th,
+.cf-article td {
+  border: 1px solid var(--c-border);
+  padding: 6px 10px;
+}
+.cf-article th {
+  background: #f4f5f7;
+}
