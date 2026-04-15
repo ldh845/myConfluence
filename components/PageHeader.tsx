@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { PageFull, PageNode, SpaceWithPages } from "@/lib/types";
 import type { PresenceUser, SaveStatus } from "@/components/CollaborativeEditor";
 
@@ -45,11 +45,12 @@ type Props = {
   space: SpaceWithPages | null;
   saveStatus: SaveStatus;
   presence: PresenceUser[];
-  editMode: boolean;
-  onEdit: () => void;
+  titleEditing: boolean;
+  onStartTitleEdit: () => void;
+  onCancelTitleEdit: () => void;
+  onTitleChange: (title: string) => void;
   onDelete: () => void;
   onSelectAncestor: (id: string) => void;
-  onTitleChange: (title: string) => void;
 };
 
 export default function PageHeader({
@@ -57,24 +58,45 @@ export default function PageHeader({
   space,
   saveStatus,
   presence,
-  editMode,
-  onEdit,
+  titleEditing,
+  onStartTitleEdit,
+  onCancelTitleEdit,
+  onTitleChange,
   onDelete,
   onSelectAncestor,
-  onTitleChange,
 }: Props) {
   const crumbs = space ? buildBreadcrumb(page, space.pages) : [];
   const ancestors = crumbs.slice(0, -1);
-  const [title, setTitle] = useState(page.title);
+  const [draft, setDraft] = useState(page.title);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    setTitle(page.title);
+    setDraft(page.title);
   }, [page.id, page.title]);
 
-  const commitTitle = () => {
-    const next = title.trim();
-    if (next && next !== page.title) onTitleChange(next);
-    else setTitle(page.title);
+  useEffect(() => {
+    if (titleEditing) {
+      setDraft(page.title);
+      requestAnimationFrame(() => {
+        inputRef.current?.focus();
+        inputRef.current?.select();
+      });
+    }
+  }, [titleEditing, page.title]);
+
+  const commit = () => {
+    const next = draft.trim();
+    if (next && next !== page.title) {
+      onTitleChange(next);
+    } else {
+      setDraft(page.title);
+      onCancelTitleEdit();
+    }
+  };
+
+  const cancel = () => {
+    setDraft(page.title);
+    onCancelTitleEdit();
   };
 
   return (
@@ -97,32 +119,38 @@ export default function PageHeader({
       </nav>
 
       <div className="mt-3 flex items-start gap-4">
-        <input
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          onBlur={commitTitle}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              (e.target as HTMLInputElement).blur();
-            }
-          }}
-          placeholder="제목 없음"
-          className="flex-1 text-[32px] leading-tight font-bold text-[#172b4d] bg-transparent outline-none border-b border-transparent focus:border-[#0052cc] py-1"
-        />
+        {titleEditing ? (
+          <input
+            ref={inputRef}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={commit}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                commit();
+              } else if (e.key === "Escape") {
+                e.preventDefault();
+                cancel();
+              }
+            }}
+            placeholder="페이지 제목을 입력하세요"
+            className="flex-1 text-[32px] leading-tight font-bold text-[#172b4d] bg-white outline-none border-2 border-[#0052cc] rounded px-2 py-1 ring-2 ring-[#deebff]"
+          />
+        ) : (
+          <h1 className="flex-1 text-[32px] leading-tight font-bold text-[#172b4d] py-1 px-0.5">
+            {page.title}
+          </h1>
+        )}
         <div className="flex items-center gap-2 pt-3 shrink-0">
           <PresenceStrip users={presence} />
           <SaveStatusBadge status={saveStatus} />
-          {editMode ? (
-            <button
-              onClick={onEdit}
-              className="inline-flex items-center gap-1 px-3 py-1 rounded text-[12px] bg-[#0052cc] text-white hover:bg-[#0747a6]"
-            >
-              완료
-            </button>
-          ) : (
-            <ActionButton icon="✏️" label="편집 (E)" onClick={onEdit} />
-          )}
+          <ActionButton
+            icon="✏️"
+            label="편집 (E)"
+            onClick={onStartTitleEdit}
+            disabled={titleEditing}
+          />
           <ActionButton icon="💬" label="댓글" disabled />
           <ActionButton icon="⭐" label="저장" disabled />
           <ActionButton icon="👁️" label="지켜보기" disabled />
@@ -140,6 +168,14 @@ export default function PageHeader({
         <span>최근 수정: {formatDateTime(page.updatedAt)}</span>
         <span>|</span>
         <span>{relativeTime(page.updatedAt)}</span>
+        {titleEditing && (
+          <>
+            <span>|</span>
+            <span className="text-[#0052cc]">
+              제목 편집 중 — Enter 저장 / Esc 취소
+            </span>
+          </>
+        )}
       </div>
     </div>
   );

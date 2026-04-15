@@ -28,7 +28,6 @@ export type SaveStatus = "idle" | "saving" | "saved" | "error";
 type Props = {
   pageId: string;
   initialMarkdown: string;
-  editable: boolean;
   onSaveStatusChange?: (status: SaveStatus) => void;
   onPresenceChange?: (users: PresenceUser[]) => void;
 };
@@ -57,7 +56,6 @@ const WS_URL = resolveWsUrl();
 export default function CollaborativeEditor({
   pageId,
   initialMarkdown,
-  editable,
   onSaveStatusChange,
   onPresenceChange,
 }: Props) {
@@ -83,7 +81,7 @@ export default function CollaborativeEditor({
 
   const editor = useEditor(
     {
-      editable,
+      editable: true,
       extensions: instance
         ? [
             StarterKit.configure({ history: false }),
@@ -116,12 +114,6 @@ export default function CollaborativeEditor({
     },
     [instance, identity.name, identity.color]
   );
-
-  // Keep editable in sync without recreating the editor
-  useEffect(() => {
-    if (!editor) return;
-    editor.setEditable(editable);
-  }, [editor, editable]);
 
   // Seed initial content from DB once, only if the shared doc is empty
   const seededRef = useRef<string | null>(null);
@@ -221,7 +213,7 @@ export default function CollaborativeEditor({
         <div className="text-sm text-[#6b778c]">에디터 불러오는 중...</div>
       ) : (
         <>
-          {editable && <EditorToolbar editor={editor} />}
+          <EditorToolbar editor={editor} />
           <EditorContentWithCursorStyles editor={editor} />
         </>
       )}

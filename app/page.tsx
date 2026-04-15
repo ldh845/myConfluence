@@ -7,6 +7,7 @@ import Sidebar from "@/components/Sidebar";
 import ChatPanel from "@/components/ChatPanel";
 import PageHeader from "@/components/PageHeader";
 import WelcomeBanner from "@/components/WelcomeBanner";
+import DiagramList from "@/components/DiagramList";
 import type {
   PresenceUser,
   SaveStatus,
@@ -27,7 +28,7 @@ export default function HomePage() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [presence, setPresence] = useState<PresenceUser[]>([]);
-  const [editMode, setEditMode] = useState(false);
+  const [titleEditing, setTitleEditing] = useState(false);
 
   const loadSpaces = useCallback(async () => {
     const res = await fetch("/api/spaces");
@@ -42,7 +43,7 @@ export default function HomePage() {
   }, [loadSpaces]);
 
   useEffect(() => {
-    setEditMode(false);
+    setTitleEditing(false);
     if (!selectedPageId) {
       setCurrentPage(null);
       return;
@@ -68,13 +69,13 @@ export default function HomePage() {
         t?.isContentEditable
       )
         return;
-      if (!currentPage) return;
+      if (!currentPage || titleEditing) return;
       e.preventDefault();
-      setEditMode((v) => !v);
+      setTitleEditing(true);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [currentPage]);
+  }, [currentPage, titleEditing]);
 
   const activeSpace = useMemo<SpaceWithPages | null>(
     () => spaces.find((s) => s.id === selectedSpaceId) ?? spaces[0] ?? null,
@@ -156,21 +157,7 @@ export default function HomePage() {
     } else {
       setSaveStatus("error");
     }
-  };
-
-  const toggleEditMode = () => {
-    setEditMode((prev) => {
-      const next = !prev;
-      if (next) {
-        requestAnimationFrame(() => {
-          const el = document.querySelector<HTMLElement>(".ProseMirror");
-          if (!el) return;
-          el.scrollIntoView({ behavior: "smooth", block: "center" });
-          el.focus({ preventScroll: true });
-        });
-      }
-      return next;
-    });
+    setTitleEditing(false);
   };
 
   const confirmDeleteCurrent = () => {
@@ -235,21 +222,22 @@ export default function HomePage() {
                   space={activeSpace}
                   saveStatus={saveStatus}
                   presence={presence}
-                  editMode={editMode}
-                  onEdit={toggleEditMode}
+                  titleEditing={titleEditing}
+                  onStartTitleEdit={() => setTitleEditing(true)}
+                  onCancelTitleEdit={() => setTitleEditing(false)}
+                  onTitleChange={handleTitleChange}
                   onDelete={confirmDeleteCurrent}
                   onSelectAncestor={setSelectedPageId}
-                  onTitleChange={handleTitleChange}
                 />
                 <hr className="my-4 border-[#dfe1e6]" />
                 <CollaborativeEditor
                   key={currentPage.id}
                   pageId={currentPage.id}
                   initialMarkdown={currentPage.content}
-                  editable={editMode}
                   onSaveStatusChange={setSaveStatus}
                   onPresenceChange={setPresence}
                 />
+                <DiagramList pageId={currentPage.id} />
                 <div className="mt-10 flex items-center justify-between border-t border-[#dfe1e6] pt-4">
                   <div className="flex items-center gap-2 text-[13px] text-[#6b778c]">
                     <button className="hover:text-[#0052cc]">👍</button>

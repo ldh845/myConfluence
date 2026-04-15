@@ -24,9 +24,23 @@ model Page {
   parentId  String?
   parent    Page?    @relation("PageTree", fields: [parentId], references: [id], onDelete: Cascade)
   children  Page[]   @relation("PageTree")
+  diagrams  Diagram[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([spaceId])
   @@index([parentId])
+}
+
+model Diagram {
+  id        String   @id @default(cuid())
+  pageId    String
+  page      Page     @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  title     String   @default("Untitled diagram")
+  data      String   @default("")
+  preview   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([pageId])
 }
