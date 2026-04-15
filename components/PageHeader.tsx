@@ -45,9 +45,8 @@ type Props = {
   space: SpaceWithPages | null;
   saveStatus: SaveStatus;
   presence: PresenceUser[];
-  titleEditing: boolean;
-  onStartTitleEdit: () => void;
-  onCancelTitleEdit: () => void;
+  isBodyEditable: boolean;
+  onToggleEdit: () => void;
   onTitleChange: (title: string) => void;
   onDelete: () => void;
   onSelectAncestor: (id: string) => void;
@@ -58,9 +57,8 @@ export default function PageHeader({
   space,
   saveStatus,
   presence,
-  titleEditing,
-  onStartTitleEdit,
-  onCancelTitleEdit,
+  isBodyEditable,
+  onToggleEdit,
   onTitleChange,
   onDelete,
   onSelectAncestor,
@@ -74,15 +72,15 @@ export default function PageHeader({
     setDraft(page.title);
   }, [page.id, page.title]);
 
+  // When edit mode turns on, pre-select the title for quick rename.
   useEffect(() => {
-    if (titleEditing) {
+    if (isBodyEditable) {
       setDraft(page.title);
       requestAnimationFrame(() => {
-        inputRef.current?.focus();
         inputRef.current?.select();
       });
     }
-  }, [titleEditing, page.title]);
+  }, [isBodyEditable, page.title]);
 
   const commit = () => {
     const next = draft.trim();
@@ -90,13 +88,14 @@ export default function PageHeader({
       onTitleChange(next);
     } else {
       setDraft(page.title);
-      onCancelTitleEdit();
     }
+    // Stay in edit mode; blur the input so further keys don't trap here.
+    inputRef.current?.blur();
   };
 
   const cancel = () => {
     setDraft(page.title);
-    onCancelTitleEdit();
+    inputRef.current?.blur();
   };
 
   return (
@@ -119,7 +118,7 @@ export default function PageHeader({
       </nav>
 
       <div className="mt-3 flex items-start gap-4">
-        {titleEditing ? (
+        {isBodyEditable ? (
           <input
             ref={inputRef}
             value={draft}
@@ -145,12 +144,22 @@ export default function PageHeader({
         <div className="flex items-center gap-2 pt-3 shrink-0">
           <PresenceStrip users={presence} />
           <SaveStatusBadge status={saveStatus} />
-          <ActionButton
-            icon="✏️"
-            label="편집 (E)"
-            onClick={onStartTitleEdit}
-            disabled={titleEditing}
-          />
+          {isBodyEditable && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-[#deebff] text-[#0052cc] text-[11px] font-semibold">
+              ● 편집 중
+            </span>
+          )}
+          <button
+            onClick={onToggleEdit}
+            className={`inline-flex items-center gap-1 px-2 py-1 rounded text-[12px] ${
+              isBodyEditable
+                ? "bg-[#0052cc] text-white hover:bg-[#0747a6]"
+                : "text-[#42526e] hover:bg-[#ebecf0]"
+            }`}
+          >
+            <span>{isBodyEditable ? "✓" : "✏️"}</span>
+            <span>{isBodyEditable ? "완료 (E)" : "편집 (E)"}</span>
+          </button>
           <ActionButton icon="💬" label="댓글" disabled />
           <ActionButton icon="⭐" label="저장" disabled />
           <ActionButton icon="👁️" label="지켜보기" disabled />
@@ -168,11 +177,11 @@ export default function PageHeader({
         <span>최근 수정: {formatDateTime(page.updatedAt)}</span>
         <span>|</span>
         <span>{relativeTime(page.updatedAt)}</span>
-        {titleEditing && (
+        {isBodyEditable && (
           <>
             <span>|</span>
             <span className="text-[#0052cc]">
-              제목 편집 중 — Enter 저장 / Esc 취소
+              편집 모드 — 제목은 Enter로 저장, Esc로 취소 · 본문은 자동 저장
             </span>
           </>
         )}

@@ -28,6 +28,7 @@ export type SaveStatus = "idle" | "saving" | "saved" | "error";
 type Props = {
   pageId: string;
   initialMarkdown: string;
+  editable: boolean;
   onSaveStatusChange?: (status: SaveStatus) => void;
   onPresenceChange?: (users: PresenceUser[]) => void;
 };
@@ -56,6 +57,7 @@ const WS_URL = resolveWsUrl();
 export default function CollaborativeEditor({
   pageId,
   initialMarkdown,
+  editable,
   onSaveStatusChange,
   onPresenceChange,
 }: Props) {
@@ -81,7 +83,7 @@ export default function CollaborativeEditor({
 
   const editor = useEditor(
     {
-      editable: true,
+      editable,
       extensions: instance
         ? [
             StarterKit.configure({ history: false }),
@@ -115,6 +117,13 @@ export default function CollaborativeEditor({
     [instance, identity.name, identity.color]
   );
 
+  // Keep the live editor's editable flag in sync without tearing down
+  // the Yjs WebSocket / awareness pipeline.
+  useEffect(() => {
+    if (!editor) return;
+    editor.setEditable(editable);
+  }, [editor, editable]);
+
   // Seed initial content from DB once, only if the shared doc is empty
   const seededRef = useRef<string | null>(null);
   useEffect(() => {
@@ -144,9 +153,12 @@ export default function CollaborativeEditor({
     return () => provider.off("sync", onSync);
   }, [editor, instance, pageId, initialMarkdown]);
 
-  // Debounced save: client-side, last-writer-wins
+  // Debounced save: client-side, last-writer-wins.
+  // Only active while the body is editable. When the user exits edit mode
+  // the effect cleanup force-flushes any pending debounce so "완료" always
+  // commits the latest change before the UI switches back to read-only.
   useEffect(() => {
-    if (!editor) return;
+    if (!editor || !editable) return;
     let timer: ReturnType<typeof setTimeout> | null = null;
     let latestMd = "";
 
@@ -184,7 +196,7 @@ export default function CollaborativeEditor({
         flush();
       }
     };
-  }, [editor, pageId, onSaveStatusChange]);
+  }, [editor, pageId, editable, onSaveStatusChange]);
 
   // Presence / awareness
   useEffect(() => {
@@ -213,8 +225,16 @@ export default function CollaborativeEditor({
         <div className="text-sm text-[#6b778c]">에디터 불러오는 중...</div>
       ) : (
         <>
-          <EditorToolbar editor={editor} />
-          <EditorContentWithCursorStyles editor={editor} />
+          {editable && <EditorToolbar editor={editor} />}
+          <div
+            className={
+              editable
+                ? "rounded border-l-2 border-[#0052cc] bg-[#f4f8ff]/40 pl-4 py-2 transition-colors"
+                : "pl-4 py-2 transition-colors"
+            }
+          >
+            <EditorContentWithCursorStyles editor={editor} />
+          </div>
         </>
       )}
     </div>
@@ -229,7 +249,15 @@ function EditorContentWithCursorStyles({ editor }: { editor: Editor }) {
           min-height: 320px;
           outline: none;
         }
-        .ProseMirror p.is-editor-empty:first-child::before {
+        .ProseMirror[contenteditable="false"] {
+          caret-color: transparent;
+        }
+        .ProseMirror[contenteditable="false"] p.is-editor-empty:first-child::before {
+          content: "(내용 없음) — '편집 (E)'을 눌러 작성을 시작하세요.";
+          color: #6b778c;
+          font-style: italic;
+        }
+        .ProseMirror[contenteditable="true"] p.is-editor-empty:first-child::before {
           content: "내용을 입력하세요...";
           color: #a5adba;
           float: left;

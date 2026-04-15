@@ -9,6 +9,7 @@ export type DiagramSummary = {
 
 type Props = {
   diagram: DiagramSummary;
+  canDelete: boolean;
   onOpen: () => void;
   onDelete: () => void;
 };
@@ -21,7 +22,12 @@ function formatShort(iso: string): string {
   )}:${pad(d.getMinutes())}`;
 }
 
-export default function DiagramCard({ diagram, onOpen, onDelete }: Props) {
+export default function DiagramCard({
+  diagram,
+  canDelete,
+  onOpen,
+  onDelete,
+}: Props) {
   return (
     <div
       onClick={onOpen}
@@ -47,16 +53,18 @@ export default function DiagramCard({ diagram, onOpen, onDelete }: Props) {
           {formatShort(diagram.updatedAt)}
         </div>
       </div>
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          onDelete();
-        }}
-        aria-label="다이어그램 삭제"
-        className="absolute top-1 right-1 w-6 h-6 rounded bg-white/95 border border-[#dfe1e6] text-[#6b778c] hover:text-[#de350b] opacity-0 group-hover:opacity-100 text-sm leading-none"
-      >
-        ×
-      </button>
+      {canDelete && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete();
+          }}
+          aria-label="다이어그램 삭제"
+          className="absolute top-1 right-1 w-6 h-6 rounded bg-white/95 border border-[#dfe1e6] text-[#6b778c] hover:text-[#de350b] opacity-0 group-hover:opacity-100 text-sm leading-none"
+        >
+          ×
+        </button>
+      )}
     </div>
   );
 }

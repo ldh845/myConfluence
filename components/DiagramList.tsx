@@ -6,7 +6,13 @@ import DiagramEditorModal from "./DiagramEditorModal";
 
 type Diagram = DiagramSummary & { data: string };
 
-export default function DiagramList({ pageId }: { pageId: string }) {
+export default function DiagramList({
+  pageId,
+  editable,
+}: {
+  pageId: string;
+  editable: boolean;
+}) {
   const [items, setItems] = useState<Diagram[]>([]);
   const [editing, setEditing] = useState<Diagram | null>(null);
   const [loading, setLoading] = useState(true);
@@ -84,20 +90,23 @@ export default function DiagramList({ pageId }: { pageId: string }) {
             <span className="text-[#6b778c] font-normal">({items.length})</span>
           )}
         </h3>
-        <button
-          onClick={handleCreate}
-          className="text-xs text-[#0052cc] hover:underline"
-        >
-          + 다이어그램 추가
-        </button>
+        {editable && (
+          <button
+            onClick={handleCreate}
+            className="text-xs text-[#0052cc] hover:underline"
+          >
+            + 다이어그램 추가
+          </button>
+        )}
       </div>
 
       {loading ? (
         <div className="text-xs text-[#6b778c] py-4">불러오는 중...</div>
       ) : items.length === 0 ? (
         <div className="text-xs text-[#6b778c] py-4">
-          이 페이지에 다이어그램이 없습니다. &quot;+ 다이어그램 추가&quot;로
-          만들어보세요.
+          {editable
+            ? '이 페이지에 다이어그램이 없습니다. "+ 다이어그램 추가"로 만들어보세요.'
+            : "이 페이지에 다이어그램이 없습니다. 편집 모드에서 새로 추가할 수 있습니다."}
         </div>
       ) : (
         <div className="grid grid-cols-3 gap-3">
@@ -105,6 +114,7 @@ export default function DiagramList({ pageId }: { pageId: string }) {
             <DiagramCard
               key={d.id}
               diagram={d}
+              canDelete={editable}
               onOpen={() => handleOpen(d)}
               onDelete={() => handleDelete(d)}
             />

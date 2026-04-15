@@ -28,7 +28,7 @@ export default function HomePage() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [presence, setPresence] = useState<PresenceUser[]>([]);
-  const [titleEditing, setTitleEditing] = useState(false);
+  const [isBodyEditable, setIsBodyEditable] = useState(false);
 
   const loadSpaces = useCallback(async () => {
     const res = await fetch("/api/spaces");
@@ -43,7 +43,7 @@ export default function HomePage() {
   }, [loadSpaces]);
 
   useEffect(() => {
-    setTitleEditing(false);
+    setIsBodyEditable(false);
     if (!selectedPageId) {
       setCurrentPage(null);
       return;
@@ -56,26 +56,56 @@ export default function HomePage() {
       });
   }, [selectedPageId]);
 
+  const enterEditMode = useCallback(() => {
+    setIsBodyEditable(true);
+    // Focus the body editor shortly after the editable flag flips so the
+    // caret lands inside ProseMirror.
+    requestAnimationFrame(() => {
+      const el = document.querySelector<HTMLElement>(".ProseMirror");
+      el?.focus({ preventScroll: true });
+    });
+  }, []);
+
+  const exitEditMode = useCallback(() => {
+    // Effect cleanup inside CollaborativeEditor force-flushes any pending
+    // debounced save when `editable` flips to false, so we just flip state.
+    setIsBodyEditable(false);
+  }, []);
+
+  const toggleEditMode = useCallback(() => {
+    if (isBodyEditable) exitEditMode();
+    else enterEditMode();
+  }, [isBodyEditable, enterEditMode, exitEditMode]);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "e" && e.key !== "E") return;
-      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      if (!currentPage) return;
       const t = e.target as HTMLElement | null;
       const tag = t?.tagName;
-      if (
-        tag === "INPUT" ||
-        tag === "TEXTAREA" ||
-        tag === "SELECT" ||
-        t?.isContentEditable
-      )
+      const inInput =
+        tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
+      const inBody = !!t?.isContentEditable;
+
+      if ((e.key === "e" || e.key === "E") && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        // E toggles edit mode unless the user is typing somewhere.
+        if (inInput || inBody) return;
+        e.preventDefault();
+        toggleEditMode();
         return;
-      if (!currentPage || titleEditing) return;
-      e.preventDefault();
-      setTitleEditing(true);
+      }
+
+      if (e.key === "Escape") {
+        // Esc exits edit mode only when focus is inside the body editor.
+        if (inBody && isBodyEditable) {
+          e.preventDefault();
+          (t as HTMLElement | null)?.blur?.();
+          exitEditMode();
+        }
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [currentPage, titleEditing]);
+  }, [currentPage, isBodyEditable, toggleEditMode, exitEditMode]);
 
   const activeSpace = useMemo<SpaceWithPages | null>(
     () => spaces.find((s) => s.id === selectedSpaceId) ?? spaces[0] ?? null,
@@ -157,7 +187,6 @@ export default function HomePage() {
     } else {
       setSaveStatus("error");
     }
-    setTitleEditing(false);
   };
 
   const confirmDeleteCurrent = () => {
@@ -222,9 +251,8 @@ export default function HomePage() {
                   space={activeSpace}
                   saveStatus={saveStatus}
                   presence={presence}
-                  titleEditing={titleEditing}
-                  onStartTitleEdit={() => setTitleEditing(true)}
-                  onCancelTitleEdit={() => setTitleEditing(false)}
+                  isBodyEditable={isBodyEditable}
+                  onToggleEdit={toggleEditMode}
                   onTitleChange={handleTitleChange}
                   onDelete={confirmDeleteCurrent}
                   onSelectAncestor={setSelectedPageId}
@@ -234,10 +262,11 @@ export default function HomePage() {
                   key={currentPage.id}
                   pageId={currentPage.id}
                   initialMarkdown={currentPage.content}
+                  editable={isBodyEditable}
                   onSaveStatusChange={setSaveStatus}
                   onPresenceChange={setPresence}
                 />
-                <DiagramList pageId={currentPage.id} />
+                <DiagramList pageId={currentPage.id} editable={isBodyEditable} />
                 <div className="mt-10 flex items-center justify-between border-t border-[#dfe1e6] pt-4">
                   <div className="flex items-center gap-2 text-[13px] text-[#6b778c]">
                     <button className="hover:text-[#0052cc]">👍</button>
