@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev -H 0.0.0.0 -p 3000",
     "dev:all": "concurrently -n next,ws -c blue,magenta \"npm:dev\" \"npm:ws-server\"",
     "ws-server": "node server/ws-server.js",
     "build": "next build",

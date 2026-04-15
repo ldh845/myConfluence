@@ -33,11 +33,26 @@ type Props = {
   onPresenceChange?: (users: PresenceUser[]) => void;
 };
 
-const WS_URL =
-  (typeof window !== "undefined" &&
-    (window as unknown as { __MYCF_WS_URL__?: string }).__MYCF_WS_URL__) ||
-  process.env.NEXT_PUBLIC_WS_URL ||
-  "ws://localhost:1234";
+function resolveWsUrl(): string {
+  // 1) Runtime override (set on window before app bootstraps)
+  if (
+    typeof window !== "undefined" &&
+    (window as unknown as { __MYCF_WS_URL__?: string }).__MYCF_WS_URL__
+  ) {
+    return (window as unknown as { __MYCF_WS_URL__?: string }).__MYCF_WS_URL__!;
+  }
+  // 2) Build-time env var (highest priority for fixed domains/ports)
+  if (process.env.NEXT_PUBLIC_WS_URL) {
+    return process.env.NEXT_PUBLIC_WS_URL;
+  }
+  // 3) Derive from the hostname the browser used to reach the app,
+  //    so LAN peers hitting http://server-ip:3000 get ws://server-ip:1234.
+  const wsHost =
+    typeof window !== "undefined" ? window.location.hostname : "localhost";
+  return `ws://${wsHost}:1234`;
+}
+
+const WS_URL = resolveWsUrl();
 
 export default function CollaborativeEditor({
   pageId,
