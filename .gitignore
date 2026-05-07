@@ -9,3 +9,12 @@ prisma/dev.db
 prisma/migrations/dev.db*
 .DS_Store
 *.docx
+
+# apps/api (NestJS)
+apps/api/node_modules
+apps/api/.env
+apps/api/dist
+
+# Local-only: Claude Code metadata and internal SRS document
+.claude/
+SRS.md

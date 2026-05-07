@@ -1,0 +1,34 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: docspace_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: docspace
+      POSTGRES_PASSWORD: docspace
+      POSTGRES_DB: docspace
+    ports:
+      - "5432:5432"
+    volumes:
+      - docspace_pgdata:/var/lib/postgresql/data
+    networks:
+      - docspace_net
+
+  redis:
+    image: redis:7-alpine
+    container_name: docspace_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - docspace_redisdata:/data
+    networks:
+      - docspace_net
+
+volumes:
+  docspace_pgdata:
+  docspace_redisdata:
+
+networks:
+  docspace_net:
+    driver: bridge
