@@ -4,7 +4,8 @@ import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import TopNav from "@/components/TopNav";
 import Sidebar from "@/components/Sidebar";
-import ChatPanel from "@/components/ChatPanel";
+// SRS 5.9 검색·AI 사이클에서 재구현 예정 (Cycle 2-5 일시 비활성)
+// import ChatPanel from "@/components/ChatPanel";
 import PageHeader from "@/components/PageHeader";
 import WelcomeBanner from "@/components/WelcomeBanner";
 import DiagramList from "@/components/DiagramList";
@@ -24,7 +25,8 @@ export default function HomePage() {
   const [selectedSpaceId, setSelectedSpaceId] = useState<string | null>(null);
   const [selectedPageId, setSelectedPageId] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState<PageFull | null>(null);
-  const [chatOpen, setChatOpen] = useState(true);
+  // SRS 5.9 검색·AI 사이클에서 재구현 예정 (Cycle 2-5 일시 비활성)
+  // const [chatOpen, setChatOpen] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [presence, setPresence] = useState<PresenceUser[]>([]);
@@ -292,11 +294,13 @@ export default function HomePage() {
           </div>
         </main>
 
+        {/* SRS 5.9 검색·AI 사이클에서 재구현 예정 (Cycle 2-5 일시 비활성)
         <ChatPanel
           open={chatOpen}
           onToggle={() => setChatOpen((v) => !v)}
           onOpenPage={setSelectedPageId}
         />
+        */}
       </div>
     </div>
   );

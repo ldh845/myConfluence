@@ -9,13 +9,10 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "seed": "tsx prisma/seed.ts",
-    "postinstall": "prisma generate"
+    "seed": "npm --prefix apps/api run seed"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.30.1",
     "@excalidraw/excalidraw": "^0.18.0",
-    "@prisma/client": "^5.22.0",
     "@tiptap/core": "^2.27.2",
     "@tiptap/extension-collaboration": "^2.27.2",
     "@tiptap/extension-collaboration-cursor": "^2.26.2",
@@ -45,9 +42,7 @@
     "@types/react-dom": "^18.3.0",
     "autoprefixer": "^10.4.20",
     "postcss": "^8.4.47",
-    "prisma": "^5.22.0",
     "tailwindcss": "^3.4.13",
-    "tsx": "^4.19.1",
     "typescript": "^5.6.3"
   }
 }

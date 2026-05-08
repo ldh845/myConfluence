@@ -1,4 +1,4 @@
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
@@ -33,14 +33,14 @@ async function main() {
 
   const space = await prisma.space.create({
     data: {
-      name: "Engineering",
-      description: "DocSpace 시작 시드 스페이스",
+      name: 'Engineering',
+      description: 'DocSpace 시작 시드 스페이스',
     },
   });
 
   await prisma.page.create({
     data: {
-      title: "Welcome to DocSpace",
+      title: 'Welcome to DocSpace',
       content: WELCOME_MD,
       spaceId: space.id,
     },
@@ -48,13 +48,13 @@ async function main() {
 
   await prisma.page.create({
     data: {
-      title: "Getting Started",
+      title: 'Getting Started',
       content: GETTING_STARTED_MD,
       spaceId: space.id,
     },
   });
 
-  console.log("Seed completed: 1 space, 2 pages.");
+  console.log('Seed completed: 1 space, 2 pages.');
 }
 
 main()
