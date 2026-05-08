@@ -1,8 +1,18 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreatePageDto } from './dto/create-page.dto';
 import { UpdatePageDto } from './dto/update-page.dto';
 import { CreateDiagramDto } from './dto/create-diagram.dto';
+
+// FR-064 — 페이지당 보관할 PageVersion 수. 환경변수 미설정/잘못된 값일
+// 때는 50으로 폴백해 무한 누적을 막고, 동시에 잘못된 0/음수가 들어와
+// 모든 버전이 지워지는 사고도 막는다.
+function resolveRetentionLimit(): number {
+  const raw = Number(process.env.PAGE_VERSION_RETENTION ?? 50);
+  if (!Number.isFinite(raw) || raw <= 0) return 50;
+  return Math.floor(raw);
+}
 
 const EMPTY_EXCALIDRAW = JSON.stringify({
   type: 'excalidraw',
@@ -15,7 +25,32 @@ const EMPTY_EXCALIDRAW = JSON.stringify({
 
 @Injectable()
 export class PagesService {
+  // 모듈 로드 시 한 번만 평가. dev 시 .env 변경 후 재시작 필요.
+  private readonly retentionLimit = resolveRetentionLimit();
+
   constructor(private readonly prisma: PrismaService) {}
+
+  // FR-064 — 같은 트랜잭션 안에서 호출. 새 PageVersion이 막 추가된
+  // 직후라, 보관 한도를 넘겼다면 가장 오래된 것부터 잘라낸다.
+  private async cleanupOldVersions(
+    tx: Prisma.TransactionClient,
+    pageId: string,
+  ): Promise<void> {
+    const limit = this.retentionLimit;
+    const total = await tx.pageVersion.count({ where: { pageId } });
+    if (total <= limit) return;
+    const excess = total - limit;
+    const toDelete = await tx.pageVersion.findMany({
+      where: { pageId },
+      orderBy: { version: 'asc' },
+      take: excess,
+      select: { id: true },
+    });
+    if (toDelete.length === 0) return;
+    await tx.pageVersion.deleteMany({
+      where: { id: { in: toDelete.map((v) => v.id) } },
+    });
+  }
 
   findAll() {
     return this.prisma.page.findMany({ orderBy: { createdAt: 'asc' } });
@@ -66,6 +101,7 @@ export class PagesService {
           version: (last?.version ?? 0) + 1,
         },
       });
+      await this.cleanupOldVersions(tx, id);
       return page;
     });
   }
@@ -110,6 +146,7 @@ export class PagesService {
           version: (last?.version ?? 0) + 1,
         },
       });
+      await this.cleanupOldVersions(tx, pageId);
       return page;
     });
   }
