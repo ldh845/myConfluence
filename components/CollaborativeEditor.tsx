@@ -12,7 +12,7 @@ import TableHeader from "@tiptap/extension-table-header";
 import { Markdown } from "tiptap-markdown";
 import EditorToolbar from "./EditorToolbar";
 import * as Y from "yjs";
-import { WebsocketProvider } from "y-websocket";
+import { HocuspocusProvider } from "@hocuspocus/provider";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { getIdentity, type Identity } from "@/lib/userIdentity";
 
@@ -64,14 +64,16 @@ export default function CollaborativeEditor({
   const identity = useMemo<Identity>(() => getIdentity(), []);
   const [instance, setInstance] = useState<{
     ydoc: Y.Doc;
-    provider: WebsocketProvider;
+    provider: HocuspocusProvider;
   } | null>(null);
 
   // Create fresh Y.Doc + provider whenever pageId changes
   useEffect(() => {
     const ydoc = new Y.Doc();
-    const provider = new WebsocketProvider(WS_URL, `page-${pageId}`, ydoc, {
-      connect: true,
+    const provider = new HocuspocusProvider({
+      url: WS_URL,
+      name: `page-${pageId}`,
+      document: ydoc,
     });
     setInstance({ ydoc, provider });
     return () => {
@@ -143,14 +145,14 @@ export default function CollaborativeEditor({
       trySeed();
       return;
     }
-    const onSync = (isSynced: boolean) => {
-      if (isSynced) {
-        trySeed();
-        provider.off("sync", onSync);
-      }
+    // HocuspocusProvider fires "synced" once when the initial sync
+    // round-trip with the server completes.
+    const onSynced = () => {
+      trySeed();
+      provider.off("synced", onSynced);
     };
-    provider.on("sync", onSync);
-    return () => provider.off("sync", onSync);
+    provider.on("synced", onSynced);
+    return () => provider.off("synced", onSynced);
   }, [editor, instance, pageId, initialMarkdown]);
 
   // Debounced save: client-side, last-writer-wins.
