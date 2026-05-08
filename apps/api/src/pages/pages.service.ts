@@ -77,6 +77,43 @@ export class PagesService {
     });
   }
 
+  // FR-063 — 특정 PageVersion으로 페이지를 되돌린다.
+  // 동시에 새 PageVersion 한 행을 추가해 원복 자체를 히스토리로 남긴다.
+  // 두 단계가 같은 트랜잭션이라 한쪽 실패 시 모두 롤백.
+  restoreVersion(
+    pageId: string,
+    versionId: string,
+    authorName?: string | null,
+  ) {
+    return this.prisma.$transaction(async (tx) => {
+      const target = await tx.pageVersion.findUnique({
+        where: { id: versionId },
+      });
+      if (!target || target.pageId !== pageId) {
+        throw new NotFoundException({ error: 'version not found' });
+      }
+      const page = await tx.page.update({
+        where: { id: pageId },
+        data: { title: target.title, content: target.content },
+      });
+      const last = await tx.pageVersion.findFirst({
+        where: { pageId },
+        orderBy: { version: 'desc' },
+        select: { version: true },
+      });
+      await tx.pageVersion.create({
+        data: {
+          pageId,
+          title: page.title,
+          content: page.content,
+          authorName: authorName ?? null,
+          version: (last?.version ?? 0) + 1,
+        },
+      });
+      return page;
+    });
+  }
+
   async remove(id: string) {
     await this.prisma.page.delete({ where: { id } });
     return { ok: true };

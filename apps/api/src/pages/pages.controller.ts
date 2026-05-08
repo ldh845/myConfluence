@@ -51,6 +51,15 @@ export class PagesController {
     return this.pages.listVersions(id);
   }
 
+  @Post(':id/versions/:versionId/restore')
+  restoreVersion(
+    @Param('id') id: string,
+    @Param('versionId') versionId: string,
+    @Body() body: { authorName?: string } = {},
+  ) {
+    return this.pages.restoreVersion(id, versionId, body?.authorName ?? null);
+  }
+
   @Post(':id/diagrams')
   createDiagram(@Param('id') id: string, @Body() dto: CreateDiagramDto) {
     return this.pages.createDiagram(id, dto);
