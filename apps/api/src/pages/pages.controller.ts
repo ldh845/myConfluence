@@ -46,6 +46,11 @@ export class PagesController {
     return this.pages.listDiagrams(id);
   }
 
+  @Get(':id/versions')
+  listVersions(@Param('id') id: string) {
+    return this.pages.listVersions(id);
+  }
+
   @Post(':id/diagrams')
   createDiagram(@Param('id') id: string, @Body() dto: CreateDiagramDto) {
     return this.pages.createDiagram(id, dto);

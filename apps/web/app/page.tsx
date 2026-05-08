@@ -10,6 +10,7 @@ import PageHeader from "@/components/PageHeader";
 import WelcomeBanner from "@/components/WelcomeBanner";
 import DiagramList from "@/components/DiagramList";
 import TableOfContents from "@/components/TableOfContents";
+import PageVersionHistory from "@/components/PageVersionHistory";
 import type {
   PresenceUser,
   SaveStatus,
@@ -35,6 +36,8 @@ export default function HomePage() {
   const [isBodyEditable, setIsBodyEditable] = useState(false);
   // FR-039 — TableOfContents에 editor 참조를 넘기기 위한 상태.
   const [editor, setEditor] = useState<Editor | null>(null);
+  // FR-061 — 버전 히스토리 슬라이드 패널 토글.
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   const loadSpaces = useCallback(async () => {
     const res = await fetch("/api/spaces");
@@ -262,6 +265,7 @@ export default function HomePage() {
                   onTitleChange={handleTitleChange}
                   onDelete={confirmDeleteCurrent}
                   onSelectAncestor={setSelectedPageId}
+                  onHistoryClick={() => setHistoryOpen(true)}
                 />
                 <hr className="my-4 border-[#dfe1e6]" />
                 <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_220px] gap-8">
@@ -317,6 +321,11 @@ export default function HomePage() {
         />
         */}
       </div>
+      <PageVersionHistory
+        pageId={selectedPageId}
+        open={historyOpen}
+        onOpenChange={setHistoryOpen}
+      />
     </div>
   );
 }

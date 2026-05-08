@@ -50,6 +50,7 @@ type Props = {
   onTitleChange: (title: string) => void;
   onDelete: () => void;
   onSelectAncestor: (id: string) => void;
+  onHistoryClick?: () => void;
 };
 
 export default function PageHeader({
@@ -62,6 +63,7 @@ export default function PageHeader({
   onTitleChange,
   onDelete,
   onSelectAncestor,
+  onHistoryClick,
 }: Props) {
   const crumbs = space ? buildBreadcrumb(page, space.pages) : [];
   const ancestors = crumbs.slice(0, -1);
@@ -164,6 +166,11 @@ export default function PageHeader({
           <ActionButton icon="⭐" label="저장" disabled />
           <ActionButton icon="👁️" label="지켜보기" disabled />
           <ActionButton icon="🔗" label="공유" disabled />
+          <ActionButton
+            icon="🕘"
+            label="히스토리"
+            onClick={onHistoryClick}
+          />
           <MoreMenu onDelete={onDelete} />
         </div>
       </div>

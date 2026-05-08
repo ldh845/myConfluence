@@ -16,20 +16,35 @@ model Space {
 }
 
 model Page {
-  id        String    @id @default(cuid())
+  id        String        @id @default(cuid())
   title     String
-  content   String    @default("")
+  content   String        @default("")
   spaceId   String
-  space     Space     @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  space     Space         @relation(fields: [spaceId], references: [id], onDelete: Cascade)
   parentId  String?
-  parent    Page?     @relation("PageTree", fields: [parentId], references: [id], onDelete: Cascade)
-  children  Page[]    @relation("PageTree")
+  parent    Page?         @relation("PageTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children  Page[]        @relation("PageTree")
   diagrams  Diagram[]
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  versions  PageVersion[]
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
 
   @@index([spaceId])
   @@index([parentId])
+}
+
+model PageVersion {
+  id         String   @id @default(cuid())
+  pageId     String
+  page       Page     @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  title      String
+  content    String
+  authorName String?
+  version    Int
+  createdAt  DateTime @default(now())
+
+  @@unique([pageId, version])
+  @@index([pageId, createdAt])
 }
 
 model Diagram {

@@ -38,14 +38,42 @@ export class PagesService {
     });
   }
 
+  // FR-060 / FR-061 — 페이지가 변경될 때마다 PageVersion 스냅샷을 생성한다.
+  // page.update와 version.create는 같은 트랜잭션이라 둘 중 하나가 실패하면
+  // 함께 롤백된다. authorName은 FR-002 인증이 들어오기 전까지 클라이언트의
+  // 익명 이름을 그대로 보관한다.
   update(id: string, dto: UpdatePageDto) {
-    return this.prisma.page.update({
-      where: { id },
-      data: {
-        ...(dto.title !== undefined ? { title: dto.title } : {}),
-        ...(dto.content !== undefined ? { content: dto.content } : {}),
-        ...(dto.parentId !== undefined ? { parentId: dto.parentId } : {}),
-      },
+    return this.prisma.$transaction(async (tx) => {
+      const page = await tx.page.update({
+        where: { id },
+        data: {
+          ...(dto.title !== undefined ? { title: dto.title } : {}),
+          ...(dto.content !== undefined ? { content: dto.content } : {}),
+          ...(dto.parentId !== undefined ? { parentId: dto.parentId } : {}),
+        },
+      });
+      const last = await tx.pageVersion.findFirst({
+        where: { pageId: id },
+        orderBy: { version: 'desc' },
+        select: { version: true },
+      });
+      await tx.pageVersion.create({
+        data: {
+          pageId: id,
+          title: page.title,
+          content: page.content,
+          authorName: dto.authorName ?? null,
+          version: (last?.version ?? 0) + 1,
+        },
+      });
+      return page;
+    });
+  }
+
+  listVersions(pageId: string) {
+    return this.prisma.pageVersion.findMany({
+      where: { pageId },
+      orderBy: { version: 'desc' },
     });
   }
 

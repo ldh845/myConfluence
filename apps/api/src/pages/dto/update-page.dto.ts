@@ -14,4 +14,10 @@ export class UpdatePageDto {
   @IsOptional()
   @IsString()
   parentId?: string | null;
+
+  // FR-060 — 자동 버전 스냅샷에 attribution을 남기기 위한 필드.
+  // page 컬럼으로 forward 하지 않고, 서비스에서 PageVersion에만 기록한다.
+  @IsOptional()
+  @IsString()
+  authorName?: string;
 }

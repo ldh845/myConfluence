@@ -188,7 +188,11 @@ export default function CollaborativeEditor({
         const res = await fetch(`/api/pages/${pageId}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ content: latestMd }),
+          // FR-060 — 자동 스냅샷 attribution. 인증 전까지는 익명 이름.
+          body: JSON.stringify({
+            content: latestMd,
+            authorName: identity.name,
+          }),
         });
         onSaveStatusChange?.(res.ok ? "saved" : "error");
       } catch {
