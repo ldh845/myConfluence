@@ -11,6 +11,10 @@ import TableCell from "@tiptap/extension-table-cell";
 import TableHeader from "@tiptap/extension-table-header";
 import { Markdown } from "tiptap-markdown";
 import { CodeBlockExtension } from "@/lib/tiptap/code-block-lowlight";
+import {
+  SlashCommand,
+  slashCommandSuggestion,
+} from "@/lib/tiptap/slash-command";
 import EditorToolbar from "./EditorToolbar";
 import * as Y from "yjs";
 import { HocuspocusProvider } from "@hocuspocus/provider";
@@ -93,6 +97,7 @@ export default function CollaborativeEditor({
             // 기본 codeBlock은 비활성. 두 노드가 충돌하면 schema가 깨진다.
             StarterKit.configure({ history: false, codeBlock: false }),
             CodeBlockExtension,
+            SlashCommand.configure({ suggestion: slashCommandSuggestion }),
             Link.configure({
               openOnClick: false,
               autolink: true,
