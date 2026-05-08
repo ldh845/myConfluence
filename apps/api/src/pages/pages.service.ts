@@ -1,0 +1,79 @@
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
+import { CreatePageDto } from './dto/create-page.dto';
+import { UpdatePageDto } from './dto/update-page.dto';
+import { CreateDiagramDto } from './dto/create-diagram.dto';
+
+const EMPTY_EXCALIDRAW = JSON.stringify({
+  type: 'excalidraw',
+  version: 2,
+  source: 'myconfluence',
+  elements: [],
+  appState: { viewBackgroundColor: '#ffffff', gridSize: null },
+  files: {},
+});
+
+@Injectable()
+export class PagesService {
+  constructor(private readonly prisma: PrismaService) {}
+
+  findAll() {
+    return this.prisma.page.findMany({ orderBy: { createdAt: 'asc' } });
+  }
+
+  async findOne(id: string) {
+    const page = await this.prisma.page.findUnique({ where: { id } });
+    if (!page) throw new NotFoundException({ error: 'not found' });
+    return page;
+  }
+
+  create(dto: CreatePageDto) {
+    return this.prisma.page.create({
+      data: {
+        title: dto.title,
+        content: dto.content ?? '',
+        spaceId: dto.spaceId,
+        parentId: dto.parentId ?? null,
+      },
+    });
+  }
+
+  update(id: string, dto: UpdatePageDto) {
+    return this.prisma.page.update({
+      where: { id },
+      data: {
+        ...(dto.title !== undefined ? { title: dto.title } : {}),
+        ...(dto.content !== undefined ? { content: dto.content } : {}),
+        ...(dto.parentId !== undefined ? { parentId: dto.parentId } : {}),
+      },
+    });
+  }
+
+  async remove(id: string) {
+    await this.prisma.page.delete({ where: { id } });
+    return { ok: true };
+  }
+
+  listDiagrams(pageId: string) {
+    return this.prisma.diagram.findMany({
+      where: { pageId },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  async createDiagram(pageId: string, dto: CreateDiagramDto) {
+    const page = await this.prisma.page.findUnique({ where: { id: pageId } });
+    if (!page) throw new NotFoundException({ error: 'page not found' });
+    const title =
+      typeof dto.title === 'string' && dto.title.trim()
+        ? dto.title
+        : '새 다이어그램';
+    const data =
+      typeof dto.data === 'string' && dto.data.length > 0
+        ? dto.data
+        : EMPTY_EXCALIDRAW;
+    return this.prisma.diagram.create({
+      data: { pageId, title, data },
+    });
+  }
+}
