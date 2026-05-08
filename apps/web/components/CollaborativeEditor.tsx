@@ -10,6 +10,7 @@ import TableRow from "@tiptap/extension-table-row";
 import TableCell from "@tiptap/extension-table-cell";
 import TableHeader from "@tiptap/extension-table-header";
 import { Markdown } from "tiptap-markdown";
+import { CodeBlockExtension } from "@/lib/tiptap/code-block-lowlight";
 import EditorToolbar from "./EditorToolbar";
 import * as Y from "yjs";
 import { HocuspocusProvider } from "@hocuspocus/provider";
@@ -88,7 +89,10 @@ export default function CollaborativeEditor({
       editable,
       extensions: instance
         ? [
-            StarterKit.configure({ history: false }),
+            // FR-031 — codeBlock은 CodeBlockLowlight로 교체하므로 StarterKit
+            // 기본 codeBlock은 비활성. 두 노드가 충돌하면 schema가 깨진다.
+            StarterKit.configure({ history: false, codeBlock: false }),
+            CodeBlockExtension,
             Link.configure({
               openOnClick: false,
               autolink: true,
@@ -109,7 +113,7 @@ export default function CollaborativeEditor({
               user: { name: identity.name, color: identity.color },
             }),
           ]
-        : [StarterKit.configure({ history: false })],
+        : [StarterKit.configure({ history: false, codeBlock: false })],
       editorProps: {
         attributes: {
           class: "cf-article outline-none min-h-[320px]",
@@ -187,7 +191,8 @@ export default function CollaborativeEditor({
       if (!storage) return;
       latestMd = storage.getMarkdown();
       if (timer) clearTimeout(timer);
-      timer = setTimeout(flush, 2000);
+      // FR-038 / NFR-A-020 — 5초 간격 자동 저장
+      timer = setTimeout(flush, 5000);
     };
 
     editor.on("update", onUpdate);

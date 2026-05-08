@@ -2,6 +2,7 @@
 
 import type { Editor } from "@tiptap/react";
 import { useEffect, useRef, useState } from "react";
+import { CODE_BLOCK_LANGUAGES } from "@/lib/tiptap/code-block-lowlight";
 
 type Props = { editor: Editor | null };
 
@@ -133,6 +134,12 @@ export default function EditorToolbar({ editor }: Props) {
         <LinkButton editor={editor} />
         <TableButton editor={editor} />
       </BtnGroup>
+      {editor.isActive("codeBlock") && (
+        <>
+          <Divider />
+          <CodeBlockLanguageSelect editor={editor} />
+        </>
+      )}
       {editor.isActive("table") && (
         <>
           <Divider />
@@ -227,6 +234,32 @@ function TB({
     >
       {children ?? label}
     </button>
+  );
+}
+
+function CodeBlockLanguageSelect({ editor }: { editor: Editor }) {
+  const current =
+    (editor.getAttributes("codeBlock").language as string | null) ??
+    "plaintext";
+  return (
+    <select
+      title="코드 블록 언어"
+      value={current}
+      onChange={(e) =>
+        editor
+          .chain()
+          .focus()
+          .updateAttributes("codeBlock", { language: e.target.value })
+          .run()
+      }
+      className="h-7 px-2 text-[12px] rounded border border-[#dfe1e6] bg-white text-[#42526e] hover:border-[#0052cc] focus:outline-none focus:border-[#0052cc]"
+    >
+      {CODE_BLOCK_LANGUAGES.map((lang) => (
+        <option key={lang} value={lang}>
+          {lang}
+        </option>
+      ))}
+    </select>
   );
 }
 

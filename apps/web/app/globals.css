@@ -2,6 +2,9 @@
 @tailwind components;
 @tailwind utilities;
 
+/* FR-031 — highlight.js GitHub 테마 (lowlight가 hljs-* 클래스를 출력) */
+@import "highlight.js/styles/github.css";
+
 /* shadcn/ui base tokens (Cycle 4 scaffold).
    기존 --c-* 변수들은 그대로 보존. 신규 컴포넌트만 hsl(var(--*)) 사용. */
 @layer base {
@@ -148,6 +151,25 @@ body {
   margin: 0.8em 0;
 }
 .cf-article pre code {
+  background: transparent;
+  border: 0;
+  padding: 0;
+}
+
+/* FR-031 — CodeBlockLowlight가 출력하는 pre.cf-code-block.
+   highlight.js github 테마(@import)가 색을 칠하므로 여기선 컨테이너만 다듬음. */
+.cf-code-block {
+  background: #f7f8fa;
+  border: 1px solid #dfe1e6;
+  border-radius: 6px;
+  padding: 12px 14px;
+  margin: 0.8em 0;
+  overflow-x: auto;
+  font-size: 13px;
+  line-height: 1.55;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+}
+.cf-code-block code {
   background: transparent;
   border: 0;
   padding: 0;
