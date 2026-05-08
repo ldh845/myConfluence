@@ -13,6 +13,14 @@ const nextConfig = {
         source: '/api/pages/:path*',
         destination: 'http://localhost:3001/pages/:path*',
       },
+      {
+        source: '/api/diagrams',
+        destination: 'http://localhost:3001/diagrams',
+      },
+      {
+        source: '/api/diagrams/:path*',
+        destination: 'http://localhost:3001/diagrams/:path*',
+      },
     ];
   },
 };
