@@ -19,6 +19,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { getIdentity } from "@/lib/userIdentity";
+import PageVersionDiff from "@/components/PageVersionDiff";
 
 // FR-061 / FR-063 — 페이지 버전 히스토리 + 원복 다이얼로그.
 // 비교(FR-062), 보관 정책(FR-064)은 다음 사이클.
@@ -54,6 +55,8 @@ export default function PageVersionHistory({
 }: Props) {
   const queryClient = useQueryClient();
   const [target, setTarget] = useState<PageVersion | null>(null);
+  // FR-062 — 카드별 diff 패널 펼침 상태. 한 번에 하나만 펼친다.
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const { data, isLoading, isError } = useQuery<PageVersion[]>({
     queryKey: ["page-versions", pageId],
@@ -117,43 +120,69 @@ export default function PageVersionHistory({
                 아직 저장된 버전이 없습니다.
               </div>
             )}
-            {data?.map((v) => (
-              <article
-                key={v.id}
-                className="border border-[#dfe1e6] rounded-md p-3 hover:border-[#0052cc] transition-colors"
-              >
-                <header className="flex items-center justify-between text-[12px]">
-                  <span className="inline-flex items-center gap-1 text-[#172b4d] font-semibold">
-                    <span className="px-1.5 py-0.5 rounded bg-[#deebff] text-[#0052cc] text-[11px]">
-                      v{v.version}
+            {data?.map((v, i) => {
+              const expanded = expandedId === v.id;
+              // 목록은 version DESC. 직전 버전은 한 칸 뒤(i+1).
+              const previous = data[i + 1];
+              const isOldest = !previous;
+              return (
+                <article
+                  key={v.id}
+                  className="border border-[#dfe1e6] rounded-md p-3 hover:border-[#0052cc] transition-colors"
+                >
+                  <header className="flex items-center justify-between text-[12px]">
+                    <span className="inline-flex items-center gap-1 text-[#172b4d] font-semibold">
+                      <span className="px-1.5 py-0.5 rounded bg-[#deebff] text-[#0052cc] text-[11px]">
+                        v{v.version}
+                      </span>
+                      {v.title}
                     </span>
-                    {v.title}
-                  </span>
-                  <span className="text-[#6b778c]">
-                    {formatDateTime(v.createdAt)}
-                  </span>
-                </header>
-                <div className="mt-1.5 text-[11px] text-[#6b778c]">
-                  작성자: {v.authorName ?? "익명"}
-                </div>
-                {v.content && (
-                  <p className="mt-2 text-[12px] text-[#42526e] whitespace-pre-wrap line-clamp-3">
-                    {v.content.slice(0, 100)}
-                    {v.content.length > 100 ? "…" : ""}
-                  </p>
-                )}
-                <div className="mt-2 flex justify-end">
-                  <button
-                    type="button"
-                    onClick={() => setTarget(v)}
-                    disabled={restore.isPending}
-                    className="text-[11px] px-2 py-1 rounded border border-[#dfe1e6] text-[#0052cc] hover:bg-[#deebff] disabled:opacity-50"
-                  >
-                    이 버전으로 복원
-                  </button>
-                </div>
-              </article>
-            ))}
+                    <span className="text-[#6b778c]">
+                      {formatDateTime(v.createdAt)}
+                    </span>
+                  </header>
+                  <div className="mt-1.5 text-[11px] text-[#6b778c]">
+                    작성자: {v.authorName ?? "익명"}
+                  </div>
+                  {v.content && (
+                    <p className="mt-2 text-[12px] text-[#42526e] whitespace-pre-wrap line-clamp-3">
+                      {v.content.slice(0, 100)}
+                      {v.content.length > 100 ? "…" : ""}
+                    </p>
+                  )}
+                  <div className="mt-2 flex justify-end gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setExpandedId((prev) => (prev === v.id ? null : v.id))
+                      }
+                      className="text-[11px] px-2 py-1 rounded border border-[#dfe1e6] text-[#42526e] hover:bg-[#ebecf0]"
+                    >
+                      {expanded ? "비교 닫기" : "비교"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTarget(v)}
+                      disabled={restore.isPending}
+                      className="text-[11px] px-2 py-1 rounded border border-[#dfe1e6] text-[#0052cc] hover:bg-[#deebff] disabled:opacity-50"
+                    >
+                      이 버전으로 복원
+                    </button>
+                  </div>
+                  {expanded &&
+                    (isOldest ? (
+                      <div className="mt-2 text-[11px] text-[#6b778c]">
+                        이전 버전 없음 (최초 생성)
+                      </div>
+                    ) : (
+                      <PageVersionDiff
+                        oldContent={previous.content}
+                        newContent={v.content}
+                      />
+                    ))}
+                </article>
+              );
+            })}
           </div>
         </SheetContent>
       </Sheet>
