@@ -1,4 +1,4 @@
-﻿node_modules/
+node_modules/
 .next/
 .env
 .env.local
@@ -14,6 +14,11 @@ prisma/migrations/dev.db*
 apps/api/node_modules
 apps/api/.env
 apps/api/dist
+
+# apps/web (Next.js workspace)
+apps/web/node_modules
+apps/web/.next
+apps/web/.env
 
 # Local-only: Claude Code metadata and internal SRS document
 .claude/
