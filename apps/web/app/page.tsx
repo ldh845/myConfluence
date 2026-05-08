@@ -9,11 +9,13 @@ import Sidebar from "@/components/Sidebar";
 import PageHeader from "@/components/PageHeader";
 import WelcomeBanner from "@/components/WelcomeBanner";
 import DiagramList from "@/components/DiagramList";
+import TableOfContents from "@/components/TableOfContents";
 import type {
   PresenceUser,
   SaveStatus,
 } from "@/components/CollaborativeEditor";
 import type { PageFull, SpaceWithPages } from "@/lib/types";
+import type { Editor } from "@tiptap/react";
 
 const CollaborativeEditor = dynamic(
   () => import("@/components/CollaborativeEditor"),
@@ -31,6 +33,8 @@ export default function HomePage() {
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [presence, setPresence] = useState<PresenceUser[]>([]);
   const [isBodyEditable, setIsBodyEditable] = useState(false);
+  // FR-039 — TableOfContents에 editor 참조를 넘기기 위한 상태.
+  const [editor, setEditor] = useState<Editor | null>(null);
 
   const loadSpaces = useCallback(async () => {
     const res = await fetch("/api/spaces");
@@ -260,15 +264,26 @@ export default function HomePage() {
                   onSelectAncestor={setSelectedPageId}
                 />
                 <hr className="my-4 border-[#dfe1e6]" />
-                <CollaborativeEditor
-                  key={currentPage.id}
-                  pageId={currentPage.id}
-                  initialMarkdown={currentPage.content}
-                  editable={isBodyEditable}
-                  onSaveStatusChange={setSaveStatus}
-                  onPresenceChange={setPresence}
-                />
-                <DiagramList pageId={currentPage.id} editable={isBodyEditable} />
+                <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_220px] gap-8">
+                  <div className="min-w-0">
+                    <CollaborativeEditor
+                      key={currentPage.id}
+                      pageId={currentPage.id}
+                      initialMarkdown={currentPage.content}
+                      editable={isBodyEditable}
+                      onSaveStatusChange={setSaveStatus}
+                      onPresenceChange={setPresence}
+                      onEditor={setEditor}
+                    />
+                    <DiagramList
+                      pageId={currentPage.id}
+                      editable={isBodyEditable}
+                    />
+                  </div>
+                  <aside className="hidden lg:block sticky top-4 h-fit max-h-[calc(100vh-2rem)] overflow-y-auto pl-4 border-l border-[#dfe1e6]">
+                    <TableOfContents editor={editor} />
+                  </aside>
+                </div>
                 <div className="mt-10 flex items-center justify-between border-t border-[#dfe1e6] pt-4">
                   <div className="flex items-center gap-2 text-[13px] text-[#6b778c]">
                     <button className="hover:text-[#0052cc]">👍</button>

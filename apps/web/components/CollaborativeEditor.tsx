@@ -36,6 +36,8 @@ type Props = {
   editable: boolean;
   onSaveStatusChange?: (status: SaveStatus) => void;
   onPresenceChange?: (users: PresenceUser[]) => void;
+  // FR-039 — 부모(page.tsx)가 TOC 등 외부 위젯에서 editor를 참조할 수 있게 노출.
+  onEditor?: (editor: Editor | null) => void;
 };
 
 function resolveWsUrl(): string {
@@ -65,6 +67,7 @@ export default function CollaborativeEditor({
   editable,
   onSaveStatusChange,
   onPresenceChange,
+  onEditor,
 }: Props) {
   const identity = useMemo<Identity>(() => getIdentity(), []);
   const [instance, setInstance] = useState<{
@@ -134,6 +137,12 @@ export default function CollaborativeEditor({
     if (!editor) return;
     editor.setEditable(editable);
   }, [editor, editable]);
+
+  // FR-039 — editor 인스턴스를 부모에 노출. cleanup에서 null 통지.
+  useEffect(() => {
+    onEditor?.(editor ?? null);
+    return () => onEditor?.(null);
+  }, [editor, onEditor]);
 
   // Seed initial content from DB once, only if the shared doc is empty
   const seededRef = useRef<string | null>(null);
