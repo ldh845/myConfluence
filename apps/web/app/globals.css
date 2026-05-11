@@ -174,6 +174,43 @@ body {
   border: 0;
   padding: 0;
 }
+
+/* FR-030 부분 — TaskList(체크리스트) 시각.
+   ProseMirror가 ul[data-type=taskList]/ li[data-checked] / label > input 으로 렌더한다. */
+.ProseMirror ul[data-type="taskList"] {
+  list-style: none;
+  padding: 0;
+}
+.ProseMirror ul[data-type="taskList"] > li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin: 0.25rem 0;
+}
+.ProseMirror ul[data-type="taskList"] > li > label {
+  flex: 0 0 auto;
+  user-select: none;
+  margin-top: 0.25rem;
+}
+.ProseMirror ul[data-type="taskList"] > li > label > input[type="checkbox"] {
+  cursor: pointer;
+  width: 1rem;
+  height: 1rem;
+}
+.ProseMirror ul[data-type="taskList"] > li > div {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.ProseMirror ul[data-type="taskList"] li[data-checked="true"] > div {
+  color: #6b778c;
+  text-decoration: line-through;
+}
+
+/* FR-030 부분 — Highlight mark (배경 색상). 색은 inline style로 박힘. */
+.ProseMirror mark {
+  padding: 0 0.125em;
+  border-radius: 2px;
+}
 .cf-article blockquote {
   border-left: 3px solid #dfe1e6;
   padding-left: 12px;

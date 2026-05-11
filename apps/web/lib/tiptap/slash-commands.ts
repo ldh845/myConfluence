@@ -62,6 +62,13 @@ export const SLASH_ITEMS: SlashCommandItem[] = [
       editor.chain().focus().deleteRange(range).toggleOrderedList().run(),
   },
   {
+    title: "체크리스트",
+    description: "할 일 목록",
+    searchTerms: ["checklist", "todo", "task", "체크", "할일", "할 일"],
+    command: ({ editor, range }) =>
+      editor.chain().focus().deleteRange(range).toggleTaskList().run(),
+  },
+  {
     title: "인용문",
     description: "Blockquote",
     searchTerms: ["quote", "blockquote", "인용"],

@@ -3,6 +3,7 @@
 import type { Editor } from "@tiptap/react";
 import { useEffect, useRef, useState } from "react";
 import { CODE_BLOCK_LANGUAGES } from "@/lib/tiptap/code-block-lowlight";
+import EditorColorPicker from "@/components/EditorColorPicker";
 
 type Props = { editor: Editor | null };
 
@@ -85,6 +86,8 @@ export default function EditorToolbar({ editor }: Props) {
         >
           <code>&lt;/&gt;</code>
         </TB>
+        <EditorColorPicker editor={editor} kind="text" />
+        <EditorColorPicker editor={editor} kind="highlight" />
       </BtnGroup>
       <Divider />
       <BtnGroup>
@@ -103,6 +106,13 @@ export default function EditorToolbar({ editor }: Props) {
           )}
         >
           1.
+        </TB>
+        <TB
+          title="체크리스트"
+          active={isActive("taskList")}
+          onClick={run(() => editor.chain().focus().toggleTaskList().run())}
+        >
+          ☑
         </TB>
         <TB
           title="인용"

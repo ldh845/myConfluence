@@ -10,6 +10,11 @@ import TableRow from "@tiptap/extension-table-row";
 import TableCell from "@tiptap/extension-table-cell";
 import TableHeader from "@tiptap/extension-table-header";
 import { Markdown } from "tiptap-markdown";
+import TaskList from "@tiptap/extension-task-list";
+import TaskItem from "@tiptap/extension-task-item";
+import TextStyle from "@tiptap/extension-text-style";
+import Color from "@tiptap/extension-color";
+import Highlight from "@tiptap/extension-highlight";
 import { CodeBlockExtension } from "@/lib/tiptap/code-block-lowlight";
 import {
   SlashCommand,
@@ -100,6 +105,14 @@ export default function CollaborativeEditor({
             // 기본 codeBlock은 비활성. 두 노드가 충돌하면 schema가 깨진다.
             StarterKit.configure({ history: false, codeBlock: false }),
             CodeBlockExtension,
+            // FR-030 부분 — 체크리스트 + 텍스트/배경 색상.
+            // TextStyle은 Color mark를 얹기 위한 base; Highlight multicolor로
+            // 형광펜 색을 노드별로 다르게 잡는다. TaskItem은 nested 허용.
+            TaskList,
+            TaskItem.configure({ nested: true }),
+            TextStyle,
+            Color.configure({ types: ["textStyle"] }),
+            Highlight.configure({ multicolor: true }),
             SlashCommand.configure({ suggestion: slashCommandSuggestion }),
             Link.configure({
               openOnClick: false,
