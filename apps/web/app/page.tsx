@@ -9,6 +9,7 @@ import Sidebar from "@/components/Sidebar";
 import PageHeader from "@/components/PageHeader";
 import WelcomeBanner from "@/components/WelcomeBanner";
 import DiagramList from "@/components/DiagramList";
+import AttachmentList from "@/components/AttachmentList";
 import TableOfContents from "@/components/TableOfContents";
 import PageVersionHistory from "@/components/PageVersionHistory";
 import type {
@@ -280,6 +281,10 @@ export default function HomePage() {
                       onEditor={setEditor}
                     />
                     <DiagramList
+                      pageId={currentPage.id}
+                      editable={isBodyEditable}
+                    />
+                    <AttachmentList
                       pageId={currentPage.id}
                       editable={isBodyEditable}
                     />
