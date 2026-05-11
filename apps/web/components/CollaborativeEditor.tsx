@@ -23,6 +23,7 @@ import Highlight from "@tiptap/extension-highlight";
 import Underline from "@tiptap/extension-underline";
 import Image from "@tiptap/extension-image";
 import { CodeBlockExtension } from "@/lib/tiptap/code-block-lowlight";
+import { MarkdownInputRules } from "@/lib/tiptap/markdown-input-rules";
 import {
   SlashCommand,
   slashCommandSuggestion,
@@ -195,6 +196,8 @@ export default function CollaborativeEditor({
           allowBase64: false,
           HTMLAttributes: { class: "cf-image" },
         }),
+        // FR-036 (Cycle 13) — StarterKit 미커버 input rules (체크리스트/링크/이미지).
+        MarkdownInputRules,
         SlashCommand.configure({ suggestion: slashCommandSuggestion }),
         Link.configure({
           openOnClick: false,
