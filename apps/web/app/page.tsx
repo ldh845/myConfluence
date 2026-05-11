@@ -310,10 +310,14 @@ export default function HomePage() {
                 <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_220px] gap-8">
                   <div className="min-w-0">
                     <CollaborativeEditor
-                      key={currentPage.id}
+                      key={`${currentPage.id}-${
+                        isBodyEditable ? "edit" : "view"
+                      }`}
                       pageId={currentPage.id}
                       initialMarkdown={
-                        currentPage.draftContent ?? currentPage.content
+                        isBodyEditable
+                          ? currentPage.draftContent ?? currentPage.content
+                          : currentPage.content
                       }
                       editable={isBodyEditable}
                       onSaveStatusChange={setSaveStatus}

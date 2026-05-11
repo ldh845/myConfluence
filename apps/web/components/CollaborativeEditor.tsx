@@ -87,8 +87,11 @@ export default function CollaborativeEditor({
     provider: HocuspocusProvider;
   } | null>(null);
 
-  // Create fresh Y.Doc + provider whenever pageId changes
+  // Cycle 10-2b-1 — 편집 모드일 때만 Yjs 세션. 조회 모드 사용자는 다른
+  // 사용자의 임시 변경(draft)이 보이지 않게 하기 위해 협업 채널에 참여하지
+  // 않는다. page.tsx가 모드 전환 시 key prop으로 컴포넌트를 재마운트한다.
   useEffect(() => {
+    if (!editable) return;
     const ydoc = new Y.Doc();
     const provider = new HocuspocusProvider({
       url: WS_URL,
@@ -101,83 +104,80 @@ export default function CollaborativeEditor({
       ydoc.destroy();
       setInstance(null);
     };
-  }, [pageId]);
+  }, [editable, pageId]);
 
   const editor = useEditor(
     {
       editable,
-      extensions: instance
-        ? [
-            // FR-031 — codeBlock은 CodeBlockLowlight로 교체하므로 StarterKit
-            // 기본 codeBlock은 비활성. 두 노드가 충돌하면 schema가 깨진다.
-            StarterKit.configure({
-              history: false,
-              codeBlock: false,
-              // FR-030 (Cycle 9-2) — H4까지 노출. StarterKit 기본 levels는
-              // 1~6이지만 toolbar/슬래시가 H4까지만 보여주는 게 우리 정책.
-              heading: { levels: [1, 2, 3, 4] },
-            }),
-            CodeBlockExtension,
-            // FR-030 (Cycle 9-2) — 밑줄 mark.
-            Underline,
-            // FR-030 부분 — 체크리스트 + 텍스트/배경 색상.
-            // TextStyle은 Color mark를 얹기 위한 base; Highlight multicolor로
-            // 형광펜 색을 노드별로 다르게 잡는다. TaskItem은 nested 허용.
-            TaskList,
-            // FR-030 보강 (Cycle 9-1b) — React NodeView로 체크박스를 직접
-            // 컨트롤. editor.editable과 무관하게 항상 클릭 가능하고, attr
-            // 변경 transaction이 Y.Doc → 다른 클라이언트로 전파된다.
-            TaskItem.configure({ nested: true }).extend({
-              addNodeView() {
-                return ReactNodeViewRenderer(TaskItemNodeView);
-              },
-            }),
-            TextStyle,
-            Color.configure({ types: ["textStyle"] }),
-            Highlight.configure({ multicolor: true }),
-            SlashCommand.configure({ suggestion: slashCommandSuggestion }),
-            Link.configure({
-              openOnClick: false,
-              autolink: true,
-              HTMLAttributes: { rel: "noopener noreferrer" },
-            }),
-            Table.configure({ resizable: true }),
-            TableRow,
-            TableHeader,
-            TableCell,
-            Markdown.configure({
-              html: false,
-              tightLists: true,
-              transformCopiedText: true,
-            }),
-            Collaboration.configure({ document: instance.ydoc }),
-            CollaborationCursor.configure({
-              provider: instance.provider,
-              user: { name: identity.name, color: identity.color },
-            }),
-          ]
-        : [StarterKit.configure({
-              history: false,
-              codeBlock: false,
-              // FR-030 (Cycle 9-2) — H4까지 노출. StarterKit 기본 levels는
-              // 1~6이지만 toolbar/슬래시가 H4까지만 보여주는 게 우리 정책.
-              heading: { levels: [1, 2, 3, 4] },
-            })],
+      extensions: [
+        // FR-031 — codeBlock은 CodeBlockLowlight로 교체하므로 StarterKit
+        // 기본 codeBlock은 비활성. 두 노드가 충돌하면 schema가 깨진다.
+        // Cycle 10-2b-1 — 편집 모드는 Yjs UndoManager 사용(history false),
+        // 조회 모드는 어차피 편집 불가라 history 켜둬도 무관하지만 일관성을
+        // 위해 둘 다 false.
+        StarterKit.configure({
+          history: false,
+          codeBlock: false,
+          // FR-030 (Cycle 9-2) — H4까지 노출. StarterKit 기본 levels는
+          // 1~6이지만 toolbar/슬래시가 H4까지만 보여주는 게 우리 정책.
+          heading: { levels: [1, 2, 3, 4] },
+        }),
+        CodeBlockExtension,
+        // FR-030 (Cycle 9-2) — 밑줄 mark.
+        Underline,
+        // FR-030 부분 — 체크리스트 + 텍스트/배경 색상.
+        // TextStyle은 Color mark를 얹기 위한 base; Highlight multicolor로
+        // 형광펜 색을 노드별로 다르게 잡는다. TaskItem은 nested 허용.
+        TaskList,
+        // FR-030 보강 (Cycle 9-1b) — React NodeView로 체크박스를 직접
+        // 컨트롤. editor.editable과 무관하게 항상 클릭 가능하고, attr
+        // 변경 transaction이 Y.Doc → 다른 클라이언트로 전파된다.
+        TaskItem.configure({ nested: true }).extend({
+          addNodeView() {
+            return ReactNodeViewRenderer(TaskItemNodeView);
+          },
+        }),
+        TextStyle,
+        Color.configure({ types: ["textStyle"] }),
+        Highlight.configure({ multicolor: true }),
+        SlashCommand.configure({ suggestion: slashCommandSuggestion }),
+        Link.configure({
+          openOnClick: false,
+          autolink: true,
+          HTMLAttributes: { rel: "noopener noreferrer" },
+        }),
+        Table.configure({ resizable: true }),
+        TableRow,
+        TableHeader,
+        TableCell,
+        Markdown.configure({
+          html: false,
+          tightLists: true,
+          transformCopiedText: true,
+        }),
+        // Cycle 10-2b-1 — 편집 모드 + Yjs 세션 준비된 후에만 Collaboration.
+        ...(editable && instance
+          ? [
+              Collaboration.configure({ document: instance.ydoc }),
+              CollaborationCursor.configure({
+                provider: instance.provider,
+                user: { name: identity.name, color: identity.color },
+              }),
+            ]
+          : []),
+      ],
+      // Cycle 10-2b-1 — 조회 모드는 Yjs 없이 published content를 직접 시드.
+      // 편집 모드는 Collaboration extension이 ydoc에서 채워주므로 content
+      // prop을 주면 안 된다(중복 시드 → 본문 두 번 표시).
+      content: !editable ? initialMarkdown : undefined,
       editorProps: {
         attributes: {
           class: "cf-article outline-none min-h-[320px]",
         },
       },
     },
-    [instance, identity.name, identity.color]
+    [editable, instance, identity.name, identity.color, initialMarkdown]
   );
-
-  // Keep the live editor's editable flag in sync without tearing down
-  // the Yjs WebSocket / awareness pipeline.
-  useEffect(() => {
-    if (!editor) return;
-    editor.setEditable(editable);
-  }, [editor, editable]);
 
   // FR-039 — editor 인스턴스를 부모에 노출. cleanup에서 null 통지.
   useEffect(() => {
@@ -185,9 +185,12 @@ export default function CollaborativeEditor({
     return () => onEditor?.(null);
   }, [editor, onEditor]);
 
-  // Seed initial content from DB once, only if the shared doc is empty
+  // Seed initial content from DB once, only if the shared doc is empty.
+  // Cycle 10-2b-1 — 조회 모드는 useEditor의 content prop이 시드를 처리하므로
+  // 이 효과는 편집 모드 전용.
   const seededRef = useRef<string | null>(null);
   useEffect(() => {
+    if (!editable) return;
     if (!editor || !instance) return;
     if (seededRef.current === pageId) return;
 
@@ -212,14 +215,14 @@ export default function CollaborativeEditor({
     };
     provider.on("synced", onSynced);
     return () => provider.off("synced", onSynced);
-  }, [editor, instance, pageId, initialMarkdown]);
+  }, [editor, instance, pageId, initialMarkdown, editable]);
 
   // Debounced save: client-side, last-writer-wins.
-  // FR-038 / Cycle 9-1b — editable 가드를 제거. 조회 모드에서도 TaskItem
-  // NodeView가 attr를 바꾸면 update가 발화하므로 PATCH가 트리거되어 체크
-  // 상태가 영속화된다. cleanup의 force-flush 동작은 그대로.
+  // Cycle 10-2b-1 — editable 가드 복귀. 조회 모드는 Yjs 미참여이고 자동저장도
+  // 하지 않는다. 조회 모드 체크박스 토글은 10-2b-2에서 즉시 발행 흐름으로
+  // 별도 처리(현재는 일시적으로 영속화되지 않음).
   useEffect(() => {
-    if (!editor) return;
+    if (!editor || !editable) return;
     let timer: ReturnType<typeof setTimeout> | null = null;
     let latestMd = "";
 
@@ -262,7 +265,7 @@ export default function CollaborativeEditor({
         flush();
       }
     };
-  }, [editor, pageId, onSaveStatusChange]);
+  }, [editor, editable, pageId, onSaveStatusChange]);
 
   // Presence / awareness
   useEffect(() => {
@@ -285,9 +288,11 @@ export default function CollaborativeEditor({
     return () => provider.awareness.off("change", emit);
   }, [instance, onPresenceChange]);
 
+  // Cycle 10-2b-1 — 조회 모드는 Yjs instance 없이도 렌더. 편집 모드는
+  // instance가 준비되기 전 잠시 로딩 표시(Yjs sync 시작 전 빈 본문 방지).
   return (
     <div className="relative">
-      {!editor || !instance ? (
+      {!editor || (editable && !instance) ? (
         <div className="text-sm text-[#6b778c]">에디터 불러오는 중...</div>
       ) : (
         <>
