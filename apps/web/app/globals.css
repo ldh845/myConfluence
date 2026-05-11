@@ -224,6 +224,21 @@ body {
   padding: 0 0.125em;
   border-radius: 2px;
 }
+
+/* FR-033 (Cycle 12-1) — 본문 이미지. 폭 넘침 방지 + 선택 시 강조. */
+.ProseMirror .cf-image,
+.ProseMirror img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 0.5rem 0;
+  border-radius: 4px;
+}
+.ProseMirror .cf-image.ProseMirror-selectednode,
+.ProseMirror img.ProseMirror-selectednode {
+  outline: 2px solid #0052cc;
+  outline-offset: 2px;
+}
 .cf-article blockquote {
   border-left: 3px solid #dfe1e6;
   padding-left: 12px;

@@ -21,6 +21,7 @@ import TextStyle from "@tiptap/extension-text-style";
 import Color from "@tiptap/extension-color";
 import Highlight from "@tiptap/extension-highlight";
 import Underline from "@tiptap/extension-underline";
+import Image from "@tiptap/extension-image";
 import { CodeBlockExtension } from "@/lib/tiptap/code-block-lowlight";
 import {
   SlashCommand,
@@ -30,7 +31,9 @@ import EditorToolbar from "./EditorToolbar";
 import TaskItemNodeView from "./TaskItemNodeView";
 import * as Y from "yjs";
 import { HocuspocusProvider } from "@hocuspocus/provider";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import type { EditorView } from "@tiptap/pm/view";
 import { getIdentity, type Identity } from "@/lib/userIdentity";
 
 export type PresenceUser = {
@@ -82,10 +85,55 @@ export default function CollaborativeEditor({
   onEditor,
 }: Props) {
   const identity = useMemo<Identity>(() => getIdentity(), []);
+  const queryClient = useQueryClient();
   const [instance, setInstance] = useState<{
     ydoc: Y.Doc;
     provider: HocuspocusProvider;
   } | null>(null);
+
+  // FR-033 (Cycle 12-1) — 본문 안에 드롭/붙여넣기된 이미지 파일을 첨부 API로
+  // 업로드하고 ProseMirror image 노드로 인라인 삽입한다. 첨부 영역(useQuery)
+  // 도 invalidate해 카드 목록을 즉시 갱신.
+  const uploadImageFiles = useCallback(
+    (view: EditorView, files: File[], pos: number) => {
+      void (async () => {
+        for (const file of files) {
+          const form = new FormData();
+          form.append("file", file);
+          form.append("authorName", identity.name);
+          try {
+            const r = await fetch(`/api/pages/${pageId}/attachments`, {
+              method: "POST",
+              body: form,
+            });
+            if (!r.ok) {
+              if (r.status === 413) {
+                window.alert("파일이 너무 큽니다 (최대 100MB).");
+              } else {
+                window.alert("이미지 업로드에 실패했습니다.");
+              }
+              continue;
+            }
+            const att = (await r.json()) as { id: string };
+            const imageType = view.state.schema.nodes.image;
+            if (!imageType) continue;
+            const node = imageType.create({
+              src: `/api/attachments/${att.id}`,
+              alt: file.name,
+            });
+            view.dispatch(view.state.tr.insert(pos, node));
+            queryClient.invalidateQueries({
+              queryKey: ["attachments", pageId],
+            });
+          } catch (err) {
+            console.error("[image] upload failed", err);
+            window.alert("이미지 업로드에 실패했습니다.");
+          }
+        }
+      })();
+    },
+    [pageId, identity.name, queryClient],
+  );
 
   // Cycle 10-2b-1 — 편집 모드일 때만 Yjs 세션. 조회 모드 사용자는 다른
   // 사용자의 임시 변경(draft)이 보이지 않게 하기 위해 협업 채널에 참여하지
@@ -140,6 +188,13 @@ export default function CollaborativeEditor({
         TextStyle,
         Color.configure({ types: ["textStyle"] }),
         Highlight.configure({ multicolor: true }),
+        // FR-033 (Cycle 12-1) — 본문 이미지. allowBase64=false로 서버 업로드
+        // 강제 (DB 비대화 방지). 외부 URL/크기 조절/캡션은 12-2에서.
+        Image.configure({
+          inline: false,
+          allowBase64: false,
+          HTMLAttributes: { class: "cf-image" },
+        }),
         SlashCommand.configure({ suggestion: slashCommandSuggestion }),
         Link.configure({
           openOnClick: false,
@@ -174,9 +229,48 @@ export default function CollaborativeEditor({
         attributes: {
           class: "cf-article outline-none min-h-[320px]",
         },
+        // FR-033 (Cycle 12-1) — 드래그앤드롭 이미지 파일 → 첨부 업로드 + 인라인 삽입.
+        handleDrop: (view, event) => {
+          if (!editable) return false;
+          const files = event.dataTransfer
+            ? Array.from(event.dataTransfer.files)
+            : [];
+          const images = files.filter((f) => f.type.startsWith("image/"));
+          if (images.length === 0) return false;
+          event.preventDefault();
+          const pos =
+            view.posAtCoords({ left: event.clientX, top: event.clientY })
+              ?.pos ?? view.state.selection.from;
+          uploadImageFiles(view, images, pos);
+          return true;
+        },
+        // FR-033 (Cycle 12-1) — 클립보드(스크린샷 등) 이미지 붙여넣기.
+        handlePaste: (view, event) => {
+          if (!editable) return false;
+          const items = event.clipboardData?.items;
+          if (!items) return false;
+          const imageItems = Array.from(items).filter(
+            (it) => it.kind === "file" && it.type.startsWith("image/"),
+          );
+          if (imageItems.length === 0) return false;
+          const files = imageItems
+            .map((it) => it.getAsFile())
+            .filter((f): f is File => !!f);
+          if (files.length === 0) return false;
+          event.preventDefault();
+          uploadImageFiles(view, files, view.state.selection.from);
+          return true;
+        },
       },
     },
-    [editable, instance, identity.name, identity.color, initialMarkdown]
+    [
+      editable,
+      instance,
+      identity.name,
+      identity.color,
+      initialMarkdown,
+      uploadImageFiles,
+    ]
   );
 
   // FR-039 — editor 인스턴스를 부모에 노출. cleanup에서 null 통지.
