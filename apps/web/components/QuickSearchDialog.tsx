@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 
@@ -27,6 +28,7 @@ export default function QuickSearchDialog({
   onOpenChange,
   onSelect,
 }: Props) {
+  const router = useRouter();
   const [query, setQuery] = useState("");
   const [debouncedQ, setDebouncedQ] = useState("");
   const [selectedIdx, setSelectedIdx] = useState(0);
@@ -77,6 +79,13 @@ export default function QuickSearchDialog({
 
   const handleSelect = (id: string) => {
     onSelect(id);
+    onOpenChange(false);
+  };
+
+  // Cycle 15-2 — popup에서 /search?q=... 결과 페이지로 이동.
+  const handleSeeAll = () => {
+    if (!debouncedQ.trim()) return;
+    router.push(`/search?q=${encodeURIComponent(debouncedQ)}`);
     onOpenChange(false);
   };
 
@@ -146,6 +155,17 @@ export default function QuickSearchDialog({
             </ul>
           )}
         </div>
+        {results.length > 0 && (
+          <div className="border-t border-[#dfe1e6] px-4 py-2 text-right">
+            <button
+              type="button"
+              onClick={handleSeeAll}
+              className="text-[12px] text-[#0052cc] hover:underline"
+            >
+              모든 결과 보기 →
+            </button>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );
