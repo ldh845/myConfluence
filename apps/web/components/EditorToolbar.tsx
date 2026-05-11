@@ -175,20 +175,43 @@ export default function EditorToolbar({ editor }: Props) {
       {editor.isActive("table") && (
         <>
           <Divider />
+          {/* FR-032 (Cycle 14) — 행/열 추가·삭제 + 셀 병합/분할 + 표 삭제. */}
           <BtnGroup>
             <TB
-              title="열 추가"
+              title="행 추가 (위)"
+              onClick={run(() =>
+                editor.chain().focus().addRowBefore().run()
+              )}
+            >
+              ⬆+
+            </TB>
+            <TB
+              title="행 추가 (아래)"
+              onClick={run(() => editor.chain().focus().addRowAfter().run())}
+            >
+              ⬇+
+            </TB>
+            <TB
+              title="행 삭제"
+              onClick={run(() => editor.chain().focus().deleteRow().run())}
+            >
+              ⬌−
+            </TB>
+            <TB
+              title="열 추가 (왼쪽)"
+              onClick={run(() =>
+                editor.chain().focus().addColumnBefore().run()
+              )}
+            >
+              ⬅+
+            </TB>
+            <TB
+              title="열 추가 (오른쪽)"
               onClick={run(() =>
                 editor.chain().focus().addColumnAfter().run()
               )}
             >
-              +열
-            </TB>
-            <TB
-              title="행 추가"
-              onClick={run(() => editor.chain().focus().addRowAfter().run())}
-            >
-              +행
+              ➡+
             </TB>
             <TB
               title="열 삭제"
@@ -196,19 +219,25 @@ export default function EditorToolbar({ editor }: Props) {
                 editor.chain().focus().deleteColumn().run()
               )}
             >
-              −열
+              ⬍−
             </TB>
             <TB
-              title="행 삭제"
-              onClick={run(() => editor.chain().focus().deleteRow().run())}
+              title="셀 병합 (먼저 두 개 이상 셀 드래그 선택)"
+              onClick={run(() => editor.chain().focus().mergeCells().run())}
             >
-              −행
+              ⊞⊟
+            </TB>
+            <TB
+              title="셀 분할"
+              onClick={run(() => editor.chain().focus().splitCell().run())}
+            >
+              ⊟⊞
             </TB>
             <TB
               title="표 삭제"
               onClick={run(() => editor.chain().focus().deleteTable().run())}
             >
-              ×표
+              🗑️
             </TB>
           </BtnGroup>
         </>
