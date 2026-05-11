@@ -1,6 +1,11 @@
 "use client";
 
-import { useEditor, EditorContent, type Editor } from "@tiptap/react";
+import {
+  useEditor,
+  EditorContent,
+  ReactNodeViewRenderer,
+  type Editor,
+} from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Collaboration from "@tiptap/extension-collaboration";
 import CollaborationCursor from "@tiptap/extension-collaboration-cursor";
@@ -21,6 +26,7 @@ import {
   slashCommandSuggestion,
 } from "@/lib/tiptap/slash-command";
 import EditorToolbar from "./EditorToolbar";
+import TaskItemNodeView from "./TaskItemNodeView";
 import * as Y from "yjs";
 import { HocuspocusProvider } from "@hocuspocus/provider";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -109,14 +115,13 @@ export default function CollaborativeEditor({
             // TextStyle은 Color mark를 얹기 위한 base; Highlight multicolor로
             // 형광펜 색을 노드별로 다르게 잡는다. TaskItem은 nested 허용.
             TaskList,
-            TaskItem.configure({
-              nested: true,
-              // FR-030 보강 (Cycle 9-1a) — 조회 모드(editable=false)에서도
-              // 체크박스 토글을 허용. true 반환 시 TipTap이 attr 변경
-              // 트랜잭션을 디스패치한다. 그 외 인라인 편집은 ProseMirror의
-              // editable 가드가 그대로 막아주므로 본문 텍스트 편집이 새는
-              // 건 아니다.
-              onReadOnlyChecked: () => true,
+            // FR-030 보강 (Cycle 9-1b) — React NodeView로 체크박스를 직접
+            // 컨트롤. editor.editable과 무관하게 항상 클릭 가능하고, attr
+            // 변경 transaction이 Y.Doc → 다른 클라이언트로 전파된다.
+            TaskItem.configure({ nested: true }).extend({
+              addNodeView() {
+                return ReactNodeViewRenderer(TaskItemNodeView);
+              },
             }),
             TextStyle,
             Color.configure({ types: ["textStyle"] }),
@@ -195,11 +200,11 @@ export default function CollaborativeEditor({
   }, [editor, instance, pageId, initialMarkdown]);
 
   // Debounced save: client-side, last-writer-wins.
-  // Only active while the body is editable. When the user exits edit mode
-  // the effect cleanup force-flushes any pending debounce so "완료" always
-  // commits the latest change before the UI switches back to read-only.
+  // FR-038 / Cycle 9-1b — editable 가드를 제거. 조회 모드에서도 TaskItem
+  // NodeView가 attr를 바꾸면 update가 발화하므로 PATCH가 트리거되어 체크
+  // 상태가 영속화된다. cleanup의 force-flush 동작은 그대로.
   useEffect(() => {
-    if (!editor || !editable) return;
+    if (!editor) return;
     let timer: ReturnType<typeof setTimeout> | null = null;
     let latestMd = "";
 
@@ -242,7 +247,7 @@ export default function CollaborativeEditor({
         flush();
       }
     };
-  }, [editor, pageId, editable, onSaveStatusChange]);
+  }, [editor, pageId, onSaveStatusChange]);
 
   // Presence / awareness
   useEffect(() => {
