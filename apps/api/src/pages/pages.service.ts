@@ -66,6 +66,19 @@ export class PagesService {
     return this.prisma.page.findMany({ orderBy: { createdAt: 'asc' } });
   }
 
+  // FR-034 (Cycle 11-1) — 내부 페이지 링크 modal용 제목 검색.
+  // 인증 도입 후엔 권한 필터를 추가한다. ILIKE로 한국어 포함 대소문자 무관.
+  search(query: string, limit = 10) {
+    const trimmed = (query ?? '').trim();
+    if (!trimmed) return [];
+    return this.prisma.page.findMany({
+      where: { title: { contains: trimmed, mode: 'insensitive' } },
+      take: limit,
+      orderBy: { updatedAt: 'desc' },
+      select: { id: true, title: true, spaceId: true, updatedAt: true },
+    });
+  }
+
   async findOne(id: string) {
     const page = await this.prisma.page.findUnique({ where: { id } });
     if (!page) throw new NotFoundException({ error: 'not found' });

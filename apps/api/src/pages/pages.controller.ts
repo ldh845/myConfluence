@@ -7,6 +7,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
 } from '@nestjs/common';
 import { PagesService } from './pages.service';
 import { CreatePageDto } from './dto/create-page.dto';
@@ -27,6 +28,13 @@ export class PagesController {
   @Post()
   create(@Body() dto: CreatePageDto) {
     return this.pages.create(dto);
+  }
+
+  // FR-034 (Cycle 11-1) — 내부 링크 modal용 제목 검색.
+  // ⚠️ @Get(':id')보다 반드시 위에 선언해야 'search'가 cuid로 매칭되지 않는다.
+  @Get('search')
+  search(@Query('q') q?: string) {
+    return this.pages.search(q ?? '');
   }
 
   @Get(':id')

@@ -4,6 +4,7 @@ import type { Editor } from "@tiptap/react";
 import { useEffect, useRef, useState } from "react";
 import { CODE_BLOCK_LANGUAGES } from "@/lib/tiptap/code-block-lowlight";
 import EditorColorPicker from "@/components/EditorColorPicker";
+import InternalPageLinkDialog from "@/components/InternalPageLinkDialog";
 
 type Props = { editor: Editor | null };
 
@@ -288,11 +289,12 @@ function CodeBlockLanguageSelect({ editor }: { editor: Editor }) {
 }
 
 function LinkButton({ editor }: { editor: Editor }) {
-  const set = () => {
-    const prev = editor.getAttributes("link").href as string | undefined;
-    const url = window.prompt("링크 URL (비우면 제거):", prev ?? "https://");
-    if (url === null) return;
-    if (url === "") {
+  const [open, setOpen] = useState(false);
+  const currentHref = editor.getAttributes("link").href as string | undefined;
+
+  // FR-034 (Cycle 11-1) — modal로 외부 URL + 내부 페이지 검색 둘 다 처리.
+  const handleSelect = (href: string | null) => {
+    if (href === null || href === "") {
       editor.chain().focus().extendMarkRange("link").unsetLink().run();
       return;
     }
@@ -300,17 +302,26 @@ function LinkButton({ editor }: { editor: Editor }) {
       .chain()
       .focus()
       .extendMarkRange("link")
-      .setLink({ href: url })
+      .setLink({ href })
       .run();
   };
+
   return (
-    <TB
-      title="링크"
-      active={editor.isActive("link")}
-      onClick={set}
-    >
-      🔗
-    </TB>
+    <>
+      <TB
+        title="링크"
+        active={editor.isActive("link")}
+        onClick={() => setOpen(true)}
+      >
+        🔗
+      </TB>
+      <InternalPageLinkDialog
+        open={open}
+        onOpenChange={setOpen}
+        onSelect={handleSelect}
+        currentHref={currentHref}
+      />
+    </>
   );
 }
 
