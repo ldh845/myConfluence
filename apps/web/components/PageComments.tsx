@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  useMemo,
   useState,
   type FormEvent,
   type KeyboardEvent,
@@ -8,8 +9,9 @@ import {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getIdentity } from "@/lib/userIdentity";
 
-// FR-070 (Cycle 16-1b) — 페이지 댓글 기본 UI.
-// 답글(스레드)·리치 텍스트는 16-2, 권한·인증은 별도 사이클.
+// FR-070 (Cycle 16-1b + 16-2a) — 페이지 댓글.
+// 16-2a: parentId 기반 트리 빌드 + 들여쓰기 렌더 + 답글 작성.
+// 권한·리치 텍스트는 추후.
 
 type Comment = {
   id: string;
@@ -21,6 +23,24 @@ type Comment = {
   updatedAt: string;
 };
 
+type CommentNode = Comment & { children: CommentNode[] };
+
+// flat 배열을 parentId 기반 트리로. 부모가 사라진 고아는 root로 끌어올림.
+function buildCommentTree(flat: Comment[]): CommentNode[] {
+  const map = new Map<string, CommentNode>();
+  flat.forEach((c) => map.set(c.id, { ...c, children: [] }));
+  const roots: CommentNode[] = [];
+  flat.forEach((c) => {
+    const node = map.get(c.id)!;
+    if (c.parentId && map.has(c.parentId)) {
+      map.get(c.parentId)!.children.push(node);
+    } else {
+      roots.push(node);
+    }
+  });
+  return roots;
+}
+
 type Props = {
   pageId: string;
   editable: boolean;
@@ -31,6 +51,8 @@ export default function PageComments({ pageId, editable }: Props) {
   const [draft, setDraft] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingBody, setEditingBody] = useState("");
+  const [replyingTo, setReplyingTo] = useState<string | null>(null);
+  const [replyBody, setReplyBody] = useState("");
 
   const { data, isLoading } = useQuery<Comment[]>({
     queryKey: ["comments", pageId],
@@ -41,6 +63,12 @@ export default function PageComments({ pageId, editable }: Props) {
     },
     enabled: !!pageId,
   });
+
+  const comments = data ?? [];
+  const tree = useMemo(() => buildCommentTree(comments), [comments]);
+
+  const invalidate = () =>
+    queryClient.invalidateQueries({ queryKey: ["comments", pageId] });
 
   const create = useMutation({
     mutationFn: async (body: string) => {
@@ -57,7 +85,30 @@ export default function PageComments({ pageId, editable }: Props) {
     },
     onSuccess: () => {
       setDraft("");
-      queryClient.invalidateQueries({ queryKey: ["comments", pageId] });
+      invalidate();
+    },
+    onError: (err: Error) => window.alert(err.message),
+  });
+
+  // FR-070 (Cycle 16-2a) — 답글. parentId 포함 POST.
+  const reply = useMutation({
+    mutationFn: async ({ parentId, body }: { parentId: string; body: string }) => {
+      const r = await fetch(`/api/pages/${pageId}/comments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json; charset=utf-8" },
+        body: JSON.stringify({
+          body,
+          authorName: getIdentity().name,
+          parentId,
+        }),
+      });
+      if (!r.ok) throw new Error("답글 작성에 실패했습니다.");
+      return (await r.json()) as Comment;
+    },
+    onSuccess: () => {
+      setReplyingTo(null);
+      setReplyBody("");
+      invalidate();
     },
     onError: (err: Error) => window.alert(err.message),
   });
@@ -75,36 +126,35 @@ export default function PageComments({ pageId, editable }: Props) {
     onSuccess: () => {
       setEditingId(null);
       setEditingBody("");
-      queryClient.invalidateQueries({ queryKey: ["comments", pageId] });
+      invalidate();
     },
     onError: (err: Error) => window.alert(err.message),
   });
 
   const remove = useMutation({
     mutationFn: async (id: string) => {
-      if (!window.confirm("이 댓글을 삭제하시겠습니까?")) {
+      if (!window.confirm("이 댓글을 삭제하시겠습니까? (답글도 함께 삭제됩니다)")) {
         throw new Error("cancel");
       }
       const r = await fetch(`/api/comments/${id}`, { method: "DELETE" });
       if (!r.ok) throw new Error("댓글 삭제에 실패했습니다.");
       return r.json();
     },
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: ["comments", pageId] }),
+    onSuccess: invalidate,
     onError: (err: Error) => {
       if (err.message === "cancel") return;
       window.alert(err.message);
     },
   });
 
-  const submit = (e: FormEvent) => {
+  const submitRoot = (e: FormEvent) => {
     e.preventDefault();
     const body = draft.trim();
     if (!body || create.isPending) return;
     create.mutate(body);
   };
 
-  const handleKey = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+  const handleRootKey = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
       e.preventDefault();
       const body = draft.trim();
@@ -116,6 +166,7 @@ export default function PageComments({ pageId, editable }: Props) {
   const startEdit = (c: Comment) => {
     setEditingId(c.id);
     setEditingBody(c.body);
+    setReplyingTo(null);
   };
   const cancelEdit = () => {
     setEditingId(null);
@@ -128,7 +179,136 @@ export default function PageComments({ pageId, editable }: Props) {
     update.mutate({ id: editingId, body });
   };
 
-  const comments = data ?? [];
+  const startReply = (id: string) => {
+    setReplyingTo(id);
+    setReplyBody("");
+    setEditingId(null);
+  };
+  const cancelReply = () => {
+    setReplyingTo(null);
+    setReplyBody("");
+  };
+  const submitReply = (parentId: string) => {
+    const body = replyBody.trim();
+    if (!body || reply.isPending) return;
+    reply.mutate({ parentId, body });
+  };
+
+  // 재귀 렌더. closure로 상태/핸들러 접근. 깊이별 들여쓰기는 max 5.
+  const renderItem = (node: CommentNode, depth: number): JSX.Element => {
+    const isEditing = editingId === node.id;
+    const isReplying = replyingTo === node.id;
+    const indent = Math.min(depth, 5) * 24;
+    return (
+      <li
+        key={node.id}
+        className="border border-[#dfe1e6] rounded-md p-3 bg-[#f9fafb]"
+        style={{ marginLeft: indent }}
+      >
+        <div className="flex items-center justify-between mb-1 text-[11px] text-[#6b778c]">
+          <span>
+            <strong className="text-[#172b4d]">
+              {node.authorName ?? "익명"}
+            </strong>
+            <span>
+              {" · "}
+              {new Date(node.createdAt).toLocaleString("ko-KR")}
+            </span>
+            {node.updatedAt !== node.createdAt && <span> (수정됨)</span>}
+          </span>
+          {editable && !isEditing && (
+            <span>
+              <button
+                type="button"
+                onClick={() => startReply(node.id)}
+                className="hover:underline mr-2 text-[#0052cc]"
+              >
+                답글
+              </button>
+              <button
+                type="button"
+                onClick={() => startEdit(node)}
+                className="hover:underline mr-2"
+              >
+                수정
+              </button>
+              <button
+                type="button"
+                onClick={() => remove.mutate(node.id)}
+                className="hover:underline text-[#de350b]"
+              >
+                삭제
+              </button>
+            </span>
+          )}
+        </div>
+        {isEditing ? (
+          <>
+            <textarea
+              value={editingBody}
+              onChange={(e) => setEditingBody(e.target.value)}
+              className="w-full min-h-[60px] border border-[#dfe1e6] rounded p-2 text-[13px] focus:outline-none focus:border-[#0052cc]"
+            />
+            <div className="text-right mt-1">
+              <button
+                type="button"
+                onClick={cancelEdit}
+                className="text-[12px] mr-2 hover:underline"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={saveEdit}
+                disabled={!editingBody.trim() || update.isPending}
+                className="px-3 py-1 bg-[#0052cc] text-white text-[12px] rounded hover:bg-[#0747a6] disabled:bg-[#a5adba]"
+              >
+                {update.isPending ? "저장 중..." : "저장"}
+              </button>
+            </div>
+          </>
+        ) : (
+          <div className="text-[13px] text-[#172b4d] whitespace-pre-wrap">
+            {node.body}
+          </div>
+        )}
+
+        {isReplying && (
+          <div className="mt-2">
+            <textarea
+              value={replyBody}
+              onChange={(e) => setReplyBody(e.target.value)}
+              placeholder="답글 입력..."
+              className="w-full min-h-[60px] border border-[#dfe1e6] rounded p-2 text-[13px] focus:outline-none focus:border-[#0052cc]"
+            />
+            <div className="text-right mt-1">
+              <button
+                type="button"
+                onClick={cancelReply}
+                className="text-[12px] mr-2 hover:underline"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={() => submitReply(node.id)}
+                disabled={!replyBody.trim() || reply.isPending}
+                className="px-3 py-1 bg-[#0052cc] text-white text-[12px] rounded hover:bg-[#0747a6] disabled:bg-[#a5adba]"
+              >
+                {reply.isPending ? "작성 중..." : "답글 작성"}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {node.children.length > 0 && (
+          <ul className="space-y-2 mt-2">
+            {node.children.map((child) => renderItem(child, depth + 1))}
+          </ul>
+        )}
+      </li>
+    );
+  };
 
   return (
     <section className="mt-8 border-t border-[#dfe1e6] pt-6">
@@ -137,11 +317,11 @@ export default function PageComments({ pageId, editable }: Props) {
       </h3>
 
       {editable && (
-        <form onSubmit={submit} className="mb-4">
+        <form onSubmit={submitRoot} className="mb-4">
           <textarea
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={handleKey}
+            onKeyDown={handleRootKey}
             placeholder="댓글 작성... (Ctrl+Enter로 빠른 작성)"
             className="w-full min-h-[80px] border border-[#dfe1e6] rounded-md p-2 text-[13px] focus:outline-none focus:border-[#0052cc]"
             disabled={create.isPending}
@@ -160,78 +340,10 @@ export default function PageComments({ pageId, editable }: Props) {
 
       {isLoading ? (
         <div className="text-[12px] text-[#6b778c]">불러오는 중...</div>
-      ) : comments.length === 0 ? (
+      ) : tree.length === 0 ? (
         <div className="text-[12px] text-[#6b778c]">아직 댓글이 없습니다.</div>
       ) : (
-        <ul className="space-y-3">
-          {comments.map((c) => {
-            const isEditing = editingId === c.id;
-            return (
-              <li
-                key={c.id}
-                className="border border-[#dfe1e6] rounded-md p-3 bg-[#f9fafb]"
-              >
-                <div className="flex items-center justify-between mb-1 text-[11px] text-[#6b778c]">
-                  <span>
-                    <strong className="text-[#172b4d]">
-                      {c.authorName ?? "익명"}
-                    </strong>
-                    <span> · {new Date(c.createdAt).toLocaleString("ko-KR")}</span>
-                    {c.updatedAt !== c.createdAt && <span> (수정됨)</span>}
-                  </span>
-                  {editable && !isEditing && (
-                    <span>
-                      <button
-                        type="button"
-                        onClick={() => startEdit(c)}
-                        className="hover:underline mr-2"
-                      >
-                        수정
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => remove.mutate(c.id)}
-                        className="hover:underline text-[#de350b]"
-                      >
-                        삭제
-                      </button>
-                    </span>
-                  )}
-                </div>
-                {isEditing ? (
-                  <>
-                    <textarea
-                      value={editingBody}
-                      onChange={(e) => setEditingBody(e.target.value)}
-                      className="w-full min-h-[60px] border border-[#dfe1e6] rounded p-2 text-[13px] focus:outline-none focus:border-[#0052cc]"
-                    />
-                    <div className="text-right mt-1">
-                      <button
-                        type="button"
-                        onClick={cancelEdit}
-                        className="text-[12px] mr-2 hover:underline"
-                      >
-                        취소
-                      </button>
-                      <button
-                        type="button"
-                        onClick={saveEdit}
-                        disabled={!editingBody.trim() || update.isPending}
-                        className="px-3 py-1 bg-[#0052cc] text-white text-[12px] rounded hover:bg-[#0747a6] disabled:bg-[#a5adba]"
-                      >
-                        {update.isPending ? "저장 중..." : "저장"}
-                      </button>
-                    </div>
-                  </>
-                ) : (
-                  <div className="text-[13px] text-[#172b4d] whitespace-pre-wrap">
-                    {c.body}
-                  </div>
-                )}
-              </li>
-            );
-          })}
-        </ul>
+        <ul className="space-y-3">{tree.map((root) => renderItem(root, 0))}</ul>
       )}
     </section>
   );
