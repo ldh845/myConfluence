@@ -14,6 +14,7 @@ import AttachmentList from "@/components/AttachmentList";
 import TableOfContents from "@/components/TableOfContents";
 import PageVersionHistory from "@/components/PageVersionHistory";
 import { getIdentity } from "@/lib/userIdentity";
+import { usePageStore } from "@/lib/stores/usePageStore";
 import type {
   PresenceUser,
   SaveStatus,
@@ -71,6 +72,17 @@ export default function HomePage() {
     setSaveStatus("idle");
     loadCurrentPage(selectedPageId);
   }, [selectedPageId, loadCurrentPage]);
+
+  // Cycle 10-2b-2 — TaskItemNodeView가 조회 모드에서 즉시 발행할 때 쓰는
+  // pageId/authorName을 store에 동기화. NodeView는 props를 못 받으므로 store
+  // 우회.
+  useEffect(() => {
+    if (currentPage) {
+      usePageStore.getState().setPage(currentPage.id, getIdentity().name);
+    } else {
+      usePageStore.getState().reset();
+    }
+  }, [currentPage]);
 
   // Cycle 10-2a — 발행 흐름. draftContent → content + PageVersion 스냅샷.
   const publish = useMutation({
