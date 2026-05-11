@@ -55,6 +55,13 @@ export default function EditorToolbar({ editor }: Props) {
             editor.chain().focus().toggleHeading({ level: 3 }).run()
           )}
         />
+        <TB
+          label="H4"
+          active={isActive("heading", { level: 4 })}
+          onClick={run(() =>
+            editor.chain().focus().toggleHeading({ level: 4 }).run()
+          )}
+        />
       </BtnGroup>
       <Divider />
       <BtnGroup>
@@ -71,6 +78,13 @@ export default function EditorToolbar({ editor }: Props) {
           onClick={run(() => editor.chain().focus().toggleItalic().run())}
         >
           <i>I</i>
+        </TB>
+        <TB
+          title="밑줄 (Ctrl+U)"
+          active={isActive("underline")}
+          onClick={run(() => editor.chain().focus().toggleUnderline().run())}
+        >
+          <u>U</u>
         </TB>
         <TB
           title="취소선"

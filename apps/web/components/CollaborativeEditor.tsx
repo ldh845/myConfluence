@@ -20,6 +20,7 @@ import TaskItem from "@tiptap/extension-task-item";
 import TextStyle from "@tiptap/extension-text-style";
 import Color from "@tiptap/extension-color";
 import Highlight from "@tiptap/extension-highlight";
+import Underline from "@tiptap/extension-underline";
 import { CodeBlockExtension } from "@/lib/tiptap/code-block-lowlight";
 import {
   SlashCommand,
@@ -109,8 +110,16 @@ export default function CollaborativeEditor({
         ? [
             // FR-031 — codeBlock은 CodeBlockLowlight로 교체하므로 StarterKit
             // 기본 codeBlock은 비활성. 두 노드가 충돌하면 schema가 깨진다.
-            StarterKit.configure({ history: false, codeBlock: false }),
+            StarterKit.configure({
+              history: false,
+              codeBlock: false,
+              // FR-030 (Cycle 9-2) — H4까지 노출. StarterKit 기본 levels는
+              // 1~6이지만 toolbar/슬래시가 H4까지만 보여주는 게 우리 정책.
+              heading: { levels: [1, 2, 3, 4] },
+            }),
             CodeBlockExtension,
+            // FR-030 (Cycle 9-2) — 밑줄 mark.
+            Underline,
             // FR-030 부분 — 체크리스트 + 텍스트/배경 색상.
             // TextStyle은 Color mark를 얹기 위한 base; Highlight multicolor로
             // 형광펜 색을 노드별로 다르게 잡는다. TaskItem은 nested 허용.
@@ -147,7 +156,13 @@ export default function CollaborativeEditor({
               user: { name: identity.name, color: identity.color },
             }),
           ]
-        : [StarterKit.configure({ history: false, codeBlock: false })],
+        : [StarterKit.configure({
+              history: false,
+              codeBlock: false,
+              // FR-030 (Cycle 9-2) — H4까지 노출. StarterKit 기본 levels는
+              // 1~6이지만 toolbar/슬래시가 H4까지만 보여주는 게 우리 정책.
+              heading: { levels: [1, 2, 3, 4] },
+            })],
       editorProps: {
         attributes: {
           class: "cf-article outline-none min-h-[320px]",

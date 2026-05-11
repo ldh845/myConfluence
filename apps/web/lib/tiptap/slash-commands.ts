@@ -48,6 +48,18 @@ export const SLASH_ITEMS: SlashCommandItem[] = [
         .run(),
   },
   {
+    title: "제목 4",
+    description: "소단원 제목",
+    searchTerms: ["h4", "heading", "title", "제목"],
+    command: ({ editor, range }) =>
+      editor
+        .chain()
+        .focus()
+        .deleteRange(range)
+        .setNode("heading", { level: 4 })
+        .run(),
+  },
+  {
     title: "불릿 리스트",
     description: "• 항목 목록",
     searchTerms: ["bullet", "ul", "list", "리스트", "목록"],
