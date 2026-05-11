@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  HttpCode,
   Param,
   Patch,
   Post,
@@ -10,6 +11,8 @@ import {
 import { PagesService } from './pages.service';
 import { CreatePageDto } from './dto/create-page.dto';
 import { UpdatePageDto } from './dto/update-page.dto';
+import { UpdateDraftDto } from './dto/update-draft.dto';
+import { PublishPageDto } from './dto/publish-page.dto';
 import { CreateDiagramDto } from './dto/create-diagram.dto';
 
 @Controller('pages')
@@ -34,6 +37,19 @@ export class PagesController {
   @Patch(':id')
   update(@Param('id') id: string, @Body() dto: UpdatePageDto) {
     return this.pages.update(id, dto);
+  }
+
+  // 이슈 2 (Cycle 10-1) — 임시 저장. PageVersion 미적재.
+  @Patch(':id/draft')
+  updateDraft(@Param('id') id: string, @Body() dto: UpdateDraftDto) {
+    return this.pages.updateDraft(id, dto);
+  }
+
+  // 이슈 2 (Cycle 10-1) — 발행. draft → content + PageVersion 스냅샷.
+  @Post(':id/publish')
+  @HttpCode(200)
+  publish(@Param('id') id: string, @Body() dto: PublishPageDto) {
+    return this.pages.publish(id, dto);
   }
 
   @Delete(':id')

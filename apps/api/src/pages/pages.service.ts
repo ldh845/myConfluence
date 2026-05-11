@@ -1,9 +1,15 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AttachmentsService } from '../attachments/attachments.service';
 import { CreatePageDto } from './dto/create-page.dto';
 import { UpdatePageDto } from './dto/update-page.dto';
+import { UpdateDraftDto } from './dto/update-draft.dto';
+import { PublishPageDto } from './dto/publish-page.dto';
 import { CreateDiagramDto } from './dto/create-diagram.dto';
 
 // FR-064 — 페이지당 보관할 PageVersion 수. 환경변수 미설정/잘못된 값일
@@ -114,6 +120,53 @@ export class PagesService {
     return this.prisma.pageVersion.findMany({
       where: { pageId },
       orderBy: { version: 'desc' },
+    });
+  }
+
+  // 이슈 2 (Cycle 10-1) — 임시 저장.
+  // PageVersion은 만들지 않는다 (drafts는 발행 시점에만 history에 적재).
+  async updateDraft(id: string, dto: UpdateDraftDto) {
+    const page = await this.prisma.page.findUnique({
+      where: { id },
+      select: { id: true },
+    });
+    if (!page) throw new NotFoundException({ error: 'page not found' });
+    return this.prisma.page.update({
+      where: { id },
+      data: { draftContent: dto.content },
+    });
+  }
+
+  // 이슈 2 (Cycle 10-1) — 발행.
+  // draft → content 승격 + draft 비움 + PageVersion 스냅샷 + retention cap.
+  // 모두 같은 트랜잭션이므로 한쪽 실패 시 함께 롤백.
+  publish(id: string, dto: PublishPageDto) {
+    return this.prisma.$transaction(async (tx) => {
+      const page = await tx.page.findUnique({ where: { id } });
+      if (!page) throw new NotFoundException({ error: 'page not found' });
+      if (page.draftContent === null) {
+        throw new BadRequestException({ error: 'no draft to publish' });
+      }
+      const published = await tx.page.update({
+        where: { id },
+        data: { content: page.draftContent, draftContent: null },
+      });
+      const last = await tx.pageVersion.findFirst({
+        where: { pageId: id },
+        orderBy: { version: 'desc' },
+        select: { version: true },
+      });
+      await tx.pageVersion.create({
+        data: {
+          pageId: id,
+          title: published.title,
+          content: published.content,
+          authorName: dto.authorName ?? null,
+          version: (last?.version ?? 0) + 1,
+        },
+      });
+      await this.cleanupOldVersions(tx, id);
+      return published;
     });
   }
 

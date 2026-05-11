@@ -19,6 +19,10 @@ model Page {
   id          String        @id @default(cuid())
   title       String
   content     String        @default("")
+  // 이슈 2 (Cycle 10-1) — 편집 중 임시 저장.
+  // null이면 draft 없음(published만). PATCH /pages/:id/draft로 갱신,
+  // POST /pages/:id/publish로 비움(content로 승격).
+  draftContent String?
   spaceId     String
   space       Space         @relation(fields: [spaceId], references: [id], onDelete: Cascade)
   parentId    String?
