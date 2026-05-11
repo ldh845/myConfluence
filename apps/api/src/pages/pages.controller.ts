@@ -30,6 +30,21 @@ export class PagesController {
     return this.pages.create(dto);
   }
 
+  // FR-090 / FR-092 (Cycle 15-1a) — 전문 검색(제목 + 본문).
+  // ⚠️ 모든 정적 path는 @Get(':id') 위에 선언.
+  @Get('full-search')
+  fullSearch(
+    @Query('q') q?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.pages.fullSearch(
+      q ?? '',
+      limit ? Number(limit) : 20,
+      offset ? Number(offset) : 0,
+    );
+  }
+
   // FR-034 (Cycle 11-1) — 내부 링크 modal용 제목 검색.
   // ⚠️ @Get(':id')보다 반드시 위에 선언해야 'search'가 cuid로 매칭되지 않는다.
   @Get('search')

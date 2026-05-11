@@ -79,6 +79,75 @@ export class PagesService {
     });
   }
 
+  // FR-090 / FR-092 (Cycle 15-1a) — 전문 검색.
+  // 제목·본문 ILIKE (pg_trgm GIN 인덱스가 가속). app-level에서 제목 매칭을
+  // 우선 정렬한 뒤, 본문 매칭 위치 주변 60자를 snippet으로 추출한다.
+  async fullSearch(query: string, limit = 20, offset = 0) {
+    const trimmed = (query ?? '').trim();
+    if (!trimmed) return { results: [], total: 0 };
+    const safeLimit = Math.min(Math.max(limit, 1), 100);
+    const safeOffset = Math.max(offset, 0);
+    const where: Prisma.PageWhereInput = {
+      OR: [
+        { title: { contains: trimmed, mode: 'insensitive' } },
+        { content: { contains: trimmed, mode: 'insensitive' } },
+      ],
+    };
+    const [rows, total] = await Promise.all([
+      this.prisma.page.findMany({
+        where,
+        take: safeLimit,
+        skip: safeOffset,
+        orderBy: { updatedAt: 'desc' },
+        select: {
+          id: true,
+          title: true,
+          spaceId: true,
+          updatedAt: true,
+          content: true,
+        },
+      }),
+      this.prisma.page.count({ where }),
+    ]);
+    const lowerQ = trimmed.toLowerCase();
+    rows.sort((a, b) => {
+      const aTitle = a.title.toLowerCase().includes(lowerQ);
+      const bTitle = b.title.toLowerCase().includes(lowerQ);
+      if (aTitle !== bTitle) return aTitle ? -1 : 1;
+      return b.updatedAt.getTime() - a.updatedAt.getTime();
+    });
+    const results = rows.map((r) => ({
+      id: r.id,
+      title: r.title,
+      spaceId: r.spaceId,
+      updatedAt: r.updatedAt,
+      snippet: this.extractSnippet(r.content, trimmed),
+    }));
+    return { results, total };
+  }
+
+  private extractSnippet(
+    content: string,
+    query: string,
+    contextChars = 60,
+  ): string {
+    if (!content) return '';
+    const lowerContent = content.toLowerCase();
+    const idx = lowerContent.indexOf(query.toLowerCase());
+    if (idx === -1) {
+      const head = content.slice(0, contextChars * 2).trim();
+      return content.length > contextChars * 2 ? `${head}...` : head;
+    }
+    const start = Math.max(0, idx - contextChars);
+    const end = Math.min(content.length, idx + query.length + contextChars);
+    const body = content.slice(start, end).trim();
+    return (
+      (start > 0 ? '...' : '') +
+      body +
+      (end < content.length ? '...' : '')
+    );
+  }
+
   async findOne(id: string) {
     const page = await this.prisma.page.findUnique({ where: { id } });
     if (!page) throw new NotFoundException({ error: 'not found' });
