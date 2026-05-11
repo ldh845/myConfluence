@@ -8,6 +8,7 @@ import { PagesModule } from './pages/pages.module';
 import { DiagramsModule } from './diagrams/diagrams.module';
 import { CollaborationModule } from './collaboration/collaboration.module';
 import { AttachmentsModule } from './attachments/attachments.module';
+import { CommentsModule } from './comments/comments.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { AttachmentsModule } from './attachments/attachments.module';
     DiagramsModule,
     CollaborationModule,
     AttachmentsModule,
+    CommentsModule,
   ],
   controllers: [AppController, HealthController],
   providers: [AppService],

@@ -31,10 +31,30 @@ model Page {
   diagrams    Diagram[]
   versions    PageVersion[]
   attachments Attachment[]
+  comments    Comment[]
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 
   @@index([spaceId])
+  @@index([parentId])
+}
+
+// FR-070 (Cycle 16-1a) — 페이지 댓글.
+// parentId/parent self-relation은 16-2 스레드 사이클 대비. 현재는 모두 null.
+// page cascade로 페이지 삭제 시 함께 정리. 권한 체크는 인증 사이클까지 보류.
+model Comment {
+  id         String    @id @default(cuid())
+  pageId     String
+  page       Page      @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  parentId   String?
+  parent     Comment?  @relation("CommentThread", fields: [parentId], references: [id], onDelete: Cascade)
+  replies    Comment[] @relation("CommentThread")
+  authorName String?
+  body       String
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@index([pageId, createdAt])
   @@index([parentId])
 }
 
