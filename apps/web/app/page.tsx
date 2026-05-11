@@ -15,6 +15,7 @@ import AttachmentList from "@/components/AttachmentList";
 import TableOfContents from "@/components/TableOfContents";
 import PageVersionHistory from "@/components/PageVersionHistory";
 import QuickSearchDialog from "@/components/QuickSearchDialog";
+import PageComments from "@/components/PageComments";
 import { getIdentity } from "@/lib/userIdentity";
 import { usePageStore } from "@/lib/stores/usePageStore";
 import type {
@@ -416,6 +417,10 @@ export default function HomePage() {
                       editable={isBodyEditable}
                     />
                     <AttachmentList
+                      pageId={currentPage.id}
+                      editable={isBodyEditable}
+                    />
+                    <PageComments
                       pageId={currentPage.id}
                       editable={isBodyEditable}
                     />
