@@ -16,21 +16,36 @@ model Space {
 }
 
 model Page {
-  id        String        @id @default(cuid())
-  title     String
-  content   String        @default("")
-  spaceId   String
-  space     Space         @relation(fields: [spaceId], references: [id], onDelete: Cascade)
-  parentId  String?
-  parent    Page?         @relation("PageTree", fields: [parentId], references: [id], onDelete: Cascade)
-  children  Page[]        @relation("PageTree")
-  diagrams  Diagram[]
-  versions  PageVersion[]
-  createdAt DateTime      @default(now())
-  updatedAt DateTime      @updatedAt
+  id          String        @id @default(cuid())
+  title       String
+  content     String        @default("")
+  spaceId     String
+  space       Space         @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  parentId    String?
+  parent      Page?         @relation("PageTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children    Page[]        @relation("PageTree")
+  diagrams    Diagram[]
+  versions    PageVersion[]
+  attachments Attachment[]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
 
   @@index([spaceId])
   @@index([parentId])
+}
+
+model Attachment {
+  id         String   @id @default(cuid())
+  pageId     String
+  page       Page     @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  filename   String
+  mimetype   String
+  size       Int
+  storageKey String   @unique
+  authorName String?
+  createdAt  DateTime @default(now())
+
+  @@index([pageId])
 }
 
 model PageVersion {

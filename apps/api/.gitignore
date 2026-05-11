@@ -3,3 +3,10 @@ node_modules
 .env
 
 /generated/prisma
+
+# Attachment storage: keep folder layout but ignore contents (FR-080).
+storage/*
+!storage/.gitkeep
+!storage/attachments
+storage/attachments/*
+!storage/attachments/.gitkeep

@@ -7,6 +7,7 @@ import { SpacesModule } from './spaces/spaces.module';
 import { PagesModule } from './pages/pages.module';
 import { DiagramsModule } from './diagrams/diagrams.module';
 import { CollaborationModule } from './collaboration/collaboration.module';
+import { AttachmentsModule } from './attachments/attachments.module';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { CollaborationModule } from './collaboration/collaboration.module';
     PagesModule,
     DiagramsModule,
     CollaborationModule,
+    AttachmentsModule,
   ],
   controllers: [AppController, HealthController],
   providers: [AppService],

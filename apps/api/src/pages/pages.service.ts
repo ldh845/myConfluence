@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { AttachmentsService } from '../attachments/attachments.service';
 import { CreatePageDto } from './dto/create-page.dto';
 import { UpdatePageDto } from './dto/update-page.dto';
 import { CreateDiagramDto } from './dto/create-diagram.dto';
@@ -28,7 +29,10 @@ export class PagesService {
   // 모듈 로드 시 한 번만 평가. dev 시 .env 변경 후 재시작 필요.
   private readonly retentionLimit = resolveRetentionLimit();
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly attachments: AttachmentsService,
+  ) {}
 
   // FR-064 — 같은 트랜잭션 안에서 호출. 새 PageVersion이 막 추가된
   // 직후라, 보관 한도를 넘겼다면 가장 오래된 것부터 잘라낸다.
@@ -152,8 +156,35 @@ export class PagesService {
   }
 
   async remove(id: string) {
+    // FR-080 — 페이지 삭제 시 첨부 파일도 디스크에서 제거. DB row는 cascade
+    // 가 처리하지만 디스크 파일은 별도로 best-effort로 정리한다. 자식 페이지의
+    // 첨부도 같이 청소하기 위해 삭제 대상 트리 전체의 storageKey를 한 번에
+    // 모은다.
+    const targetIds = await this.collectDescendantIds(id);
+    const orphans = await this.prisma.attachment.findMany({
+      where: { pageId: { in: targetIds } },
+      select: { storageKey: true },
+    });
     await this.prisma.page.delete({ where: { id } });
+    if (orphans.length > 0) {
+      await this.attachments.cleanupFiles(orphans.map((o) => o.storageKey));
+    }
     return { ok: true };
+  }
+
+  // 자손 페이지를 BFS로 모아 첨부 정리 시 모두 포함되게 한다.
+  private async collectDescendantIds(rootId: string): Promise<string[]> {
+    const all: string[] = [rootId];
+    let frontier: string[] = [rootId];
+    while (frontier.length > 0) {
+      const children = await this.prisma.page.findMany({
+        where: { parentId: { in: frontier } },
+        select: { id: true },
+      });
+      frontier = children.map((c) => c.id);
+      all.push(...frontier);
+    }
+    return all;
   }
 
   listDiagrams(pageId: string) {
