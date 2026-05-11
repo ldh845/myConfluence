@@ -18,6 +18,7 @@ export type PageFull = {
   id: string;
   title: string;
   content: string;
+  draftContent: string | null;
   spaceId: string;
   parentId: string | null;
   createdAt: string;

@@ -51,6 +51,9 @@ type Props = {
   onDelete: () => void;
   onSelectAncestor: (id: string) => void;
   onHistoryClick?: () => void;
+  hasDraft?: boolean;
+  publishing?: boolean;
+  onPublish?: () => void;
 };
 
 export default function PageHeader({
@@ -64,6 +67,9 @@ export default function PageHeader({
   onDelete,
   onSelectAncestor,
   onHistoryClick,
+  hasDraft,
+  publishing,
+  onPublish,
 }: Props) {
   const crumbs = space ? buildBreadcrumb(page, space.pages) : [];
   const ancestors = crumbs.slice(0, -1);
@@ -162,6 +168,22 @@ export default function PageHeader({
             <span>{isBodyEditable ? "✓" : "✏️"}</span>
             <span>{isBodyEditable ? "완료 (E)" : "편집 (E)"}</span>
           </button>
+          {isBodyEditable && (
+            <button
+              type="button"
+              onClick={onPublish}
+              disabled={!hasDraft || publishing}
+              className="inline-flex items-center gap-1 px-2 py-1 rounded text-[12px] bg-[#36b37e] text-white hover:bg-[#2a8c61] disabled:bg-[#a5adba] disabled:cursor-not-allowed"
+              title={
+                hasDraft
+                  ? "임시 저장된 변경 사항을 발행합니다"
+                  : "발행할 변경 사항이 없습니다"
+              }
+            >
+              <span>🚀</span>
+              <span>{publishing ? "발행 중..." : "발행"}</span>
+            </button>
+          )}
           <ActionButton icon="💬" label="댓글" disabled />
           <ActionButton icon="⭐" label="저장" disabled />
           <ActionButton icon="👁️" label="지켜보기" disabled />

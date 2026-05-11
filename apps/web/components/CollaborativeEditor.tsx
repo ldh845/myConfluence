@@ -226,10 +226,10 @@ export default function CollaborativeEditor({
     const flush = async () => {
       onSaveStatusChange?.("saving");
       try {
-        const res = await fetch(`/api/pages/${pageId}`, {
+        // Cycle 10-2a — 자동저장은 draft로. content는 발행 시점에만 갱신.
+        const res = await fetch(`/api/pages/${pageId}/draft`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          // FR-060 — 자동 스냅샷 attribution. 인증 전까지는 익명 이름.
           body: JSON.stringify({
             content: latestMd,
             authorName: identity.name,

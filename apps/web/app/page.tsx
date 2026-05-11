@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import TopNav from "@/components/TopNav";
 import Sidebar from "@/components/Sidebar";
 // SRS 5.9 검색·AI 사이클에서 재구현 예정 (Cycle 2-5 일시 비활성)
@@ -12,6 +13,7 @@ import DiagramList from "@/components/DiagramList";
 import AttachmentList from "@/components/AttachmentList";
 import TableOfContents from "@/components/TableOfContents";
 import PageVersionHistory from "@/components/PageVersionHistory";
+import { getIdentity } from "@/lib/userIdentity";
 import type {
   PresenceUser,
   SaveStatus,
@@ -52,19 +54,52 @@ export default function HomePage() {
     loadSpaces();
   }, [loadSpaces]);
 
+  const queryClient = useQueryClient();
+
+  const loadCurrentPage = useCallback(async (pageId: string) => {
+    const r = await fetch(`/api/pages/${pageId}`);
+    const p = r.ok ? ((await r.json()) as PageFull) : null;
+    setCurrentPage(p);
+  }, []);
+
   useEffect(() => {
     setIsBodyEditable(false);
     if (!selectedPageId) {
       setCurrentPage(null);
       return;
     }
-    fetch(`/api/pages/${selectedPageId}`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((p) => {
-        setCurrentPage(p);
-        setSaveStatus("idle");
+    setSaveStatus("idle");
+    loadCurrentPage(selectedPageId);
+  }, [selectedPageId, loadCurrentPage]);
+
+  // Cycle 10-2a — 발행 흐름. draftContent → content + PageVersion 스냅샷.
+  const publish = useMutation({
+    mutationFn: async (pageId: string) => {
+      const r = await fetch(`/api/pages/${pageId}/publish`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json; charset=utf-8" },
+        body: JSON.stringify({ authorName: getIdentity().name }),
       });
-  }, [selectedPageId]);
+      if (!r.ok) {
+        if (r.status === 400) throw new Error("발행할 변경 사항이 없습니다.");
+        throw new Error("발행에 실패했습니다.");
+      }
+      return (await r.json()) as PageFull;
+    },
+    onSuccess: async (_data, pageId) => {
+      window.alert("발행되었습니다.");
+      queryClient.invalidateQueries({ queryKey: ["page-versions", pageId] });
+      await loadCurrentPage(pageId);
+    },
+    onError: (err: Error) => {
+      window.alert(err.message);
+    },
+  });
+
+  const handlePublish = useCallback(() => {
+    if (!currentPage) return;
+    publish.mutate(currentPage.id);
+  }, [currentPage, publish]);
 
   const enterEditMode = useCallback(() => {
     setIsBodyEditable(true);
@@ -267,6 +302,9 @@ export default function HomePage() {
                   onDelete={confirmDeleteCurrent}
                   onSelectAncestor={setSelectedPageId}
                   onHistoryClick={() => setHistoryOpen(true)}
+                  hasDraft={currentPage.draftContent !== null}
+                  publishing={publish.isPending}
+                  onPublish={handlePublish}
                 />
                 <hr className="my-4 border-[#dfe1e6]" />
                 <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_220px] gap-8">
@@ -274,7 +312,9 @@ export default function HomePage() {
                     <CollaborativeEditor
                       key={currentPage.id}
                       pageId={currentPage.id}
-                      initialMarkdown={currentPage.content}
+                      initialMarkdown={
+                        currentPage.draftContent ?? currentPage.content
+                      }
                       editable={isBodyEditable}
                       onSaveStatusChange={setSaveStatus}
                       onPresenceChange={setPresence}
