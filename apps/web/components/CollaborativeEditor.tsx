@@ -109,7 +109,15 @@ export default function CollaborativeEditor({
             // TextStyle은 Color mark를 얹기 위한 base; Highlight multicolor로
             // 형광펜 색을 노드별로 다르게 잡는다. TaskItem은 nested 허용.
             TaskList,
-            TaskItem.configure({ nested: true }),
+            TaskItem.configure({
+              nested: true,
+              // FR-030 보강 (Cycle 9-1a) — 조회 모드(editable=false)에서도
+              // 체크박스 토글을 허용. true 반환 시 TipTap이 attr 변경
+              // 트랜잭션을 디스패치한다. 그 외 인라인 편집은 ProseMirror의
+              // editable 가드가 그대로 막아주므로 본문 텍스트 편집이 새는
+              // 건 아니다.
+              onReadOnlyChecked: () => true,
+            }),
             TextStyle,
             Color.configure({ types: ["textStyle"] }),
             Highlight.configure({ multicolor: true }),
