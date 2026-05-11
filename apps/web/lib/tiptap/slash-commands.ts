@@ -107,6 +107,19 @@ export const SLASH_ITEMS: SlashCommandItem[] = [
         .run(),
   },
   {
+    // FR-033 (Cycle 12-2) — 외부 URL 이미지 삽입. 첨부 업로드는 12-1 드롭/붙여넣기 흐름.
+    title: "이미지",
+    description: "외부 URL 이미지 삽입",
+    searchTerms: ["image", "img", "picture", "이미지", "사진", "그림"],
+    command: ({ editor, range }) => {
+      const url = window.prompt("이미지 URL");
+      editor.chain().focus().deleteRange(range).run();
+      if (!url) return;
+      const alt = window.prompt("이미지 캡션(alt 텍스트, 선택)", "") ?? "";
+      editor.chain().focus().setImage({ src: url, alt }).run();
+    },
+  },
+  {
     title: "구분선",
     description: "수평 구분선",
     searchTerms: ["hr", "divider", "separator", "구분선", "수평선"],

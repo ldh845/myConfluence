@@ -158,11 +158,18 @@ export default function EditorToolbar({ editor }: Props) {
       <BtnGroup>
         <LinkButton editor={editor} />
         <TableButton editor={editor} />
+        <ImageButton editor={editor} />
       </BtnGroup>
       {editor.isActive("codeBlock") && (
         <>
           <Divider />
           <CodeBlockLanguageSelect editor={editor} />
+        </>
+      )}
+      {editor.isActive("image") && (
+        <>
+          <Divider />
+          <ImageAltButton editor={editor} />
         </>
       )}
       {editor.isActive("table") && (
@@ -322,6 +329,40 @@ function LinkButton({ editor }: { editor: Editor }) {
         currentHref={currentHref}
       />
     </>
+  );
+}
+
+// FR-033 (Cycle 12-2) — 외부 URL 이미지 삽입.
+// 드롭/붙여넣기로 들어오는 첨부 업로드 흐름은 CollaborativeEditor의
+// handleDrop/handlePaste(Cycle 12-1)에서 처리하므로 여기서는 외부 URL만.
+function ImageButton({ editor }: { editor: Editor }) {
+  const insert = () => {
+    const url = window.prompt("이미지 URL");
+    if (!url) return;
+    const alt = window.prompt("이미지 캡션(alt 텍스트, 선택)", "") ?? "";
+    editor.chain().focus().setImage({ src: url, alt }).run();
+  };
+  return (
+    <TB title="이미지" onClick={insert}>
+      🖼️
+    </TB>
+  );
+}
+
+// FR-033 (Cycle 12-2) — 선택된 이미지 노드의 alt 편집(간이 캡션).
+// 12-3에서 figure/figcaption 정식 캡션 + 플로팅 UI로 교체 예정.
+function ImageAltButton({ editor }: { editor: Editor }) {
+  const editAlt = () => {
+    const current =
+      (editor.getAttributes("image").alt as string | undefined) ?? "";
+    const next = window.prompt("이미지 캡션(alt 텍스트)", current);
+    if (next === null) return;
+    editor.chain().focus().updateAttributes("image", { alt: next }).run();
+  };
+  return (
+    <TB title="이미지 캡션 편집" onClick={editAlt}>
+      📝
+    </TB>
   );
 }
 
