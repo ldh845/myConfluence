@@ -31,17 +31,34 @@ export class PagesController {
   }
 
   // FR-090 / FR-092 (Cycle 15-1a) — 전문 검색(제목 + 본문).
+  // FR-091 (Cycle 15-3) — 스페이스/날짜 필터 + 정렬.
   // ⚠️ 모든 정적 path는 @Get(':id') 위에 선언.
   @Get('full-search')
   fullSearch(
     @Query('q') q?: string,
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
+    @Query('spaceId') spaceId?: string,
+    @Query('dateFrom') dateFrom?: string,
+    @Query('dateTo') dateTo?: string,
+    @Query('sort') sort?: string,
   ) {
+    const parsedSort: 'relevance' | 'newest' | 'updated' =
+      sort === 'newest' || sort === 'updated' ? sort : 'relevance';
+    const parsedFrom = dateFrom ? new Date(dateFrom) : undefined;
+    const parsedTo = dateTo ? new Date(dateTo) : undefined;
     return this.pages.fullSearch(
       q ?? '',
       limit ? Number(limit) : 20,
       offset ? Number(offset) : 0,
+      {
+        spaceId: spaceId || undefined,
+        dateFrom:
+          parsedFrom && !isNaN(parsedFrom.getTime()) ? parsedFrom : undefined,
+        dateTo:
+          parsedTo && !isNaN(parsedTo.getTime()) ? parsedTo : undefined,
+        sort: parsedSort,
+      },
     );
   }
 

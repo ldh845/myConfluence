@@ -82,23 +82,54 @@ export class PagesService {
   // FR-090 / FR-092 (Cycle 15-1a) — 전문 검색.
   // 제목·본문 ILIKE (pg_trgm GIN 인덱스가 가속). app-level에서 제목 매칭을
   // 우선 정렬한 뒤, 본문 매칭 위치 주변 60자를 snippet으로 추출한다.
-  async fullSearch(query: string, limit = 20, offset = 0) {
+  // FR-091 (Cycle 15-3) — 스페이스/날짜 필터 + 정렬 옵션 추가.
+  async fullSearch(
+    query: string,
+    limit = 20,
+    offset = 0,
+    opts: {
+      spaceId?: string;
+      dateFrom?: Date;
+      dateTo?: Date;
+      sort?: 'relevance' | 'newest' | 'updated';
+    } = {},
+  ) {
     const trimmed = (query ?? '').trim();
     if (!trimmed) return { results: [], total: 0 };
     const safeLimit = Math.min(Math.max(limit, 1), 100);
     const safeOffset = Math.max(offset, 0);
-    const where: Prisma.PageWhereInput = {
-      OR: [
-        { title: { contains: trimmed, mode: 'insensitive' } },
-        { content: { contains: trimmed, mode: 'insensitive' } },
-      ],
-    };
+    const sort = opts.sort ?? 'relevance';
+
+    const filters: Prisma.PageWhereInput[] = [
+      {
+        OR: [
+          { title: { contains: trimmed, mode: 'insensitive' } },
+          { content: { contains: trimmed, mode: 'insensitive' } },
+        ],
+      },
+    ];
+    if (opts.spaceId) filters.push({ spaceId: opts.spaceId });
+    if (opts.dateFrom || opts.dateTo) {
+      filters.push({
+        updatedAt: {
+          ...(opts.dateFrom ? { gte: opts.dateFrom } : {}),
+          ...(opts.dateTo ? { lte: opts.dateTo } : {}),
+        },
+      });
+    }
+    const where: Prisma.PageWhereInput = { AND: filters };
+
+    const orderBy: Prisma.PageOrderByWithRelationInput =
+      sort === 'newest'
+        ? { createdAt: 'desc' }
+        : { updatedAt: 'desc' };
+
     const [rows, total] = await Promise.all([
       this.prisma.page.findMany({
         where,
         take: safeLimit,
         skip: safeOffset,
-        orderBy: { updatedAt: 'desc' },
+        orderBy,
         select: {
           id: true,
           title: true,
@@ -109,13 +140,18 @@ export class PagesService {
       }),
       this.prisma.page.count({ where }),
     ]);
-    const lowerQ = trimmed.toLowerCase();
-    rows.sort((a, b) => {
-      const aTitle = a.title.toLowerCase().includes(lowerQ);
-      const bTitle = b.title.toLowerCase().includes(lowerQ);
-      if (aTitle !== bTitle) return aTitle ? -1 : 1;
-      return b.updatedAt.getTime() - a.updatedAt.getTime();
-    });
+
+    // 관련도 정렬일 때만 app-level 제목 우선. 'newest'/'updated'는 SQL 정렬을 신뢰.
+    if (sort === 'relevance') {
+      const lowerQ = trimmed.toLowerCase();
+      rows.sort((a, b) => {
+        const aTitle = a.title.toLowerCase().includes(lowerQ);
+        const bTitle = b.title.toLowerCase().includes(lowerQ);
+        if (aTitle !== bTitle) return aTitle ? -1 : 1;
+        return b.updatedAt.getTime() - a.updatedAt.getTime();
+      });
+    }
+
     const results = rows.map((r) => ({
       id: r.id,
       title: r.title,
