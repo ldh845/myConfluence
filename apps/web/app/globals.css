@@ -183,9 +183,14 @@ body {
 }
 .ProseMirror ul[data-type="taskList"] > li {
   display: flex;
-  align-items: flex-start;
+  /* FR-030 (Cycle 9-1c) — 체크박스와 텍스트의 베이스라인 정렬. */
+  align-items: baseline;
   gap: 0.5rem;
   margin: 0.25rem 0;
+}
+/* FR-030 (Cycle 9-1c) — TaskItem 내부 p의 기본 margin이 줄바꿈을 유발. */
+.ProseMirror ul[data-type="taskList"] > li p {
+  margin: 0;
 }
 .ProseMirror ul[data-type="taskList"] > li > label {
   flex: 0 0 auto;
