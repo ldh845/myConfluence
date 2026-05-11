@@ -14,6 +14,7 @@ import DiagramList from "@/components/DiagramList";
 import AttachmentList from "@/components/AttachmentList";
 import TableOfContents from "@/components/TableOfContents";
 import PageVersionHistory from "@/components/PageVersionHistory";
+import QuickSearchDialog from "@/components/QuickSearchDialog";
 import { getIdentity } from "@/lib/userIdentity";
 import { usePageStore } from "@/lib/stores/usePageStore";
 import type {
@@ -50,6 +51,8 @@ export default function HomePage() {
   const [editor, setEditor] = useState<Editor | null>(null);
   // FR-061 — 버전 히스토리 슬라이드 패널 토글.
   const [historyOpen, setHistoryOpen] = useState(false);
+  // FR-093 (Cycle 15-1b) — Ctrl/Cmd+K 빠른 검색 popup 토글.
+  const [quickSearchOpen, setQuickSearchOpen] = useState(false);
 
   const loadSpaces = useCallback(async () => {
     const res = await fetch("/api/spaces");
@@ -111,6 +114,19 @@ export default function HomePage() {
       usePageStore.getState().reset();
     }
   }, [currentPage]);
+
+  // FR-093 (Cycle 15-1b) — Ctrl+K / Cmd+K 글로벌 단축키.
+  // 본문 편집 중에도 동작해야 하므로 window 레벨에서 listen.
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setQuickSearchOpen(true);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
 
   // Cycle 11-2 / FR-034 — 본문 안의 내부 페이지 링크(/?pageId=<id>)를
   // 가로채 SPA 라우팅으로 전환. 같은 origin + 같은 경로 + pageId 쿼리가
@@ -445,6 +461,11 @@ export default function HomePage() {
         pageId={selectedPageId}
         open={historyOpen}
         onOpenChange={setHistoryOpen}
+      />
+      <QuickSearchDialog
+        open={quickSearchOpen}
+        onOpenChange={setQuickSearchOpen}
+        onSelect={selectPage}
       />
     </div>
   );
