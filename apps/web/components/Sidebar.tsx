@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { PageNode, SpaceWithPages } from "@/lib/types";
+import { useFavoritesStore } from "@/lib/stores/useFavoritesStore";
 
 type Props = {
   space: SpaceWithPages | null;
@@ -150,6 +151,14 @@ export default function Sidebar({
 }: Props) {
   const tree = space ? buildTree(space.pages) : [];
 
+  // FR-025 (Cycle 18-2) — 활성 스페이스의 즐겨찾기 페이지만 노출.
+  // 다른 스페이스의 즐겨찾기는 그 스페이스로 전환 시 등장 (단순성).
+  const favIds = useFavoritesStore((s) => s.ids);
+  const favPages = useMemo(() => {
+    if (!space) return [];
+    return space.pages.filter((p) => favIds.includes(p.id));
+  }, [space, favIds]);
+
   return (
     <aside className="w-[260px] shrink-0 bg-[#f4f5f7] border-r border-[#dfe1e6] h-full overflow-y-auto flex flex-col">
       {space && (
@@ -180,6 +189,33 @@ export default function Sidebar({
         <NavItem icon="📅" label="캘린더" disabled />
         <NavItem icon="📊" label="분석" disabled />
       </div>
+
+      {/* FR-025 (Cycle 18-2) — 즐겨찾기 페이지 (활성 스페이스 기준). */}
+      {favPages.length > 0 && (
+        <>
+          <div className="border-t border-[#dfe1e6] mx-2" />
+          <div className="px-4 pt-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-[#6b778c]">
+            ⭐ 즐겨찾기
+          </div>
+          <ul className="px-2 pb-1 space-y-0.5">
+            {favPages.map((p) => (
+              <li key={p.id}>
+                <button
+                  type="button"
+                  onClick={() => onSelect(p.id)}
+                  className={`w-full text-left px-2 py-1 text-sm rounded truncate ${
+                    selectedPageId === p.id
+                      ? "bg-[#deebff] text-[#0052cc] font-semibold"
+                      : "text-[#172b4d] hover:bg-[#ebecf0]"
+                  }`}
+                >
+                  {p.title || "(제목 없음)"}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
 
       <div className="border-t border-[#dfe1e6] mx-2" />
 

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { PageFull, PageNode, SpaceWithPages } from "@/lib/types";
 import type { PresenceUser, SaveStatus } from "@/components/CollaborativeEditor";
+import { useFavoritesStore } from "@/lib/stores/useFavoritesStore";
 
 function relativeTime(iso: string): string {
   const diffSec = Math.max(
@@ -75,6 +76,10 @@ export default function PageHeader({
   const ancestors = crumbs.slice(0, -1);
   const [draft, setDraft] = useState(page.title);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // FR-025 (Cycle 18-2) — 즐겨찾기 토글. localStorage persist.
+  const isFavorite = useFavoritesStore((s) => s.ids.includes(page.id));
+  const toggleFavorite = useFavoritesStore((s) => s.toggle);
 
   useEffect(() => {
     setDraft(page.title);
@@ -185,7 +190,12 @@ export default function PageHeader({
             </button>
           )}
           <ActionButton icon="💬" label="댓글" disabled />
-          <ActionButton icon="⭐" label="저장" disabled />
+          {/* FR-025 (Cycle 18-2) — ⭐ 즐겨찾기. 채워진 별은 활성. */}
+          <ActionButton
+            icon={isFavorite ? "⭐" : "☆"}
+            label="즐겨찾기"
+            onClick={() => toggleFavorite(page.id)}
+          />
           <ActionButton icon="👁️" label="지켜보기" disabled />
           <ActionButton icon="🔗" label="공유" disabled />
           <ActionButton
