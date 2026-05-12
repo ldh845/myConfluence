@@ -359,6 +359,7 @@ export default function HomePage() {
             onCreatePage={handleCreatePage}
             onDeletePage={handleDeletePage}
             onOpenTrash={() => setTrashOpen(true)}
+            onReorder={loadSpaces}
           />
         ) : (
           <button
