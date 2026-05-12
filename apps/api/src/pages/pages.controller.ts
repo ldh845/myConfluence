@@ -69,6 +69,12 @@ export class PagesController {
     return this.pages.search(q ?? '');
   }
 
+  // FR-024 (Cycle 18-1a) — 휴지통 목록. 정적 path → :id 위에.
+  @Get('trash')
+  listTrash() {
+    return this.pages.listTrash();
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.pages.findOne(id);
@@ -95,6 +101,19 @@ export class PagesController {
   @Delete(':id')
   remove(@Param('id') id: string) {
     return this.pages.remove(id);
+  }
+
+  // FR-024 (Cycle 18-1a) — 휴지통 복구.
+  @Post(':id/restore')
+  @HttpCode(200)
+  restore(@Param('id') id: string) {
+    return this.pages.restore(id);
+  }
+
+  // FR-024 (Cycle 18-1a) — 영구 삭제. 휴지통에 있는 페이지만 가능.
+  @Delete(':id/permanent')
+  permanentDelete(@Param('id') id: string) {
+    return this.pages.permanentDelete(id);
   }
 
   @Get(':id/diagrams')

@@ -63,16 +63,23 @@ export class PagesService {
   }
 
   findAll() {
-    return this.prisma.page.findMany({ orderBy: { createdAt: 'asc' } });
+    return this.prisma.page.findMany({
+      where: { deletedAt: null },
+      orderBy: { createdAt: 'asc' },
+    });
   }
 
   // FR-034 (Cycle 11-1) — 내부 페이지 링크 modal용 제목 검색.
   // 인증 도입 후엔 권한 필터를 추가한다. ILIKE로 한국어 포함 대소문자 무관.
+  // FR-024 (18-1a) — 휴지통 페이지 제외.
   search(query: string, limit = 10) {
     const trimmed = (query ?? '').trim();
     if (!trimmed) return [];
     return this.prisma.page.findMany({
-      where: { title: { contains: trimmed, mode: 'insensitive' } },
+      where: {
+        title: { contains: trimmed, mode: 'insensitive' },
+        deletedAt: null,
+      },
       take: limit,
       orderBy: { updatedAt: 'desc' },
       select: { id: true, title: true, spaceId: true, updatedAt: true },
@@ -107,6 +114,8 @@ export class PagesService {
           { content: { contains: trimmed, mode: 'insensitive' } },
         ],
       },
+      // FR-024 (18-1a) — 휴지통 제외.
+      { deletedAt: null },
     ];
     if (opts.spaceId) filters.push({ spaceId: opts.spaceId });
     if (opts.dateFrom || opts.dateTo) {
@@ -185,7 +194,9 @@ export class PagesService {
   }
 
   async findOne(id: string) {
-    const page = await this.prisma.page.findUnique({ where: { id } });
+    const page = await this.prisma.page.findFirst({
+      where: { id, deletedAt: null },
+    });
     if (!page) throw new NotFoundException({ error: 'not found' });
     return page;
   }
@@ -326,11 +337,55 @@ export class PagesService {
     });
   }
 
+  // FR-024 (Cycle 18-1a) — 휴지통(soft delete). 자식까지 재귀 cascade.
+  // 영구 삭제는 permanentDelete. 디스크 첨부 파일 정리는 permanentDelete 시점에만.
   async remove(id: string) {
-    // FR-080 — 페이지 삭제 시 첨부 파일도 디스크에서 제거. DB row는 cascade
-    // 가 처리하지만 디스크 파일은 별도로 best-effort로 정리한다. 자식 페이지의
-    // 첨부도 같이 청소하기 위해 삭제 대상 트리 전체의 storageKey를 한 번에
-    // 모은다.
+    const page = await this.prisma.page.findUnique({
+      where: { id },
+      select: { id: true, deletedAt: true },
+    });
+    if (!page) throw new NotFoundException({ error: 'page not found' });
+    if (page.deletedAt) {
+      throw new BadRequestException({ error: 'already in trash' });
+    }
+    const targetIds = await this.collectDescendantIds(id);
+    await this.prisma.page.updateMany({
+      where: { id: { in: targetIds } },
+      data: { deletedAt: new Date() },
+    });
+    return { ok: true };
+  }
+
+  // FR-024 (Cycle 18-1a) — 휴지통 복구. 휴지통에 있는 자식까지 함께 복구.
+  async restore(id: string) {
+    const page = await this.prisma.page.findUnique({
+      where: { id },
+      select: { id: true, deletedAt: true },
+    });
+    if (!page) throw new NotFoundException({ error: 'page not found' });
+    if (!page.deletedAt) {
+      throw new BadRequestException({ error: 'not in trash' });
+    }
+    const targetIds = await this.collectDeletedDescendantIds(id);
+    await this.prisma.page.updateMany({
+      where: { id: { in: targetIds } },
+      data: { deletedAt: null },
+    });
+    return { ok: true };
+  }
+
+  // FR-024 (Cycle 18-1a) — 영구 삭제. 휴지통에 있는 페이지만 가능.
+  // Prisma cascade로 자식·다이어그램·첨부·댓글·버전 row 자동 정리.
+  // 디스크 첨부 파일은 best-effort로 별도 청소.
+  async permanentDelete(id: string) {
+    const page = await this.prisma.page.findUnique({
+      where: { id },
+      select: { id: true, deletedAt: true },
+    });
+    if (!page) throw new NotFoundException({ error: 'page not found' });
+    if (!page.deletedAt) {
+      throw new BadRequestException({ error: 'must be in trash first' });
+    }
     const targetIds = await this.collectDescendantIds(id);
     const orphans = await this.prisma.attachment.findMany({
       where: { pageId: { in: targetIds } },
@@ -343,13 +398,47 @@ export class PagesService {
     return { ok: true };
   }
 
-  // 자손 페이지를 BFS로 모아 첨부 정리 시 모두 포함되게 한다.
+  // FR-024 (Cycle 18-1a) — 휴지통 목록.
+  listTrash() {
+    return this.prisma.page.findMany({
+      where: { NOT: { deletedAt: null } },
+      orderBy: { deletedAt: 'desc' },
+      select: {
+        id: true,
+        title: true,
+        spaceId: true,
+        parentId: true,
+        deletedAt: true,
+        updatedAt: true,
+      },
+    });
+  }
+
+  // BFS — deletedAt 무관(부모/자식 트리 전체). 자손 페이지를 모아 cascade soft/hard
+  // delete 또는 첨부 정리에 활용한다.
   private async collectDescendantIds(rootId: string): Promise<string[]> {
     const all: string[] = [rootId];
     let frontier: string[] = [rootId];
     while (frontier.length > 0) {
       const children = await this.prisma.page.findMany({
         where: { parentId: { in: frontier } },
+        select: { id: true },
+      });
+      frontier = children.map((c) => c.id);
+      all.push(...frontier);
+    }
+    return all;
+  }
+
+  // 휴지통에 있는 자손만 BFS. restore 시 함께 휴지통 간 자식만 부활시키려는 용도.
+  private async collectDeletedDescendantIds(
+    rootId: string,
+  ): Promise<string[]> {
+    const all: string[] = [rootId];
+    let frontier: string[] = [rootId];
+    while (frontier.length > 0) {
+      const children = await this.prisma.page.findMany({
+        where: { parentId: { in: frontier }, NOT: { deletedAt: null } },
         select: { id: true },
       });
       frontier = children.map((c) => c.id);

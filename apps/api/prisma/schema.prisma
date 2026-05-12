@@ -32,11 +32,15 @@ model Page {
   versions     PageVersion[]
   attachments  Attachment[]
   comments     Comment[]
+  // FR-024 (Cycle 18-1a) — 휴지통(soft delete). null이면 활성 페이지.
+  // 모든 일반 조회는 deletedAt IS NULL 필터 적용. 영구 삭제는 별도 endpoint.
+  deletedAt    DateTime?
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
 
   @@index([spaceId])
   @@index([parentId])
+  @@index([deletedAt])
   // FR-090 (Cycle 15-1a / 17) — 한글 부분 일치 ILIKE 가속용 GIN trigram 인덱스.
   // schema에 명시함으로써 향후 prisma migrate가 자동 DROP하지 않도록 차단.
   @@index([title(ops: raw("gin_trgm_ops"))], type: Gin, map: "Page_title_trgm_idx")
