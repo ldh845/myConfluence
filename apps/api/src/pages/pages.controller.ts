@@ -76,6 +76,12 @@ export class PagesController {
     return this.pages.listTrash();
   }
 
+  // FR-130 (Cycle 22) — 홈 화면 최근 수정 페이지.
+  @Get('recent')
+  recent(@Query('limit') limit?: string) {
+    return this.pages.recent(limit ? Number(limit) : 10);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.pages.findOne(id);

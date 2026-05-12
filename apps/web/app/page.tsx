@@ -22,6 +22,7 @@ import MovePageDialog from "@/components/MovePageDialog";
 import CopyPageDialog from "@/components/CopyPageDialog";
 import { getIdentity } from "@/lib/userIdentity";
 import { usePageStore } from "@/lib/stores/usePageStore";
+import { useRecentPagesStore } from "@/lib/stores/useRecentPagesStore";
 import type {
   PresenceUser,
   SaveStatus,
@@ -123,6 +124,13 @@ export default function HomePage() {
       usePageStore.getState().setPage(currentPage.id, getIdentity().name);
     } else {
       usePageStore.getState().reset();
+    }
+  }, [currentPage]);
+
+  // FR-130 (Cycle 22) — 최근 방문 기록. 페이지가 실제로 로드된 시점에 기록.
+  useEffect(() => {
+    if (currentPage) {
+      useRecentPagesStore.getState().record(currentPage.id);
     }
   }, [currentPage]);
 
@@ -310,6 +318,8 @@ export default function HomePage() {
     const res = await fetch(`/api/pages/${pageId}`, { method: "DELETE" });
     if (res.ok) {
       if (selectedPageId === pageId) clearPageSelection();
+      // FR-130 — 휴지통 이동 시 최근 방문 기록에서도 제거(stale link 방지).
+      useRecentPagesStore.getState().remove(pageId);
       await loadSpaces();
     }
   };

@@ -91,6 +91,24 @@ export class PagesService {
     });
   }
 
+  // FR-130 (Cycle 22) — 홈 화면 "최근 수정된 페이지" 카드용.
+  // 인증 도입 전이라 "내가 편집한 페이지"가 아닌 "전체 최근 수정 페이지"로 대체.
+  recent(limit = 10) {
+    const safeLimit = Math.min(Math.max(limit, 1), 50);
+    return this.prisma.page.findMany({
+      where: { deletedAt: null },
+      orderBy: { updatedAt: 'desc' },
+      take: safeLimit,
+      select: {
+        id: true,
+        title: true,
+        spaceId: true,
+        updatedAt: true,
+        space: { select: { name: true } },
+      },
+    });
+  }
+
   // FR-090 / FR-092 (Cycle 15-1a) — 전문 검색.
   // 제목·본문 ILIKE (pg_trgm GIN 인덱스가 가속). app-level에서 제목 매칭을
   // 우선 정렬한 뒤, 본문 매칭 위치 주변 60자를 snippet으로 추출한다.

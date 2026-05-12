@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import { useMutation } from "@tanstack/react-query";
 import {
   DndContext,
@@ -117,15 +118,19 @@ function NavItem({
   label,
   active,
   disabled,
+  onClick,
 }: {
   icon: string;
   label: string;
   active?: boolean;
   disabled?: boolean;
+  onClick?: () => void;
 }) {
   return (
     <button
+      type="button"
       disabled={disabled}
+      onClick={onClick}
       className={`w-full flex items-center gap-2 px-3 py-1.5 rounded text-sm text-left ${
         active
           ? "bg-[#deebff] text-[#0052cc] font-semibold"
@@ -258,6 +263,8 @@ export default function Sidebar({
   onOpenTrash,
   onReorder,
 }: Props) {
+  const router = useRouter();
+  const pathname = usePathname();
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [activeId, setActiveId] = useState<string | null>(null);
   const [overId, setOverId] = useState<string | null>(null);
@@ -447,7 +454,19 @@ export default function Sidebar({
       )}
 
       <div className="px-2 py-2 space-y-0.5">
-        <NavItem icon="📄" label="페이지" active />
+        {/* FR-130 (Cycle 22) — 홈 대시보드 진입. */}
+        <NavItem
+          icon="🏠"
+          label="홈"
+          active={pathname === "/home"}
+          onClick={() => router.push("/home")}
+        />
+        <NavItem
+          icon="📄"
+          label="페이지"
+          active={pathname !== "/home"}
+          onClick={() => router.push("/")}
+        />
         <NavItem icon="📝" label="블로그" disabled />
         <NavItem icon="📅" label="캘린더" disabled />
         <NavItem icon="📊" label="분석" disabled />

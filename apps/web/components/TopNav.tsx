@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import type { SpaceWithPages } from "@/lib/types";
 
 type Props = {
@@ -18,14 +19,19 @@ export default function TopNav({
 }: Props) {
   return (
     <header className="h-14 shrink-0 flex items-center gap-4 px-4 bg-white border-b border-[#dfe1e6]">
-      <div className="flex items-center gap-2 pr-2">
+      {/* FR-130 (Cycle 22) — 로고 클릭 시 홈 대시보드로. */}
+      <Link
+        href="/home"
+        className="flex items-center gap-2 pr-2 rounded hover:bg-[#ebecf0]"
+        aria-label="홈으로"
+      >
         <div className="w-7 h-7 rounded bg-[#0052cc] text-white flex items-center justify-center font-bold text-sm">
           M
         </div>
         <span className="font-semibold text-[#172b4d]">
           my<span className="text-[#0052cc]">Confluence</span>
         </span>
-      </div>
+      </Link>
 
       <nav className="flex items-center gap-1 text-sm text-[#172b4d]">
         <SpaceCombobox
