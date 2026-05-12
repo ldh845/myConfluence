@@ -56,6 +56,7 @@ type Props = {
   publishing?: boolean;
   onPublish?: () => void;
   onMoveClick?: () => void;
+  onCopyClick?: () => void;
 };
 
 export default function PageHeader({
@@ -73,6 +74,7 @@ export default function PageHeader({
   publishing,
   onPublish,
   onMoveClick,
+  onCopyClick,
 }: Props) {
   const crumbs = space ? buildBreadcrumb(page, space.pages) : [];
   const ancestors = crumbs.slice(0, -1);
@@ -200,6 +202,8 @@ export default function PageHeader({
           />
           {/* FR-022 (Cycle 18-3b) — 페이지 이동 다이얼로그 열기. */}
           <ActionButton icon="↗" label="이동" onClick={onMoveClick} />
+          {/* FR-023 (Cycle 18-4b) — 페이지 복사 다이얼로그 열기. */}
+          <ActionButton icon="⧉" label="복사" onClick={onCopyClick} />
           <ActionButton icon="👁️" label="지켜보기" disabled />
           <ActionButton icon="🔗" label="공유" disabled />
           <ActionButton

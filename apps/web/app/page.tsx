@@ -19,6 +19,7 @@ import PageComments from "@/components/PageComments";
 import InlineCommentsList from "@/components/InlineCommentsList";
 import TrashSheet from "@/components/TrashSheet";
 import MovePageDialog from "@/components/MovePageDialog";
+import CopyPageDialog from "@/components/CopyPageDialog";
 import { getIdentity } from "@/lib/userIdentity";
 import { usePageStore } from "@/lib/stores/usePageStore";
 import type {
@@ -61,6 +62,8 @@ export default function HomePage() {
   const [trashOpen, setTrashOpen] = useState(false);
   // FR-022 (Cycle 18-3b) — 이동 다이얼로그 토글.
   const [moveOpen, setMoveOpen] = useState(false);
+  // FR-023 (Cycle 18-4b) — 복사 다이얼로그 토글.
+  const [copyOpen, setCopyOpen] = useState(false);
 
   const loadSpaces = useCallback(async () => {
     const res = await fetch("/api/spaces");
@@ -402,6 +405,7 @@ export default function HomePage() {
                   publishing={publish.isPending}
                   onPublish={handlePublish}
                   onMoveClick={() => setMoveOpen(true)}
+                  onCopyClick={() => setCopyOpen(true)}
                 />
                 <hr className="my-4 border-[#dfe1e6]" />
                 <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_220px] gap-8">
@@ -503,6 +507,25 @@ export default function HomePage() {
           onMoved={async () => {
             await loadSpaces();
             await loadCurrentPage(currentPage.id);
+          }}
+        />
+      )}
+      {currentPage && (
+        <CopyPageDialog
+          open={copyOpen}
+          onOpenChange={setCopyOpen}
+          page={{
+            id: currentPage.id,
+            title: currentPage.title,
+            spaceId: currentPage.spaceId,
+            parentId: currentPage.parentId,
+          }}
+          onCopied={async (newPage) => {
+            await loadSpaces();
+            // 같은 스페이스에 복사된 경우 새 페이지로 자동 이동.
+            if (newPage.spaceId === activeSpace?.id) {
+              selectPage(newPage.id);
+            }
           }}
         />
       )}
