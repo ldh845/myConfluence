@@ -23,6 +23,7 @@ import Highlight from "@tiptap/extension-highlight";
 import Underline from "@tiptap/extension-underline";
 import Image from "@tiptap/extension-image";
 import { CodeBlockExtension } from "@/lib/tiptap/code-block-lowlight";
+import { InlineCommentMark } from "@/lib/tiptap/inline-comment-mark";
 import { MarkdownInputRules } from "@/lib/tiptap/markdown-input-rules";
 import {
   SlashCommand,
@@ -196,6 +197,8 @@ export default function CollaborativeEditor({
           allowBase64: false,
           HTMLAttributes: { class: "cf-image" },
         }),
+        // FR-071 (Cycle 16-3b-1) — 인라인 댓글 마크.
+        InlineCommentMark,
         // FR-036 (Cycle 13) — StarterKit 미커버 input rules (체크리스트/링크/이미지).
         MarkdownInputRules,
         SlashCommand.configure({ suggestion: slashCommandSuggestion }),

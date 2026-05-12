@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { CODE_BLOCK_LANGUAGES } from "@/lib/tiptap/code-block-lowlight";
 import EditorColorPicker from "@/components/EditorColorPicker";
 import InternalPageLinkDialog from "@/components/InternalPageLinkDialog";
+import InlineCommentDialog from "@/components/InlineCommentDialog";
 
 type Props = { editor: Editor | null };
 
@@ -159,6 +160,7 @@ export default function EditorToolbar({ editor }: Props) {
         <LinkButton editor={editor} />
         <TableButton editor={editor} />
         <ImageButton editor={editor} />
+        <InlineCommentButton editor={editor} />
       </BtnGroup>
       {editor.isActive("codeBlock") && (
         <>
@@ -392,6 +394,55 @@ function ImageAltButton({ editor }: { editor: Editor }) {
     <TB title="이미지 캡션 편집" onClick={editAlt}>
       📝
     </TB>
+  );
+}
+
+// FR-071 (Cycle 16-3b-1) — 선택 텍스트에 인라인 댓글 작성.
+// selection이 비어 있으면 무반응. 작성 성공 시 onCreated로 받은 commentId를
+// inlineComment mark에 박는다.
+function InlineCommentButton({ editor }: { editor: Editor }) {
+  const [open, setOpen] = useState(false);
+  const [selectedText, setSelectedText] = useState("");
+  const [from, setFrom] = useState(0);
+  const [to, setTo] = useState(0);
+
+  const handleOpen = () => {
+    const sel = editor.state.selection;
+    if (sel.empty) {
+      window.alert("먼저 본문에서 댓글을 달 텍스트를 선택하세요.");
+      return;
+    }
+    const text = editor.state.doc.textBetween(sel.from, sel.to, " ");
+    if (!text.trim()) return;
+    setSelectedText(text);
+    setFrom(sel.from);
+    setTo(sel.to);
+    setOpen(true);
+  };
+
+  const handleCreated = (commentId: string) => {
+    editor
+      .chain()
+      .focus()
+      .setTextSelection({ from, to })
+      .setMark("inlineComment", { commentId })
+      .run();
+  };
+
+  return (
+    <>
+      <TB title="인라인 댓글 (텍스트 선택 후)" onClick={handleOpen}>
+        💬
+      </TB>
+      <InlineCommentDialog
+        open={open}
+        onOpenChange={setOpen}
+        selectedText={selectedText}
+        anchorFrom={from}
+        anchorTo={to}
+        onCreated={handleCreated}
+      />
+    </>
   );
 }
 
