@@ -15,6 +15,7 @@ import { UpdatePageDto } from './dto/update-page.dto';
 import { UpdateDraftDto } from './dto/update-draft.dto';
 import { PublishPageDto } from './dto/publish-page.dto';
 import { CreateDiagramDto } from './dto/create-diagram.dto';
+import { CopyPageDto } from './dto/copy-page.dto';
 
 @Controller('pages')
 export class PagesController {
@@ -114,6 +115,13 @@ export class PagesController {
   @Delete(':id/permanent')
   permanentDelete(@Param('id') id: string) {
     return this.pages.permanentDelete(id);
+  }
+
+  // FR-023 (Cycle 18-4a) — 페이지 깊은 복사. recursive=true면 자손 트리까지.
+  @Post(':id/copy')
+  @HttpCode(200)
+  copy(@Param('id') id: string, @Body() dto: CopyPageDto) {
+    return this.pages.copy(id, dto);
   }
 
   @Get(':id/diagrams')

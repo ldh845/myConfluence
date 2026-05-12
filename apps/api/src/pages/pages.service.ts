@@ -6,11 +6,15 @@ import {
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AttachmentsService } from '../attachments/attachments.service';
+import { promises as fs } from 'node:fs';
+import * as path from 'node:path';
+import { randomUUID } from 'node:crypto';
 import { CreatePageDto } from './dto/create-page.dto';
 import { UpdatePageDto } from './dto/update-page.dto';
 import { UpdateDraftDto } from './dto/update-draft.dto';
 import { PublishPageDto } from './dto/publish-page.dto';
 import { CreateDiagramDto } from './dto/create-diagram.dto';
+import { CopyPageDto } from './dto/copy-page.dto';
 
 // FR-064 — 페이지당 보관할 PageVersion 수. 환경변수 미설정/잘못된 값일
 // 때는 50으로 폴백해 무한 누적을 막고, 동시에 잘못된 0/음수가 들어와
@@ -479,6 +483,186 @@ export class PagesService {
         updatedAt: true,
       },
     });
+  }
+
+  // FR-023 (Cycle 18-4a) — 페이지 깊은 복사.
+  // 정책:
+  //  - Page row: 새 cuid, draftContent=null (편집 중 내용은 복제 X)
+  //  - Attachment row: 새 storageKey + 디스크 파일 복사
+  //  - Diagram row: 그대로 복제
+  //  - 복제 안 함: PageVersion, Comment, 즐겨찾기
+  // 안정성:
+  //  - 디스크 복사는 트랜잭션 직전에 수행 → 실패 시 throw, DB 영향 0
+  //  - 트랜잭션 실패 시 이미 복사한 파일은 cleanup
+  async copy(id: string, dto: CopyPageDto) {
+    const source = await this.prisma.page.findFirst({
+      where: { id, deletedAt: null },
+      select: {
+        id: true,
+        title: true,
+        content: true,
+        spaceId: true,
+        parentId: true,
+      },
+    });
+    if (!source) throw new NotFoundException({ error: 'page not found' });
+
+    const targetSpaceId = dto.targetSpaceId || source.spaceId;
+    const targetParentId =
+      dto.targetParentId === undefined
+        ? source.parentId
+        : (dto.targetParentId || null);
+
+    if (dto.targetSpaceId && dto.targetSpaceId !== source.spaceId) {
+      const space = await this.prisma.space.findUnique({
+        where: { id: dto.targetSpaceId },
+        select: { id: true },
+      });
+      if (!space) {
+        throw new NotFoundException({ error: 'target space not found' });
+      }
+    }
+
+    if (targetParentId) {
+      const parent = await this.prisma.page.findFirst({
+        where: { id: targetParentId, deletedAt: null },
+        select: { id: true, spaceId: true },
+      });
+      if (!parent) {
+        throw new NotFoundException({ error: 'parent page not found' });
+      }
+      if (parent.spaceId !== targetSpaceId) {
+        throw new BadRequestException({
+          error: 'parent must be in target space',
+        });
+      }
+      if (dto.recursive) {
+        const descendants = await this.collectDescendantIds(id);
+        if (descendants.includes(targetParentId)) {
+          throw new BadRequestException({
+            error: 'cannot copy under own descendant',
+          });
+        }
+      }
+    }
+
+    // 복제 대상 페이지 수집 (활성만; 휴지통 자손은 복제 제외).
+    const sourceIds = dto.recursive
+      ? await this.collectDescendantIds(id)
+      : [id];
+    const sourcePagesRaw = await this.prisma.page.findMany({
+      where: { id: { in: sourceIds }, deletedAt: null },
+      select: {
+        id: true,
+        title: true,
+        content: true,
+        parentId: true,
+      },
+    });
+    const sourceById = new Map(sourcePagesRaw.map((p) => [p.id, p]));
+
+    // BFS — root 먼저, 그 다음 자식들 (idMap 매핑이 부모 먼저 채워지도록).
+    const orderedSourceIds: string[] = [];
+    const queue: string[] = [id];
+    while (queue.length > 0) {
+      const cur = queue.shift()!;
+      if (!sourceById.has(cur)) continue;
+      orderedSourceIds.push(cur);
+      const childIds = sourcePagesRaw
+        .filter((p) => p.parentId === cur)
+        .map((p) => p.id);
+      queue.push(...childIds);
+    }
+
+    // 첨부 · 다이어그램 미리 조회 + 새 storageKey 결정.
+    const sourceAttachments = await this.prisma.attachment.findMany({
+      where: { pageId: { in: orderedSourceIds } },
+    });
+    const sourceDiagrams = await this.prisma.diagram.findMany({
+      where: { pageId: { in: orderedSourceIds } },
+    });
+    const attachmentPlans = sourceAttachments.map((a) => ({
+      source: a,
+      newStorageKey: `${randomUUID()}${path.extname(a.storageKey)}`,
+    }));
+
+    // 디스크 파일 복사 (트랜잭션 직전). 실패 시 이미 복사한 파일도 정리.
+    const copiedKeys: string[] = [];
+    try {
+      for (const ap of attachmentPlans) {
+        const src = this.attachments.resolvePath(ap.source.storageKey);
+        const dst = this.attachments.resolvePath(ap.newStorageKey);
+        await fs.copyFile(src, dst);
+        copiedKeys.push(ap.newStorageKey);
+      }
+    } catch (err) {
+      await this.attachments.cleanupFiles(copiedKeys);
+      throw err;
+    }
+
+    // DB 트랜잭션 — page → attachment → diagram. 실패 시 디스크 파일 cleanup.
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const idMap = new Map<string, string>();
+        let rootCreated: { id: string } | null = null;
+
+        for (const sid of orderedSourceIds) {
+          const sp = sourceById.get(sid)!;
+          const isRoot = sid === id;
+          const newParentId = isRoot
+            ? targetParentId
+            : (idMap.get(sp.parentId!) ?? null);
+          const newTitle = isRoot
+            ? (dto.title?.trim() || `${sp.title} (복사본)`)
+            : sp.title;
+          const created = await tx.page.create({
+            data: {
+              title: newTitle,
+              content: sp.content,
+              spaceId: targetSpaceId,
+              parentId: newParentId,
+              draftContent: null,
+            },
+          });
+          idMap.set(sid, created.id);
+          if (isRoot) rootCreated = created;
+        }
+
+        for (const ap of attachmentPlans) {
+          const newPageId = idMap.get(ap.source.pageId);
+          if (!newPageId) continue;
+          await tx.attachment.create({
+            data: {
+              pageId: newPageId,
+              filename: ap.source.filename,
+              mimetype: ap.source.mimetype,
+              size: ap.source.size,
+              storageKey: ap.newStorageKey,
+              authorName: ap.source.authorName,
+            },
+          });
+        }
+
+        for (const d of sourceDiagrams) {
+          const newPageId = idMap.get(d.pageId);
+          if (!newPageId) continue;
+          await tx.diagram.create({
+            data: {
+              pageId: newPageId,
+              title: d.title,
+              data: d.data,
+              preview: d.preview,
+            },
+          });
+        }
+
+        // 루트 새 페이지 전체 fetch — 컨트롤러 응답으로 반환.
+        return tx.page.findUnique({ where: { id: rootCreated!.id } });
+      });
+    } catch (err) {
+      await this.attachments.cleanupFiles(copiedKeys);
+      throw err;
+    }
   }
 
   // BFS — deletedAt 무관(부모/자식 트리 전체). 자손 페이지를 모아 cascade soft/hard
