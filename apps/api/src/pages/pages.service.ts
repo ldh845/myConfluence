@@ -216,7 +216,59 @@ export class PagesService {
   // page.update와 version.create는 같은 트랜잭션이라 둘 중 하나가 실패하면
   // 함께 롤백된다. authorName은 FR-002 인증이 들어오기 전까지 클라이언트의
   // 익명 이름을 그대로 보관한다.
-  update(id: string, dto: UpdatePageDto) {
+  // FR-022 (Cycle 18-3a) — spaceId/parentId 변경(페이지 이동) 시 자손 spaceId
+  // 동기화 + 순환 참조 가드.
+  async update(id: string, dto: UpdatePageDto) {
+    const current = await this.prisma.page.findFirst({
+      where: { id, deletedAt: null },
+      select: { id: true, spaceId: true, parentId: true },
+    });
+    if (!current) throw new NotFoundException({ error: 'page not found' });
+
+    const targetSpaceId = dto.spaceId ?? current.spaceId;
+
+    // spaceId 변경 시 target Space 존재 확인.
+    if (dto.spaceId && dto.spaceId !== current.spaceId) {
+      const space = await this.prisma.space.findUnique({
+        where: { id: dto.spaceId },
+        select: { id: true },
+      });
+      if (!space) {
+        throw new NotFoundException({ error: 'target space not found' });
+      }
+    }
+
+    // parentId 변경 시 순환 참조 + parent 스페이스 일치 가드.
+    if (
+      dto.parentId !== undefined &&
+      dto.parentId !== null &&
+      dto.parentId !== current.parentId
+    ) {
+      if (dto.parentId === id) {
+        throw new BadRequestException({
+          error: 'cannot be parent of itself',
+        });
+      }
+      const parent = await this.prisma.page.findFirst({
+        where: { id: dto.parentId, deletedAt: null },
+        select: { id: true, spaceId: true },
+      });
+      if (!parent) {
+        throw new NotFoundException({ error: 'parent page not found' });
+      }
+      if (parent.spaceId !== targetSpaceId) {
+        throw new BadRequestException({
+          error: 'parent must be in target space',
+        });
+      }
+      const descendants = await this.collectDescendantIds(id);
+      if (descendants.includes(dto.parentId)) {
+        throw new BadRequestException({
+          error: 'cannot move under own descendant',
+        });
+      }
+    }
+
     return this.prisma.$transaction(async (tx) => {
       const page = await tx.page.update({
         where: { id },
@@ -224,8 +276,23 @@ export class PagesService {
           ...(dto.title !== undefined ? { title: dto.title } : {}),
           ...(dto.content !== undefined ? { content: dto.content } : {}),
           ...(dto.parentId !== undefined ? { parentId: dto.parentId } : {}),
+          ...(dto.spaceId !== undefined ? { spaceId: dto.spaceId } : {}),
         },
       });
+
+      // FR-022 — 자손 spaceId 동기화. collectDescendantIds는 deletedAt 무관이라
+      // 휴지통 자손도 함께 따라간다 (페이지 트리 통째 이동의 자연스러운 의미).
+      if (dto.spaceId && dto.spaceId !== current.spaceId) {
+        const descendants = await this.collectDescendantIds(id);
+        const others = descendants.filter((d) => d !== id);
+        if (others.length > 0) {
+          await tx.page.updateMany({
+            where: { id: { in: others } },
+            data: { spaceId: dto.spaceId },
+          });
+        }
+      }
+
       const last = await tx.pageVersion.findFirst({
         where: { pageId: id },
         orderBy: { version: 'desc' },
