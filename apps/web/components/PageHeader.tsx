@@ -55,6 +55,7 @@ type Props = {
   hasDraft?: boolean;
   publishing?: boolean;
   onPublish?: () => void;
+  onMoveClick?: () => void;
 };
 
 export default function PageHeader({
@@ -71,6 +72,7 @@ export default function PageHeader({
   hasDraft,
   publishing,
   onPublish,
+  onMoveClick,
 }: Props) {
   const crumbs = space ? buildBreadcrumb(page, space.pages) : [];
   const ancestors = crumbs.slice(0, -1);
@@ -196,6 +198,8 @@ export default function PageHeader({
             label="즐겨찾기"
             onClick={() => toggleFavorite(page.id)}
           />
+          {/* FR-022 (Cycle 18-3b) — 페이지 이동 다이얼로그 열기. */}
+          <ActionButton icon="↗" label="이동" onClick={onMoveClick} />
           <ActionButton icon="👁️" label="지켜보기" disabled />
           <ActionButton icon="🔗" label="공유" disabled />
           <ActionButton
