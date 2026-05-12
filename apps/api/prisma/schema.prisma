@@ -35,12 +35,16 @@ model Page {
   // FR-024 (Cycle 18-1a) — 휴지통(soft delete). null이면 활성 페이지.
   // 모든 일반 조회는 deletedAt IS NULL 필터 적용. 영구 삭제는 별도 endpoint.
   deletedAt    DateTime?
+  // FR-021 (Cycle 19a) — 사이드바 트리 정렬용. 같은 (spaceId, parentId) 그룹
+  // 안에서 0,1,2,... 순서. reorder 시 한 그룹의 position을 일괄 재부여.
+  position     Int           @default(0)
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
 
   @@index([spaceId])
   @@index([parentId])
   @@index([deletedAt])
+  @@index([parentId, position], map: "Page_parent_position_idx")
   // FR-090 (Cycle 15-1a / 17) — 한글 부분 일치 ILIKE 가속용 GIN trigram 인덱스.
   // schema에 명시함으로써 향후 prisma migrate가 자동 DROP하지 않도록 차단.
   @@index([title(ops: raw("gin_trgm_ops"))], type: Gin, map: "Page_title_trgm_idx")

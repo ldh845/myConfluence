@@ -1,4 +1,4 @@
-import { IsOptional, IsString } from 'class-validator';
+import { IsInt, IsOptional, IsString } from 'class-validator';
 
 export class UpdatePageDto {
   @IsOptional()
@@ -21,6 +21,12 @@ export class UpdatePageDto {
   @IsOptional()
   @IsString()
   spaceId?: string;
+
+  // FR-021 (Cycle 19a) — 같은 (spaceId, parentId) 그룹 안에서의 형제 순서.
+  // 0..N으로 silent clamp. 명시되지 않으면 부모 변경 시에만 마지막으로 추가.
+  @IsOptional()
+  @IsInt()
+  position?: number;
 
   // FR-060 — 자동 버전 스냅샷에 attribution을 남기기 위한 필드.
   // page 컬럼으로 forward 하지 않고, 서비스에서 PageVersion에만 기록한다.

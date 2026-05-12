@@ -69,7 +69,8 @@ export class PagesService {
   findAll() {
     return this.prisma.page.findMany({
       where: { deletedAt: null },
-      orderBy: { createdAt: 'asc' },
+      // FR-021 (19a) — 사이드바 트리 정렬: position 우선, 동률은 createdAt.
+      orderBy: [{ position: 'asc' }, { createdAt: 'asc' }],
     });
   }
 
@@ -293,6 +294,45 @@ export class PagesService {
           await tx.page.updateMany({
             where: { id: { in: others } },
             data: { spaceId: dto.spaceId },
+          });
+        }
+      }
+
+      // FR-021 (Cycle 19a) — 형제 reorder.
+      // 다음 두 경우에만 발화:
+      //  1) dto.position 명시
+      //  2) parentId가 실제로 바뀜 (이 경우 새 그룹 마지막으로 추가)
+      // 그 외엔 position 손대지 않음 (단순 title/content/spaceId 변경 회귀 보존).
+      const finalParentId =
+        dto.parentId !== undefined ? dto.parentId : current.parentId;
+      const finalSpaceId = dto.spaceId ?? current.spaceId;
+      const parentChanged =
+        dto.parentId !== undefined && dto.parentId !== current.parentId;
+      const positionExplicit = dto.position !== undefined;
+
+      if (positionExplicit || parentChanged) {
+        const siblings = await tx.page.findMany({
+          where: {
+            id: { not: id },
+            parentId: finalParentId,
+            spaceId: finalSpaceId,
+            deletedAt: null,
+          },
+          orderBy: [{ position: 'asc' }, { createdAt: 'asc' }],
+          select: { id: true },
+        });
+        const desired = positionExplicit
+          ? Math.max(0, Math.min(siblings.length, dto.position!))
+          : siblings.length; // 부모 변경 + position 미지정 → 마지막
+        const sequence = [
+          ...siblings.slice(0, desired).map((s) => s.id),
+          id,
+          ...siblings.slice(desired).map((s) => s.id),
+        ];
+        for (let i = 0; i < sequence.length; i++) {
+          await tx.page.update({
+            where: { id: sequence[i] },
+            data: { position: i },
           });
         }
       }

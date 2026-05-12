@@ -13,7 +13,8 @@ export class SpacesService {
         pages: {
           // FR-024 (Cycle 18-1a) — 휴지통 페이지는 사이드바에서 제외.
           where: { deletedAt: null },
-          orderBy: { createdAt: 'asc' },
+          // FR-021 (Cycle 19a) — 사이드바 트리 정렬용 position 우선.
+          orderBy: [{ position: 'asc' }, { createdAt: 'asc' }],
           select: {
             id: true,
             title: true,
