@@ -25,6 +25,8 @@ import Image from "@tiptap/extension-image";
 import { CodeBlockExtension } from "@/lib/tiptap/code-block-lowlight";
 import { InlineCommentMark } from "@/lib/tiptap/inline-comment-mark";
 import { MarkdownInputRules } from "@/lib/tiptap/markdown-input-rules";
+import { MathInline } from "@/lib/tiptap/math-inline";
+import { MathBlock } from "@/lib/tiptap/math-block";
 import {
   SlashCommand,
   slashCommandSuggestion,
@@ -199,6 +201,9 @@ export default function CollaborativeEditor({
         }),
         // FR-071 (Cycle 16-3b-1) — 인라인 댓글 마크.
         InlineCommentMark,
+        // FR-040 (Cycle 20) — LaTeX 수식 (인라인 + 블록).
+        MathInline,
+        MathBlock,
         // FR-036 (Cycle 13) — StarterKit 미커버 input rules (체크리스트/링크/이미지).
         MarkdownInputRules,
         SlashCommand.configure({ suggestion: slashCommandSuggestion }),

@@ -120,6 +120,20 @@ export const SLASH_ITEMS: SlashCommandItem[] = [
     },
   },
   {
+    // FR-040 (Cycle 20) — LaTeX 수식 블록 삽입 (빈 latex → 자동 편집 모드).
+    title: "수식",
+    description: "LaTeX 수식 블록",
+    searchTerms: ["math", "latex", "katex", "수식", "공식"],
+    command: ({ editor, range }) => {
+      editor
+        .chain()
+        .focus()
+        .deleteRange(range)
+        .insertContent({ type: "mathBlock", attrs: { latex: "" } })
+        .run();
+    },
+  },
+  {
     title: "구분선",
     description: "수평 구분선",
     searchTerms: ["hr", "divider", "separator", "구분선", "수평선"],

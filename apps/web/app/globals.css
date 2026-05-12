@@ -5,6 +5,9 @@
 /* FR-031 — highlight.js GitHub 테마 (lowlight가 hljs-* 클래스를 출력) */
 @import "highlight.js/styles/github.css";
 
+/* FR-040 (Cycle 20) — KaTeX 기본 폰트/레이아웃 */
+@import "katex/dist/katex.min.css";
+
 /* shadcn/ui base tokens (Cycle 4 scaffold).
    기존 --c-* 변수들은 그대로 보존. 신규 컴포넌트만 hsl(var(--*)) 사용. */
 @layer base {

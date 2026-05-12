@@ -54,6 +54,22 @@ const imageInputRule = new InputRule({
   },
 });
 
+// FR-040 (Cycle 20) — 인라인 수식 입력 규칙. `$x$ ` 입력 시 mathInline 노드로.
+const mathInlineInputRule = new InputRule({
+  find: /\$([^$\n]+?)\$\s$/,
+  handler: ({ range, match, chain }) => {
+    const latex = match[1].trim();
+    if (!latex) return;
+    chain()
+      .deleteRange(range)
+      .insertContent([
+        { type: "mathInline", attrs: { latex } },
+        { type: "text", text: " " },
+      ])
+      .run();
+  },
+});
+
 export const MarkdownInputRules = Extension.create({
   name: "markdownInputRules",
   addInputRules() {
@@ -62,6 +78,7 @@ export const MarkdownInputRules = Extension.create({
       imageInputRule,
       linkInputRule,
       taskListInputRule,
+      mathInlineInputRule,
     ];
   },
 });
