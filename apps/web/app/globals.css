@@ -8,6 +8,55 @@
 /* FR-040 (Cycle 20) — KaTeX 기본 폰트/레이아웃 */
 @import "katex/dist/katex.min.css";
 
+/* FR-121 (Cycle 21) — 인쇄(PDF) 최적화.
+   본문만 풀폭, 사이드바·툴바·헤더 버튼은 숨김. 표/코드/이미지 페이지 경계 보존. */
+@media print {
+  aside,
+  .no-print,
+  header,
+  .editor-toolbar,
+  nav,
+  button {
+    display: none !important;
+  }
+  main {
+    width: 100% !important;
+    max-width: none !important;
+    padding: 16px !important;
+    overflow: visible !important;
+  }
+  body,
+  html {
+    background: #fff !important;
+    overflow: visible !important;
+  }
+  h1,
+  h2,
+  h3 {
+    page-break-after: avoid;
+  }
+  pre,
+  table,
+  img,
+  .math-block,
+  .math-block-wrap {
+    page-break-inside: avoid;
+  }
+  /* 링크 옆에 URL 출력 (단 내부 페이지 링크는 제외) */
+  a[href^="http"]::after,
+  a[href^="https"]::after {
+    content: " (" attr(href) ")";
+    font-size: 10px;
+    color: #555;
+  }
+  /* 인라인 댓글 마크 시각 단순화 */
+  .cf-inline-comment {
+    background-color: transparent !important;
+    border-bottom: 1px dashed #999 !important;
+    color: inherit !important;
+  }
+}
+
 /* shadcn/ui base tokens (Cycle 4 scaffold).
    기존 --c-* 변수들은 그대로 보존. 신규 컴포넌트만 hsl(var(--*)) 사용. */
 @layer base {

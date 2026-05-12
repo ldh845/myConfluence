@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import type { PageFull, PageNode, SpaceWithPages } from "@/lib/types";
 import type { PresenceUser, SaveStatus } from "@/components/CollaborativeEditor";
 import { useFavoritesStore } from "@/lib/stores/useFavoritesStore";
+import { downloadPageMarkdown } from "@/lib/export/markdown";
+import { openPrintDialog } from "@/lib/export/print";
 
 function relativeTime(iso: string): string {
   const diffSec = Math.max(
@@ -211,7 +213,7 @@ export default function PageHeader({
             label="히스토리"
             onClick={onHistoryClick}
           />
-          <MoreMenu onDelete={onDelete} />
+          <MoreMenu page={page} onDelete={onDelete} />
         </div>
       </div>
 
@@ -306,7 +308,13 @@ function ActionButton({
   );
 }
 
-function MoreMenu({ onDelete }: { onDelete: () => void }) {
+function MoreMenu({
+  page,
+  onDelete,
+}: {
+  page: PageFull;
+  onDelete: () => void;
+}) {
   const [open, setOpen] = useState(false);
   return (
     <div className="relative">
@@ -323,7 +331,31 @@ function MoreMenu({ onDelete }: { onDelete: () => void }) {
             className="fixed inset-0 z-10"
             onClick={() => setOpen(false)}
           />
-          <div className="absolute right-0 mt-1 w-44 bg-white border border-[#dfe1e6] rounded shadow-lg z-20 py-1 text-sm">
+          <div className="absolute right-0 mt-1 w-48 bg-white border border-[#dfe1e6] rounded shadow-lg z-20 py-1 text-sm">
+            {/* FR-121 (Cycle 21) — 내보내기 메뉴. */}
+            <button
+              className="w-full text-left px-3 py-1.5 text-[#172b4d] hover:bg-[#ebecf0]"
+              onClick={() => {
+                setOpen(false);
+                void downloadPageMarkdown({
+                  id: page.id,
+                  title: page.title,
+                  content: page.content,
+                });
+              }}
+            >
+              📄 Markdown으로 내보내기
+            </button>
+            <button
+              className="w-full text-left px-3 py-1.5 text-[#172b4d] hover:bg-[#ebecf0]"
+              onClick={() => {
+                setOpen(false);
+                openPrintDialog();
+              }}
+            >
+              🖨️ PDF로 내보내기
+            </button>
+            <div className="my-1 border-t border-[#dfe1e6]" />
             <button
               className="w-full text-left px-3 py-1.5 text-[#de350b] hover:bg-[#ffebe6]"
               onClick={() => {
