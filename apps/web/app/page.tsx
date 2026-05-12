@@ -17,6 +17,7 @@ import PageVersionHistory from "@/components/PageVersionHistory";
 import QuickSearchDialog from "@/components/QuickSearchDialog";
 import PageComments from "@/components/PageComments";
 import InlineCommentsList from "@/components/InlineCommentsList";
+import TrashSheet from "@/components/TrashSheet";
 import { getIdentity } from "@/lib/userIdentity";
 import { usePageStore } from "@/lib/stores/usePageStore";
 import type {
@@ -55,6 +56,8 @@ export default function HomePage() {
   const [historyOpen, setHistoryOpen] = useState(false);
   // FR-093 (Cycle 15-1b) — Ctrl/Cmd+K 빠른 검색 popup 토글.
   const [quickSearchOpen, setQuickSearchOpen] = useState(false);
+  // FR-024 (Cycle 18-1b) — 휴지통 Sheet 토글.
+  const [trashOpen, setTrashOpen] = useState(false);
 
   const loadSpaces = useCallback(async () => {
     const res = await fetch("/api/spaces");
@@ -349,6 +352,7 @@ export default function HomePage() {
             onSelect={selectPage}
             onCreatePage={handleCreatePage}
             onDeletePage={handleDeletePage}
+            onOpenTrash={() => setTrashOpen(true)}
           />
         ) : (
           <button
@@ -476,6 +480,11 @@ export default function HomePage() {
         open={quickSearchOpen}
         onOpenChange={setQuickSearchOpen}
         onSelect={selectPage}
+      />
+      <TrashSheet
+        open={trashOpen}
+        onOpenChange={setTrashOpen}
+        onRestored={loadSpaces}
       />
     </div>
   );

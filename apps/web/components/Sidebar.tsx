@@ -9,6 +9,7 @@ type Props = {
   onSelect: (pageId: string) => void;
   onCreatePage: (spaceId: string, parentId: string | null) => void;
   onDeletePage: (pageId: string) => void;
+  onOpenTrash?: () => void;
 };
 
 type TreeItem = PageNode & { children: TreeItem[] };
@@ -145,6 +146,7 @@ export default function Sidebar({
   onSelect,
   onCreatePage,
   onDeletePage,
+  onOpenTrash,
 }: Props) {
   const tree = space ? buildTree(space.pages) : [];
 
@@ -222,8 +224,19 @@ export default function Sidebar({
         ))}
       </div>
 
-      <div className="border-t border-[#dfe1e6] px-4 py-2">
-        <button className="flex items-center gap-2 text-sm text-[#172b4d] hover:text-[#0052cc]">
+      <div className="border-t border-[#dfe1e6] px-4 py-2 space-y-1">
+        {/* FR-024 (Cycle 18-1b) — 휴지통 진입. */}
+        <button
+          type="button"
+          onClick={() => onOpenTrash?.()}
+          className="flex items-center gap-2 text-sm text-[#172b4d] hover:text-[#0052cc]"
+        >
+          <span>🗑️</span> 휴지통
+        </button>
+        <button
+          type="button"
+          className="flex items-center gap-2 text-sm text-[#172b4d] hover:text-[#0052cc]"
+        >
           <span>⚙️</span> 공간 도구
         </button>
       </div>
