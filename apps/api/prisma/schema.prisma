@@ -16,27 +16,31 @@ model Space {
 }
 
 model Page {
-  id          String        @id @default(cuid())
-  title       String
-  content     String        @default("")
+  id           String        @id @default(cuid())
+  title        String
+  content      String        @default("")
   // 이슈 2 (Cycle 10-1) — 편집 중 임시 저장.
   // null이면 draft 없음(published만). PATCH /pages/:id/draft로 갱신,
   // POST /pages/:id/publish로 비움(content로 승격).
   draftContent String?
-  spaceId     String
-  space       Space         @relation(fields: [spaceId], references: [id], onDelete: Cascade)
-  parentId    String?
-  parent      Page?         @relation("PageTree", fields: [parentId], references: [id], onDelete: Cascade)
-  children    Page[]        @relation("PageTree")
-  diagrams    Diagram[]
-  versions    PageVersion[]
-  attachments Attachment[]
-  comments    Comment[]
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  spaceId      String
+  space        Space         @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  parentId     String?
+  parent       Page?         @relation("PageTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children     Page[]        @relation("PageTree")
+  diagrams     Diagram[]
+  versions     PageVersion[]
+  attachments  Attachment[]
+  comments     Comment[]
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
 
   @@index([spaceId])
   @@index([parentId])
+  // FR-090 (Cycle 15-1a / 17) — 한글 부분 일치 ILIKE 가속용 GIN trigram 인덱스.
+  // schema에 명시함으로써 향후 prisma migrate가 자동 DROP하지 않도록 차단.
+  @@index([title(ops: raw("gin_trgm_ops"))], type: Gin, map: "Page_title_trgm_idx")
+  @@index([content(ops: raw("gin_trgm_ops"))], type: Gin, map: "Page_content_trgm_idx")
 }
 
 // FR-070 (Cycle 16-1a) — 페이지 댓글.
