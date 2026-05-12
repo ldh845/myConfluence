@@ -32,6 +32,7 @@ model Page {
   versions     PageVersion[]
   attachments  Attachment[]
   comments     Comment[]
+  shares       PageShare[]
   // FR-024 (Cycle 18-1a) — 휴지통(soft delete). null이면 활성 페이지.
   // 모든 일반 조회는 deletedAt IS NULL 필터 적용. 영구 삭제는 별도 endpoint.
   deletedAt    DateTime?
@@ -54,6 +55,19 @@ model Page {
 // FR-070 (Cycle 16-1a) — 페이지 댓글.
 // parentId/parent self-relation은 16-2 스레드 사이클 대비. 현재는 모두 null.
 // page cascade로 페이지 삭제 시 함께 정리. 권한 체크는 인증 사이클까지 보류.
+// FR-120 (Cycle 23) — 페이지 공유 링크.
+// 토큰 보유자에게 읽기 전용 접근. revokedAt이 null이면 활성.
+model PageShare {
+  id        String    @id @default(cuid())
+  pageId    String
+  page      Page      @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  token     String    @unique
+  createdAt DateTime  @default(now())
+  revokedAt DateTime?
+
+  @@index([pageId])
+}
+
 model Comment {
   id         String    @id @default(cuid())
   pageId     String

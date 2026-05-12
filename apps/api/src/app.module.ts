@@ -9,6 +9,7 @@ import { DiagramsModule } from './diagrams/diagrams.module';
 import { CollaborationModule } from './collaboration/collaboration.module';
 import { AttachmentsModule } from './attachments/attachments.module';
 import { CommentsModule } from './comments/comments.module';
+import { PageSharesModule } from './page-shares/page-shares.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { CommentsModule } from './comments/comments.module';
     CollaborationModule,
     AttachmentsModule,
     CommentsModule,
+    PageSharesModule,
   ],
   controllers: [AppController, HealthController],
   providers: [AppService],

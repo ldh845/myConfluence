@@ -20,6 +20,7 @@ import InlineCommentsList from "@/components/InlineCommentsList";
 import TrashSheet from "@/components/TrashSheet";
 import MovePageDialog from "@/components/MovePageDialog";
 import CopyPageDialog from "@/components/CopyPageDialog";
+import SharePageDialog from "@/components/SharePageDialog";
 import { getIdentity } from "@/lib/userIdentity";
 import { usePageStore } from "@/lib/stores/usePageStore";
 import { useRecentPagesStore } from "@/lib/stores/useRecentPagesStore";
@@ -65,6 +66,8 @@ export default function HomePage() {
   const [moveOpen, setMoveOpen] = useState(false);
   // FR-023 (Cycle 18-4b) — 복사 다이얼로그 토글.
   const [copyOpen, setCopyOpen] = useState(false);
+  // FR-120 (Cycle 23) — 공유 다이얼로그 토글.
+  const [shareOpen, setShareOpen] = useState(false);
 
   const loadSpaces = useCallback(async () => {
     const res = await fetch("/api/spaces");
@@ -417,6 +420,7 @@ export default function HomePage() {
                   onPublish={handlePublish}
                   onMoveClick={() => setMoveOpen(true)}
                   onCopyClick={() => setCopyOpen(true)}
+                  onShareClick={() => setShareOpen(true)}
                 />
                 <hr className="my-4 border-[#dfe1e6]" />
                 <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_220px] gap-8">
@@ -538,6 +542,13 @@ export default function HomePage() {
               selectPage(newPage.id);
             }
           }}
+        />
+      )}
+      {currentPage && (
+        <SharePageDialog
+          open={shareOpen}
+          onOpenChange={setShareOpen}
+          page={{ id: currentPage.id, title: currentPage.title }}
         />
       )}
     </div>

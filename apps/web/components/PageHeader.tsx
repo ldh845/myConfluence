@@ -59,6 +59,7 @@ type Props = {
   onPublish?: () => void;
   onMoveClick?: () => void;
   onCopyClick?: () => void;
+  onShareClick?: () => void;
 };
 
 export default function PageHeader({
@@ -77,6 +78,7 @@ export default function PageHeader({
   onPublish,
   onMoveClick,
   onCopyClick,
+  onShareClick,
 }: Props) {
   const crumbs = space ? buildBreadcrumb(page, space.pages) : [];
   const ancestors = crumbs.slice(0, -1);
@@ -213,7 +215,11 @@ export default function PageHeader({
             label="히스토리"
             onClick={onHistoryClick}
           />
-          <MoreMenu page={page} onDelete={onDelete} />
+          <MoreMenu
+            page={page}
+            onDelete={onDelete}
+            onShareClick={onShareClick}
+          />
         </div>
       </div>
 
@@ -311,9 +317,11 @@ function ActionButton({
 function MoreMenu({
   page,
   onDelete,
+  onShareClick,
 }: {
   page: PageFull;
   onDelete: () => void;
+  onShareClick?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -354,6 +362,16 @@ function MoreMenu({
               }}
             >
               🖨️ PDF로 내보내기
+            </button>
+            {/* FR-120 (Cycle 23) — 공유 링크 다이얼로그. */}
+            <button
+              className="w-full text-left px-3 py-1.5 text-[#172b4d] hover:bg-[#ebecf0]"
+              onClick={() => {
+                setOpen(false);
+                onShareClick?.();
+              }}
+            >
+              🔗 공유 링크
             </button>
             <div className="my-1 border-t border-[#dfe1e6]" />
             <button
