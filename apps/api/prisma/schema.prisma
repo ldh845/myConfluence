@@ -51,11 +51,19 @@ model Comment {
   replies    Comment[] @relation("CommentThread")
   authorName String?
   body       String
+  // FR-071 (Cycle 16-3a) — 인라인 댓글.
+  // isInline=true면 anchorJson에 ProseMirror 위치(from/to)와 선택 텍스트를 JSON
+  // 문자열로 저장. resolvedAt/resolvedBy는 해결 시각·해결자.
+  isInline   Boolean   @default(false)
+  anchorJson String?
+  resolvedAt DateTime?
+  resolvedBy String?
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
 
   @@index([pageId, createdAt])
   @@index([parentId])
+  @@index([pageId, isInline, resolvedAt])
 }
 
 model Attachment {

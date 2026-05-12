@@ -6,6 +6,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateCommentDto } from './dto/create-comment.dto';
 import { UpdateCommentDto } from './dto/update-comment.dto';
+import { ResolveCommentDto } from './dto/resolve-comment.dto';
 
 // FR-070 (Cycle 16-1a) — 페이지 댓글 서비스.
 // flat 배열로 응답하고 클라이언트가 parentId 기반으로 트리를 구성한다.
@@ -38,7 +39,43 @@ export class CommentsService {
         parentId: dto.parentId ?? null,
         authorName: dto.authorName ?? null,
         body,
+        isInline: dto.isInline ?? false,
+        anchorJson: dto.anchorJson ?? null,
       },
+    });
+  }
+
+  // FR-071 (Cycle 16-3a) — 인라인 댓글 해결/해결 취소.
+  // 페이지 댓글에 resolve 시도는 400 (UI에서도 차단되지만 백엔드 가드).
+  async resolve(id: string, dto: ResolveCommentDto) {
+    const existing = await this.prisma.comment.findUnique({
+      where: { id },
+      select: { id: true, isInline: true },
+    });
+    if (!existing) throw new NotFoundException({ error: 'comment not found' });
+    if (!existing.isInline) {
+      throw new BadRequestException({
+        error: 'only inline comments can be resolved',
+      });
+    }
+    return this.prisma.comment.update({
+      where: { id },
+      data: {
+        resolvedAt: new Date(),
+        resolvedBy: dto.authorName ?? null,
+      },
+    });
+  }
+
+  async unresolve(id: string) {
+    const existing = await this.prisma.comment.findUnique({
+      where: { id },
+      select: { id: true },
+    });
+    if (!existing) throw new NotFoundException({ error: 'comment not found' });
+    return this.prisma.comment.update({
+      where: { id },
+      data: { resolvedAt: null, resolvedBy: null },
     });
   }
 
