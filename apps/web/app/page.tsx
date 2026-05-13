@@ -21,6 +21,7 @@ import TrashSheet from "@/components/TrashSheet";
 import MovePageDialog from "@/components/MovePageDialog";
 import CopyPageDialog from "@/components/CopyPageDialog";
 import SharePageDialog from "@/components/SharePageDialog";
+import ReactionBar from "@/components/ReactionBar";
 import { getIdentity } from "@/lib/userIdentity";
 import { usePageStore } from "@/lib/stores/usePageStore";
 import { useRecentPagesStore } from "@/lib/stores/useRecentPagesStore";
@@ -448,6 +449,8 @@ export default function HomePage() {
                       pageId={currentPage.id}
                       editable={isBodyEditable}
                     />
+                    {/* FR-073 (Cycle 25) — 페이지 이모지 반응 바. */}
+                    <ReactionBar target="page" targetId={currentPage.id} />
                     <InlineCommentsList
                       pageId={currentPage.id}
                       editable={isBodyEditable}

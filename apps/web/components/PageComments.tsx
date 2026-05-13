@@ -8,6 +8,7 @@ import {
 } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getIdentity } from "@/lib/userIdentity";
+import ReactionBar from "@/components/ReactionBar";
 
 // FR-070 (Cycle 16-1b + 16-2a) — 페이지 댓글.
 // 16-2a: parentId 기반 트리 빌드 + 들여쓰기 렌더 + 답글 작성.
@@ -272,6 +273,9 @@ export default function PageComments({ pageId, editable }: Props) {
             {node.body}
           </div>
         )}
+
+        {/* FR-073 (Cycle 25) — 댓글 이모지 반응. */}
+        {!isEditing && <ReactionBar target="comment" targetId={node.id} />}
 
         {isReplying && (
           <div className="mt-2">

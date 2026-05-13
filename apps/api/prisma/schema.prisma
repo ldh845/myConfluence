@@ -35,6 +35,7 @@ model Page {
   comments     Comment[]
   shares       PageShare[]
   activityLogs ActivityLog[]
+  reactions    Reaction[]
   // FR-024 (Cycle 18-1a) — 휴지통(soft delete). null이면 활성 페이지.
   // 모든 일반 조회는 deletedAt IS NULL 필터 적용. 영구 삭제는 별도 endpoint.
   deletedAt    DateTime?
@@ -110,6 +111,25 @@ model Comment {
   @@index([pageId, createdAt])
   @@index([parentId])
   @@index([pageId, isInline, resolvedAt])
+  reactions  Reaction[]
+}
+
+// FR-073 (Cycle 25) — 이모지 반응. page 또는 comment 둘 중 하나에 연결.
+// 인증 도입 전엔 reactorId(브라우저 UUID)로 식별. 같은 reactor가 같은 대상에
+// 같은 emoji 한 번만 (NULL 처리는 Postgres가 distinct로 보지만 service에서 가드).
+model Reaction {
+  id          String   @id @default(cuid())
+  emoji       String
+  reactorId   String
+  reactorName String?
+  pageId      String?
+  page        Page?    @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  commentId   String?
+  comment     Comment? @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+
+  @@index([pageId])
+  @@index([commentId])
 }
 
 model Attachment {

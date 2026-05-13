@@ -11,6 +11,7 @@ import { AttachmentsModule } from './attachments/attachments.module';
 import { CommentsModule } from './comments/comments.module';
 import { PageSharesModule } from './page-shares/page-shares.module';
 import { ActivitiesModule } from './activities/activities.module';
+import { ReactionsModule } from './reactions/reactions.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { ActivitiesModule } from './activities/activities.module';
     CommentsModule,
     PageSharesModule,
     ActivitiesModule,
+    ReactionsModule,
   ],
   controllers: [AppController, HealthController],
   providers: [AppService],
