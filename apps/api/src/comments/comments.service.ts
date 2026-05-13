@@ -7,11 +7,19 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ActivitiesService } from '../activities/activities.service';
 import { CreateCommentDto } from './dto/create-comment.dto';
 import { UpdateCommentDto } from './dto/update-comment.dto';
-import { ResolveCommentDto } from './dto/resolve-comment.dto';
 
 // FR-070 (Cycle 16-1a) — 페이지 댓글 서비스.
 // flat 배열로 응답하고 클라이언트가 parentId 기반으로 트리를 구성한다.
-// 권한 체크는 인증 사이클까지 보류 — 누구나 작성/수정/삭제.
+// FR-001 (Cycle 27d) — authorId/authorName은 JWT user에서 서버가 결정.
+// 본인만 수정/삭제 가드는 Cycle 27e에서 추가 — 현재는 인증된 누구나 수정/삭제 가능.
+
+const AUTHOR_SELECT = {
+  id: true,
+  username: true,
+  name: true,
+  department: true,
+  role: true,
+} as const;
 
 @Injectable()
 export class CommentsService {
@@ -20,7 +28,11 @@ export class CommentsService {
     private readonly activities: ActivitiesService,
   ) {}
 
-  async create(pageId: string, dto: CreateCommentDto) {
+  async create(
+    pageId: string,
+    dto: CreateCommentDto,
+    actor: { id: string; name: string } | null,
+  ) {
     const body = (dto?.body ?? '').trim();
     if (!body) throw new BadRequestException({ error: 'body required' });
     const page = await this.prisma.page.findUnique({
@@ -41,17 +53,19 @@ export class CommentsService {
       data: {
         pageId,
         parentId: dto.parentId ?? null,
-        authorName: dto.authorName ?? null,
+        authorId: actor?.id ?? null,
+        authorName: actor?.name ?? null,
         body,
         isInline: dto.isInline ?? false,
         anchorJson: dto.anchorJson ?? null,
       },
+      include: { author: { select: AUTHOR_SELECT } },
     });
     await this.activities.log({
       type: 'comment.created',
       spaceId: page.spaceId,
       pageId: page.id,
-      actorName: dto.authorName ?? null,
+      actorName: actor?.name ?? null,
       payload: {
         commentId: created.id,
         pageTitle: page.title,
@@ -63,8 +77,8 @@ export class CommentsService {
   }
 
   // FR-071 (Cycle 16-3a) — 인라인 댓글 해결/해결 취소.
-  // 페이지 댓글에 resolve 시도는 400 (UI에서도 차단되지만 백엔드 가드).
-  async resolve(id: string, dto: ResolveCommentDto) {
+  // FR-001 (Cycle 27d) — resolvedBy는 JWT user.name.
+  async resolve(id: string, actor: { id: string; name: string } | null) {
     const existing = await this.prisma.comment.findUnique({
       where: { id },
       select: { id: true, isInline: true },
@@ -79,8 +93,9 @@ export class CommentsService {
       where: { id },
       data: {
         resolvedAt: new Date(),
-        resolvedBy: dto.authorName ?? null,
+        resolvedBy: actor?.name ?? null,
       },
+      include: { author: { select: AUTHOR_SELECT } },
     });
   }
 
@@ -93,6 +108,7 @@ export class CommentsService {
     return this.prisma.comment.update({
       where: { id },
       data: { resolvedAt: null, resolvedBy: null },
+      include: { author: { select: AUTHOR_SELECT } },
     });
   }
 
@@ -100,6 +116,7 @@ export class CommentsService {
     return this.prisma.comment.findMany({
       where: { pageId },
       orderBy: { createdAt: 'asc' },
+      include: { author: { select: AUTHOR_SELECT } },
     });
   }
 
@@ -113,12 +130,8 @@ export class CommentsService {
     if (!existing) throw new NotFoundException({ error: 'comment not found' });
     return this.prisma.comment.update({
       where: { id },
-      data: {
-        body,
-        ...(dto.authorName !== undefined
-          ? { authorName: dto.authorName ?? null }
-          : {}),
-      },
+      data: { body },
+      include: { author: { select: AUTHOR_SELECT } },
     });
   }
 

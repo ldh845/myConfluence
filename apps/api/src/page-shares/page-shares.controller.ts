@@ -9,9 +9,12 @@ import {
   NotFoundException,
   Param,
   Post,
+  Req,
   Res,
+  UseGuards,
 } from '@nestjs/common';
-import type { Response } from 'express';
+import type { Request, Response } from 'express';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PrismaService } from '../prisma/prisma.service';
 import { AttachmentsService } from '../attachments/attachments.service';
 import { PageSharesService } from './page-shares.service';
@@ -27,19 +30,23 @@ export class PageSharesController {
     private readonly attachments: AttachmentsService,
   ) {}
 
+  // FR-001 (Cycle 27d) — 발급 라우트는 인증 필수. createdById는 JWT user.id.
   @Post('pages/:id/share')
+  @UseGuards(JwtAuthGuard)
   @HttpCode(200)
-  create(@Param('id') id: string) {
-    return this.shares.getOrCreate(id);
+  create(@Param('id') id: string, @Req() req: Request) {
+    return this.shares.getOrCreate(id, req.user?.id ?? null);
   }
 
   @Post('pages/:id/share/rotate')
+  @UseGuards(JwtAuthGuard)
   @HttpCode(200)
-  rotate(@Param('id') id: string) {
-    return this.shares.rotate(id);
+  rotate(@Param('id') id: string, @Req() req: Request) {
+    return this.shares.rotate(id, req.user?.id ?? null);
   }
 
   @Delete('pages/:id/share')
+  @UseGuards(JwtAuthGuard)
   @HttpCode(200)
   revoke(@Param('id') id: string) {
     return this.shares.revoke(id);

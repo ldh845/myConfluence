@@ -7,22 +7,34 @@ import {
   type KeyboardEvent,
 } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { getIdentity } from "@/lib/userIdentity";
 import ReactionBar from "@/components/ReactionBar";
 
 // FR-070 (Cycle 16-1b + 16-2a) — 페이지 댓글.
 // 16-2a: parentId 기반 트리 빌드 + 들여쓰기 렌더 + 답글 작성.
-// 권한·리치 텍스트는 추후.
+// FR-001 (Cycle 27d) — author는 JWT user. authorName은 legacy fallback.
+
+type CommentAuthor = {
+  id: string;
+  username: string;
+  name: string;
+  department: string;
+  role: string;
+};
 
 type Comment = {
   id: string;
   pageId: string;
   parentId: string | null;
   authorName: string | null;
+  author?: CommentAuthor | null;
   body: string;
   createdAt: string;
   updatedAt: string;
 };
+
+function displayAuthor(c: Comment): string {
+  return c.author?.name ?? c.authorName ?? "익명";
+}
 
 type CommentNode = Comment & { children: CommentNode[] };
 
@@ -76,9 +88,11 @@ export default function PageComments({ pageId, editable }: Props) {
       const r = await fetch(`/api/pages/${pageId}/comments`, {
         method: "POST",
         headers: { "Content-Type": "application/json; charset=utf-8" },
-        body: JSON.stringify({ body, authorName: getIdentity().name }),
+        credentials: "include",
+        body: JSON.stringify({ body }),
       });
       if (!r.ok) {
+        if (r.status === 401) throw new Error("로그인이 필요합니다.");
         if (r.status === 400) throw new Error("내용을 입력하세요.");
         throw new Error("댓글 작성에 실패했습니다.");
       }
@@ -97,13 +111,13 @@ export default function PageComments({ pageId, editable }: Props) {
       const r = await fetch(`/api/pages/${pageId}/comments`, {
         method: "POST",
         headers: { "Content-Type": "application/json; charset=utf-8" },
-        body: JSON.stringify({
-          body,
-          authorName: getIdentity().name,
-          parentId,
-        }),
+        credentials: "include",
+        body: JSON.stringify({ body, parentId }),
       });
-      if (!r.ok) throw new Error("답글 작성에 실패했습니다.");
+      if (!r.ok) {
+        if (r.status === 401) throw new Error("로그인이 필요합니다.");
+        throw new Error("답글 작성에 실패했습니다.");
+      }
       return (await r.json()) as Comment;
     },
     onSuccess: () => {
@@ -119,9 +133,13 @@ export default function PageComments({ pageId, editable }: Props) {
       const r = await fetch(`/api/comments/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json; charset=utf-8" },
+        credentials: "include",
         body: JSON.stringify({ body }),
       });
-      if (!r.ok) throw new Error("댓글 수정에 실패했습니다.");
+      if (!r.ok) {
+        if (r.status === 401) throw new Error("로그인이 필요합니다.");
+        throw new Error("댓글 수정에 실패했습니다.");
+      }
       return r.json();
     },
     onSuccess: () => {
@@ -137,8 +155,14 @@ export default function PageComments({ pageId, editable }: Props) {
       if (!window.confirm("이 댓글을 삭제하시겠습니까? (답글도 함께 삭제됩니다)")) {
         throw new Error("cancel");
       }
-      const r = await fetch(`/api/comments/${id}`, { method: "DELETE" });
-      if (!r.ok) throw new Error("댓글 삭제에 실패했습니다.");
+      const r = await fetch(`/api/comments/${id}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (!r.ok) {
+        if (r.status === 401) throw new Error("로그인이 필요합니다.");
+        throw new Error("댓글 삭제에 실패했습니다.");
+      }
       return r.json();
     },
     onSuccess: invalidate,
@@ -208,9 +232,12 @@ export default function PageComments({ pageId, editable }: Props) {
       >
         <div className="flex items-center justify-between mb-1 text-[11px] text-[#6b778c]">
           <span>
-            <strong className="text-[#172b4d]">
-              {node.authorName ?? "익명"}
-            </strong>
+            <strong className="text-[#172b4d]">{displayAuthor(node)}</strong>
+            {node.author?.department && (
+              <span className="ml-1 text-[#6b778c]">
+                ({node.author.department})
+              </span>
+            )}
             <span>
               {" · "}
               {new Date(node.createdAt).toLocaleString("ko-KR")}

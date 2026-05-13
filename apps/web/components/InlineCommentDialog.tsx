@@ -8,8 +8,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { getIdentity } from "@/lib/userIdentity";
 import { usePageStore } from "@/lib/stores/usePageStore";
+
+// FR-001 (Cycle 27d) — authorName은 서버가 JWT user.name으로 결정. client 전송 X.
 
 // FR-071 (Cycle 16-3b-1) — 인라인 댓글 작성 popup.
 // 호출 측(EditorToolbar)에서 from/to + selected text 전달, 작성 성공 시 onCreated로
@@ -53,14 +54,15 @@ export default function InlineCommentDialog({
       const r = await fetch(`/api/pages/${pageId}/comments`, {
         method: "POST",
         headers: { "Content-Type": "application/json; charset=utf-8" },
+        credentials: "include",
         body: JSON.stringify({
           body: trimmed,
-          authorName: getIdentity().name,
           isInline: true,
           anchorJson,
         }),
       });
       if (!r.ok) {
+        if (r.status === 401) throw new Error("로그인이 필요합니다.");
         if (r.status === 400) throw new Error("내용을 입력하세요.");
         throw new Error("댓글 작성에 실패했습니다.");
       }

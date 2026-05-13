@@ -18,16 +18,20 @@ enum Role {
 }
 
 model User {
-  id            String   @id @default(cuid())
-  username      String   @unique
-  passwordHash  String
-  name          String
-  department    String
-  role          Role     @default(DEVELOPER)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  authoredPages Page[]   @relation("PageAuthor")
-  editedPages   Page[]   @relation("PageEditor")
+  id               String      @id @default(cuid())
+  username         String      @unique
+  passwordHash     String
+  name             String
+  department       String
+  role             Role        @default(DEVELOPER)
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+  authoredPages    Page[]      @relation("PageAuthor")
+  editedPages      Page[]      @relation("PageEditor")
+  // FR-001 / FR-002 (Cycle 27d) — Comment / PageShare 작성자 양방향 관계.
+  // user 삭제 시 SetNull → authorName / 시스템 표기로 fallback.
+  authoredComments Comment[]   @relation("CommentAuthor")
+  createdShares    PageShare[] @relation("ShareCreator")
 }
 
 model Space {
@@ -109,14 +113,18 @@ model ActivityLog {
 // FR-120 (Cycle 23) — 페이지 공유 링크.
 // 토큰 보유자에게 읽기 전용 접근. revokedAt이 null이면 활성.
 model PageShare {
-  id        String    @id @default(cuid())
-  pageId    String
-  page      Page      @relation(fields: [pageId], references: [id], onDelete: Cascade)
-  token     String    @unique
-  createdAt DateTime  @default(now())
-  revokedAt DateTime?
+  id          String    @id @default(cuid())
+  pageId      String
+  page        Page      @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  token       String    @unique
+  // FR-001 / FR-120 (Cycle 27d) — 발급자. user 삭제 시 SetNull.
+  createdById String?
+  createdBy   User?     @relation("ShareCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt   DateTime  @default(now())
+  revokedAt   DateTime?
 
   @@index([pageId])
+  @@index([createdById])
 }
 
 model Comment {
@@ -126,6 +134,9 @@ model Comment {
   parentId   String?
   parent     Comment?  @relation("CommentThread", fields: [parentId], references: [id], onDelete: Cascade)
   replies    Comment[] @relation("CommentThread")
+  // FR-001 / FR-070 (Cycle 27d) — 작성자 FK. user 삭제 시 SetNull → authorName fallback.
+  authorId   String?
+  author     User?     @relation("CommentAuthor", fields: [authorId], references: [id], onDelete: SetNull)
   authorName String?
   body       String
   // FR-071 (Cycle 16-3a) — 인라인 댓글.
@@ -141,6 +152,7 @@ model Comment {
   @@index([pageId, createdAt])
   @@index([parentId])
   @@index([pageId, isInline, resolvedAt])
+  @@index([authorId])
   reactions  Reaction[]
 }
 

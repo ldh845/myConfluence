@@ -11,7 +11,15 @@ import {
 
 // FR-120 (Cycle 23) — 페이지 공유 다이얼로그.
 // POST /api/pages/:id/share (idempotent) — 활성 토큰 가져오기/발급.
-// 다이얼로그 열릴 때만 useQuery 발화.
+// FR-001 (Cycle 27d) — createdBy 표시. mutation은 credentials: include.
+
+type ShareCreator = {
+  id: string;
+  username: string;
+  name: string;
+  department: string;
+  role: string;
+};
 
 type Share = {
   id: string;
@@ -19,6 +27,7 @@ type Share = {
   token: string;
   createdAt: string;
   revokedAt: string | null;
+  createdBy?: ShareCreator | null;
 };
 
 type Props = {
@@ -39,8 +48,14 @@ export default function SharePageDialog({ open, onOpenChange, page }: Props) {
   const { data: share } = useQuery<Share>({
     queryKey: ["page-share", page.id],
     queryFn: async () => {
-      const r = await fetch(`/api/pages/${page.id}/share`, { method: "POST" });
-      if (!r.ok) throw new Error("공유 링크를 가져오지 못했습니다.");
+      const r = await fetch(`/api/pages/${page.id}/share`, {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!r.ok) {
+        if (r.status === 401) throw new Error("로그인이 필요합니다.");
+        throw new Error("공유 링크를 가져오지 못했습니다.");
+      }
       return (await r.json()) as Share;
     },
     enabled: open && !revoked,
@@ -50,8 +65,12 @@ export default function SharePageDialog({ open, onOpenChange, page }: Props) {
     mutationFn: async () => {
       const r = await fetch(`/api/pages/${page.id}/share/rotate`, {
         method: "POST",
+        credentials: "include",
       });
-      if (!r.ok) throw new Error("새 링크 발급에 실패했습니다.");
+      if (!r.ok) {
+        if (r.status === 401) throw new Error("로그인이 필요합니다.");
+        throw new Error("새 링크 발급에 실패했습니다.");
+      }
       return (await r.json()) as Share;
     },
     onSuccess: (data) => {
@@ -64,8 +83,12 @@ export default function SharePageDialog({ open, onOpenChange, page }: Props) {
     mutationFn: async () => {
       const r = await fetch(`/api/pages/${page.id}/share`, {
         method: "DELETE",
+        credentials: "include",
       });
-      if (!r.ok) throw new Error("공유 중지에 실패했습니다.");
+      if (!r.ok) {
+        if (r.status === 401) throw new Error("로그인이 필요합니다.");
+        throw new Error("공유 중지에 실패했습니다.");
+      }
     },
     onSuccess: () => {
       setRevoked(true);
@@ -148,6 +171,16 @@ export default function SharePageDialog({ open, onOpenChange, page }: Props) {
                 이 링크를 가진 사람은 누구나 페이지를 읽기 전용으로 볼 수
                 있습니다. 편집은 불가합니다.
               </p>
+              {share && (
+                <p className="text-[11px] text-[#6b778c]">
+                  이 링크는{" "}
+                  <strong className="text-[#172b4d]">
+                    {share.createdBy?.name ?? "레거시 (시스템)"}
+                  </strong>
+                  이(가){" "}
+                  {new Date(share.createdAt).toLocaleString("ko-KR")}에 발급했습니다.
+                </p>
+              )}
             </section>
 
             <div className="flex justify-between items-center pt-2">

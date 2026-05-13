@@ -2,17 +2,25 @@
 
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { getIdentity } from "@/lib/userIdentity";
 
 // FR-071 (Cycle 16-3b-2) — 인라인 댓글 목록 + resolve/unresolve.
 // queryKey ["comments", pageId]를 PageComments와 공유해 데이터 갱신 자동 전파.
-// 본문 마크가 markdown 직렬화로 사라져도 anchorJson 인용으로 가시성 유지.
+// FR-001 (Cycle 27d) — author는 JWT user. resolvedBy도 서버가 결정.
+
+type CommentAuthor = {
+  id: string;
+  username: string;
+  name: string;
+  department: string;
+  role: string;
+};
 
 type Comment = {
   id: string;
   pageId: string;
   parentId: string | null;
   authorName: string | null;
+  author?: CommentAuthor | null;
   body: string;
   isInline: boolean;
   anchorJson: string | null;
@@ -21,6 +29,10 @@ type Comment = {
   createdAt: string;
   updatedAt: string;
 };
+
+function displayAuthor(c: Comment): string {
+  return c.author?.name ?? c.authorName ?? "익명";
+}
 
 type Anchor = { from: number; to: number; text: string };
 
@@ -70,9 +82,13 @@ export default function InlineCommentsList({ pageId, editable }: Props) {
       const r = await fetch(`/api/comments/${id}/resolve`, {
         method: "POST",
         headers: { "Content-Type": "application/json; charset=utf-8" },
-        body: JSON.stringify({ authorName: getIdentity().name }),
+        credentials: "include",
+        body: JSON.stringify({}),
       });
-      if (!r.ok) throw new Error("해결 처리에 실패했습니다.");
+      if (!r.ok) {
+        if (r.status === 401) throw new Error("로그인이 필요합니다.");
+        throw new Error("해결 처리에 실패했습니다.");
+      }
       return r.json();
     },
     onSuccess: invalidate,
@@ -83,8 +99,12 @@ export default function InlineCommentsList({ pageId, editable }: Props) {
     mutationFn: async (id: string) => {
       const r = await fetch(`/api/comments/${id}/unresolve`, {
         method: "POST",
+        credentials: "include",
       });
-      if (!r.ok) throw new Error("해결 취소에 실패했습니다.");
+      if (!r.ok) {
+        if (r.status === 401) throw new Error("로그인이 필요합니다.");
+        throw new Error("해결 취소에 실패했습니다.");
+      }
       return r.json();
     },
     onSuccess: invalidate,
@@ -115,9 +135,10 @@ export default function InlineCommentsList({ pageId, editable }: Props) {
         </div>
         <div className="flex items-center justify-between text-[11px] text-[#6b778c]">
           <span>
-            <strong className="text-[#172b4d]">
-              {c.authorName ?? "익명"}
-            </strong>
+            <strong className="text-[#172b4d]">{displayAuthor(c)}</strong>
+            {c.author?.department && (
+              <span className="ml-1 text-[#6b778c]">({c.author.department})</span>
+            )}
             {" · "}
             {new Date(c.createdAt).toLocaleString("ko-KR")}
             {isResolved && c.resolvedAt && (
