@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { ActivitiesService } from '../activities/activities.service';
 import { CreateCommentDto } from './dto/create-comment.dto';
 import { UpdateCommentDto } from './dto/update-comment.dto';
 import { ResolveCommentDto } from './dto/resolve-comment.dto';
@@ -14,14 +15,17 @@ import { ResolveCommentDto } from './dto/resolve-comment.dto';
 
 @Injectable()
 export class CommentsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly activities: ActivitiesService,
+  ) {}
 
   async create(pageId: string, dto: CreateCommentDto) {
     const body = (dto?.body ?? '').trim();
     if (!body) throw new BadRequestException({ error: 'body required' });
     const page = await this.prisma.page.findUnique({
       where: { id: pageId },
-      select: { id: true },
+      select: { id: true, title: true, spaceId: true },
     });
     if (!page) throw new NotFoundException({ error: 'page not found' });
     if (dto.parentId) {
@@ -33,7 +37,7 @@ export class CommentsService {
         throw new BadRequestException({ error: 'invalid parent' });
       }
     }
-    return this.prisma.comment.create({
+    const created = await this.prisma.comment.create({
       data: {
         pageId,
         parentId: dto.parentId ?? null,
@@ -43,6 +47,19 @@ export class CommentsService {
         anchorJson: dto.anchorJson ?? null,
       },
     });
+    await this.activities.log({
+      type: 'comment.created',
+      spaceId: page.spaceId,
+      pageId: page.id,
+      actorName: dto.authorName ?? null,
+      payload: {
+        commentId: created.id,
+        pageTitle: page.title,
+        preview: body.slice(0, 80),
+        isInline: !!dto.isInline,
+      },
+    });
+    return created;
   }
 
   // FR-071 (Cycle 16-3a) — 인라인 댓글 해결/해결 취소.

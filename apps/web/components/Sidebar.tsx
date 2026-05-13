@@ -464,8 +464,15 @@ export default function Sidebar({
         <NavItem
           icon="📄"
           label="페이지"
-          active={pathname !== "/home"}
+          active={pathname !== "/home" && pathname !== "/activity"}
           onClick={() => router.push("/")}
+        />
+        {/* FR-131 (Cycle 24) — 활동 피드 진입. */}
+        <NavItem
+          icon="📜"
+          label="활동"
+          active={pathname === "/activity"}
+          onClick={() => router.push("/activity")}
         />
         <NavItem icon="📝" label="블로그" disabled />
         <NavItem icon="📅" label="캘린더" disabled />

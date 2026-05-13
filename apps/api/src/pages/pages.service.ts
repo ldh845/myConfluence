@@ -6,6 +6,7 @@ import {
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AttachmentsService } from '../attachments/attachments.service';
+import { ActivitiesService } from '../activities/activities.service';
 import { promises as fs } from 'node:fs';
 import * as path from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -42,6 +43,7 @@ export class PagesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly attachments: AttachmentsService,
+    private readonly activities: ActivitiesService,
   ) {}
 
   // FR-064 — 같은 트랜잭션 안에서 호출. 새 PageVersion이 막 추가된
@@ -224,8 +226,8 @@ export class PagesService {
     return page;
   }
 
-  create(dto: CreatePageDto) {
-    return this.prisma.page.create({
+  async create(dto: CreatePageDto) {
+    const page = await this.prisma.page.create({
       data: {
         title: dto.title,
         content: dto.content ?? '',
@@ -233,6 +235,13 @@ export class PagesService {
         parentId: dto.parentId ?? null,
       },
     });
+    await this.activities.log({
+      type: 'page.created',
+      spaceId: page.spaceId,
+      pageId: page.id,
+      payload: { title: page.title },
+    });
+    return page;
   }
 
   // FR-060 / FR-061 — 페이지가 변경될 때마다 PageVersion 스냅샷을 생성한다.
@@ -292,7 +301,11 @@ export class PagesService {
       }
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const moved =
+      (dto.spaceId !== undefined && dto.spaceId !== current.spaceId) ||
+      (dto.parentId !== undefined && dto.parentId !== current.parentId);
+
+    const result = await this.prisma.$transaction(async (tx) => {
       const page = await tx.page.update({
         where: { id },
         data: {
@@ -372,6 +385,24 @@ export class PagesService {
       await this.cleanupOldVersions(tx, id);
       return page;
     });
+
+    // FR-131 — 페이지 이동(스페이스/부모 변경) 시 활동 로그.
+    if (moved) {
+      await this.activities.log({
+        type: 'page.moved',
+        spaceId: result.spaceId,
+        pageId: result.id,
+        actorName: dto.authorName ?? null,
+        payload: {
+          title: result.title,
+          fromSpaceId: current.spaceId,
+          fromParentId: current.parentId,
+          toSpaceId: result.spaceId,
+          toParentId: result.parentId,
+        },
+      });
+    }
+    return result;
   }
 
   listVersions(pageId: string) {
@@ -398,8 +429,8 @@ export class PagesService {
   // 이슈 2 (Cycle 10-1) — 발행.
   // draft → content 승격 + draft 비움 + PageVersion 스냅샷 + retention cap.
   // 모두 같은 트랜잭션이므로 한쪽 실패 시 함께 롤백.
-  publish(id: string, dto: PublishPageDto) {
-    return this.prisma.$transaction(async (tx) => {
+  async publish(id: string, dto: PublishPageDto) {
+    const published = await this.prisma.$transaction(async (tx) => {
       const page = await tx.page.findUnique({ where: { id } });
       if (!page) throw new NotFoundException({ error: 'page not found' });
       if (page.draftContent === null) {
@@ -426,6 +457,14 @@ export class PagesService {
       await this.cleanupOldVersions(tx, id);
       return published;
     });
+    await this.activities.log({
+      type: 'page.published',
+      spaceId: published.spaceId,
+      pageId: published.id,
+      actorName: dto.authorName ?? null,
+      payload: { title: published.title },
+    });
+    return published;
   }
 
   // FR-063 — 특정 PageVersion으로 페이지를 되돌린다.
@@ -471,7 +510,7 @@ export class PagesService {
   async remove(id: string) {
     const page = await this.prisma.page.findUnique({
       where: { id },
-      select: { id: true, deletedAt: true },
+      select: { id: true, title: true, spaceId: true, deletedAt: true },
     });
     if (!page) throw new NotFoundException({ error: 'page not found' });
     if (page.deletedAt) {
@@ -482,6 +521,12 @@ export class PagesService {
       where: { id: { in: targetIds } },
       data: { deletedAt: new Date() },
     });
+    await this.activities.log({
+      type: 'page.soft_deleted',
+      spaceId: page.spaceId,
+      pageId: page.id,
+      payload: { title: page.title, descendants: targetIds.length - 1 },
+    });
     return { ok: true };
   }
 
@@ -489,7 +534,7 @@ export class PagesService {
   async restore(id: string) {
     const page = await this.prisma.page.findUnique({
       where: { id },
-      select: { id: true, deletedAt: true },
+      select: { id: true, title: true, spaceId: true, deletedAt: true },
     });
     if (!page) throw new NotFoundException({ error: 'page not found' });
     if (!page.deletedAt) {
@@ -500,6 +545,12 @@ export class PagesService {
       where: { id: { in: targetIds } },
       data: { deletedAt: null },
     });
+    await this.activities.log({
+      type: 'page.restored',
+      spaceId: page.spaceId,
+      pageId: page.id,
+      payload: { title: page.title, descendants: targetIds.length - 1 },
+    });
     return { ok: true };
   }
 
@@ -509,7 +560,13 @@ export class PagesService {
   async permanentDelete(id: string) {
     const page = await this.prisma.page.findUnique({
       where: { id },
-      select: { id: true, deletedAt: true },
+      select: {
+        id: true,
+        title: true,
+        spaceId: true,
+        deletedAt: true,
+        space: { select: { name: true } },
+      },
     });
     if (!page) throw new NotFoundException({ error: 'page not found' });
     if (!page.deletedAt) {
@@ -524,6 +581,17 @@ export class PagesService {
     if (orphans.length > 0) {
       await this.attachments.cleanupFiles(orphans.map((o) => o.storageKey));
     }
+    // FR-131 — 영구 삭제. pageId는 곧 NULL이 되니 payload에 스냅샷.
+    await this.activities.log({
+      type: 'page.permanent_deleted',
+      spaceId: null,
+      pageId: null,
+      payload: {
+        deletedTitle: page.title,
+        deletedSpaceName: page.space?.name ?? null,
+        descendants: targetIds.length - 1,
+      },
+    });
     return { ok: true };
   }
 
@@ -659,8 +727,9 @@ export class PagesService {
     }
 
     // DB 트랜잭션 — page → attachment → diagram. 실패 시 디스크 파일 cleanup.
+    let resultPage;
     try {
-      return await this.prisma.$transaction(async (tx) => {
+      resultPage = await this.prisma.$transaction(async (tx) => {
         const idMap = new Map<string, string>();
         let rootCreated: { id: string } | null = null;
 
@@ -721,6 +790,20 @@ export class PagesService {
       await this.attachments.cleanupFiles(copiedKeys);
       throw err;
     }
+
+    if (resultPage) {
+      await this.activities.log({
+        type: 'page.copied',
+        spaceId: resultPage.spaceId,
+        pageId: resultPage.id,
+        payload: {
+          title: resultPage.title,
+          sourcePageId: source.id,
+          recursive: !!dto.recursive,
+        },
+      });
+    }
+    return resultPage;
   }
 
   // BFS — deletedAt 무관(부모/자식 트리 전체). 자손 페이지를 모아 cascade soft/hard

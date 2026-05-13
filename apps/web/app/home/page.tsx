@@ -7,6 +7,11 @@ import { useFavoritesStore } from "@/lib/stores/useFavoritesStore";
 import { useRecentPagesStore } from "@/lib/stores/useRecentPagesStore";
 import PageCard from "@/components/PageCard";
 import type { SpaceWithPages, PageNode } from "@/lib/types";
+import {
+  formatActivity,
+  relativeTime,
+  type ActivityItem,
+} from "@/lib/activity-format";
 
 // FR-130 (Cycle 22) — 홈 대시보드.
 // 4개 카드: 최근 방문 / 즐겨찾기 / 최근 수정 / 알림(placeholder).
@@ -49,6 +54,18 @@ export default function HomePage() {
       const r = await fetch("/api/pages/recent?limit=10");
       if (!r.ok) return [];
       return (await r.json()) as RecentApiPage[];
+    },
+  });
+
+  const { data: activities } = useQuery<{
+    items: ActivityItem[];
+    total: number;
+  }>({
+    queryKey: ["activities", { limit: 8 }],
+    queryFn: async () => {
+      const r = await fetch("/api/activities?limit=8");
+      if (!r.ok) return { items: [], total: 0 };
+      return (await r.json()) as { items: ActivityItem[]; total: number };
     },
   });
 
@@ -190,6 +207,64 @@ export default function HomePage() {
           <div className="text-[12px] text-[#6b778c]">
             알림 기능은 인증·알림 사이클 후 제공됩니다.
           </div>
+        </section>
+
+        {/* FR-131 (Cycle 24) — 최근 활동. md:col-span-2로 wide. */}
+        <section className="md:col-span-2 border border-[#dfe1e6] rounded-md p-4 bg-white">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-[14px] font-semibold text-[#172b4d]">
+              📜 최근 활동
+            </h2>
+            <Link
+              href="/activity"
+              className="text-[12px] text-[#0052cc] hover:underline"
+            >
+              모두 보기 →
+            </Link>
+          </div>
+          {!activities ? (
+            <div className="text-[12px] text-[#6b778c]">불러오는 중...</div>
+          ) : activities.items.length === 0 ? (
+            <div className="text-[12px] text-[#6b778c]">
+              아직 활동이 없습니다.
+            </div>
+          ) : (
+            <ul className="space-y-2">
+              {activities.items.map((it) => {
+                const fmt = formatActivity(it);
+                const row = (
+                  <div className="flex items-start gap-2 px-2 py-1.5 rounded hover:bg-[#f4f5f7]">
+                    <span className="text-[14px] leading-none mt-0.5">
+                      {fmt.icon}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[13px] text-[#172b4d] truncate">
+                        {fmt.text}
+                      </div>
+                      <div className="text-[11px] text-[#6b778c]">
+                        {fmt.spaceName && <span>{fmt.spaceName} · </span>}
+                        {relativeTime(it.createdAt)}
+                      </div>
+                    </div>
+                  </div>
+                );
+                return (
+                  <li key={it.id}>
+                    {fmt.pageId ? (
+                      <Link
+                        href={`/?pageId=${fmt.pageId}`}
+                        className="block"
+                      >
+                        {row}
+                      </Link>
+                    ) : (
+                      row
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
         </section>
       </div>
     </div>

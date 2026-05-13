@@ -8,11 +8,12 @@ datasource db {
 }
 
 model Space {
-  id          String   @id @default(cuid())
-  name        String
-  description String?
-  createdAt   DateTime @default(now())
-  pages       Page[]
+  id           String        @id @default(cuid())
+  name         String
+  description  String?
+  createdAt    DateTime      @default(now())
+  pages        Page[]
+  activityLogs ActivityLog[]
 }
 
 model Page {
@@ -33,6 +34,7 @@ model Page {
   attachments  Attachment[]
   comments     Comment[]
   shares       PageShare[]
+  activityLogs ActivityLog[]
   // FR-024 (Cycle 18-1a) — 휴지통(soft delete). null이면 활성 페이지.
   // 모든 일반 조회는 deletedAt IS NULL 필터 적용. 영구 삭제는 별도 endpoint.
   deletedAt    DateTime?
@@ -55,6 +57,24 @@ model Page {
 // FR-070 (Cycle 16-1a) — 페이지 댓글.
 // parentId/parent self-relation은 16-2 스레드 사이클 대비. 현재는 모두 null.
 // page cascade로 페이지 삭제 시 함께 정리. 권한 체크는 인증 사이클까지 보류.
+// FR-131 (Cycle 24) — 활동 피드.
+// page/space onDelete: SetNull — 영구 삭제 후에도 로그 보존(payload에 title 스냅샷).
+// actorName은 인증 도입 전 단순 문자열(댓글의 authorName 등).
+model ActivityLog {
+  id        String   @id @default(cuid())
+  type      String
+  spaceId   String?
+  space     Space?   @relation(fields: [spaceId], references: [id], onDelete: SetNull)
+  pageId    String?
+  page      Page?    @relation(fields: [pageId], references: [id], onDelete: SetNull)
+  actorName String?
+  payload   Json?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt(sort: Desc)])
+  @@index([spaceId, createdAt(sort: Desc)])
+}
+
 // FR-120 (Cycle 23) — 페이지 공유 링크.
 // 토큰 보유자에게 읽기 전용 접근. revokedAt이 null이면 활성.
 model PageShare {
