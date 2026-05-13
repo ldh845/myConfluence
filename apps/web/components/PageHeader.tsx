@@ -2,7 +2,11 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { PageFull, PageNode, SpaceWithPages } from "@/lib/types";
-import type { PresenceUser, SaveStatus } from "@/components/CollaborativeEditor";
+import type {
+  ConnectionState,
+  PresenceUser,
+  SaveStatus,
+} from "@/components/CollaborativeEditor";
 import { useFavoritesStore } from "@/lib/stores/useFavoritesStore";
 import { downloadPageMarkdown } from "@/lib/export/markdown";
 import { openPrintDialog } from "@/lib/export/print";
@@ -48,6 +52,7 @@ type Props = {
   space: SpaceWithPages | null;
   saveStatus: SaveStatus;
   presence: PresenceUser[];
+  connectionState?: ConnectionState;
   isBodyEditable: boolean;
   onToggleEdit: () => void;
   onTitleChange: (title: string) => void;
@@ -67,6 +72,7 @@ export default function PageHeader({
   space,
   saveStatus,
   presence,
+  connectionState,
   isBodyEditable,
   onToggleEdit,
   onTitleChange,
@@ -121,6 +127,13 @@ export default function PageHeader({
 
   return (
     <div className="mb-4">
+      {/* FR-054 (Cycle 26) — 오프라인 안내 배너. */}
+      {connectionState === "offline" && (
+        <div className="mb-3 px-3 py-2 bg-[#fff7d6] border border-[#f5cd47] rounded-md text-[12px] text-[#7f5f01]">
+          ⚠️ 네트워크가 끊어졌습니다. 편집 내용은 로컬에 저장되며, 재연결 시
+          자동으로 동기화됩니다.
+        </div>
+      )}
       <nav className="text-[12px] text-[#6b778c] flex flex-wrap items-center gap-1">
         {space && <span>{space.name}</span>}
         {ancestors.map((c) => (
@@ -165,6 +178,8 @@ export default function PageHeader({
         <div className="flex items-center gap-2 pt-3 shrink-0">
           <PresenceStrip users={presence} />
           <SaveStatusBadge status={saveStatus} />
+          {/* FR-054 (Cycle 26) — 연결 상태 뱃지 (정상은 무소음). */}
+          <ConnectionBadge state={connectionState} />
           {isBodyEditable && (
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-[#deebff] text-[#0052cc] text-[11px] font-semibold">
               ● 편집 중
@@ -267,6 +282,36 @@ function PresenceStrip({ users }: { users: PresenceUser[] }) {
         </div>
       )}
     </div>
+  );
+}
+
+// FR-054 (Cycle 26) — 연결 상태 뱃지. online-synced는 침묵.
+function ConnectionBadge({ state }: { state?: ConnectionState }) {
+  if (!state || state === "online-synced") return null;
+  const map: Record<
+    Exclude<ConnectionState, "online-synced">,
+    { text: string; cls: string }
+  > = {
+    "online-syncing": {
+      text: "🔄 동기화 중",
+      cls: "bg-[#deebff] text-[#0052cc]",
+    },
+    offline: {
+      text: "🔴 오프라인 — 로컬 저장됨",
+      cls: "bg-[#ffebe6] text-[#bf2600]",
+    },
+    reconnecting: {
+      text: "🟡 재연결 중...",
+      cls: "bg-[#fff7d6] text-[#7f5f01]",
+    },
+  };
+  const m = map[state];
+  return (
+    <span
+      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium ${m.cls}`}
+    >
+      {m.text}
+    </span>
   );
 }
 

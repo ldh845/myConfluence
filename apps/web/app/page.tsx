@@ -26,6 +26,7 @@ import { getIdentity } from "@/lib/userIdentity";
 import { usePageStore } from "@/lib/stores/usePageStore";
 import { useRecentPagesStore } from "@/lib/stores/useRecentPagesStore";
 import type {
+  ConnectionState,
   PresenceUser,
   SaveStatus,
 } from "@/components/CollaborativeEditor";
@@ -54,6 +55,9 @@ export default function HomePage() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [presence, setPresence] = useState<PresenceUser[]>([]);
+  // FR-054 (Cycle 26) — 협업 연결 상태(헤더 뱃지/배너용).
+  const [connectionState, setConnectionState] =
+    useState<ConnectionState>("online-synced");
   const [isBodyEditable, setIsBodyEditable] = useState(false);
   // FR-039 — TableOfContents에 editor 참조를 넘기기 위한 상태.
   const [editor, setEditor] = useState<Editor | null>(null);
@@ -410,6 +414,7 @@ export default function HomePage() {
                   space={activeSpace}
                   saveStatus={saveStatus}
                   presence={presence}
+                  connectionState={connectionState}
                   isBodyEditable={isBodyEditable}
                   onToggleEdit={toggleEditMode}
                   onTitleChange={handleTitleChange}
@@ -440,6 +445,7 @@ export default function HomePage() {
                       onSaveStatusChange={setSaveStatus}
                       onPresenceChange={setPresence}
                       onEditor={setEditor}
+                      onConnectionStateChange={setConnectionState}
                     />
                     <DiagramList
                       pageId={currentPage.id}

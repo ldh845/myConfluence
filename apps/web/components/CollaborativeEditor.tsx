@@ -35,6 +35,7 @@ import EditorToolbar from "./EditorToolbar";
 import TaskItemNodeView from "./TaskItemNodeView";
 import * as Y from "yjs";
 import { HocuspocusProvider } from "@hocuspocus/provider";
+import { IndexeddbPersistence } from "y-indexeddb";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { EditorView } from "@tiptap/pm/view";
@@ -49,6 +50,17 @@ export type PresenceUser = {
 
 export type SaveStatus = "idle" | "saving" | "saved" | "error";
 
+// FR-054 (Cycle 26) — 오프라인 편집 상태.
+//  online-synced: 정상 (WS 연결 + 동기화 완료) — 표시 안 함
+//  online-syncing: WS 연결됐지만 아직 초기 sync 중
+//  offline: 브라우저 또는 WS 끊김 — IndexedDB에 영속, 재연결 대기
+//  reconnecting: 네트워크 복귀 시도 중
+export type ConnectionState =
+  | "online-synced"
+  | "online-syncing"
+  | "offline"
+  | "reconnecting";
+
 type Props = {
   pageId: string;
   initialMarkdown: string;
@@ -57,6 +69,8 @@ type Props = {
   onPresenceChange?: (users: PresenceUser[]) => void;
   // FR-039 — 부모(page.tsx)가 TOC 등 외부 위젯에서 editor를 참조할 수 있게 노출.
   onEditor?: (editor: Editor | null) => void;
+  // FR-054 (Cycle 26) — 연결 상태 변경을 부모에 통지(헤더 뱃지/배너용).
+  onConnectionStateChange?: (state: ConnectionState) => void;
 };
 
 function resolveWsUrl(): string {
@@ -87,6 +101,7 @@ export default function CollaborativeEditor({
   onSaveStatusChange,
   onPresenceChange,
   onEditor,
+  onConnectionStateChange,
 }: Props) {
   const identity = useMemo<Identity>(() => getIdentity(), []);
   const queryClient = useQueryClient();
@@ -142,6 +157,7 @@ export default function CollaborativeEditor({
   // Cycle 10-2b-1 — 편집 모드일 때만 Yjs 세션. 조회 모드 사용자는 다른
   // 사용자의 임시 변경(draft)이 보이지 않게 하기 위해 협업 채널에 참여하지
   // 않는다. page.tsx가 모드 전환 시 key prop으로 컴포넌트를 재마운트한다.
+  // FR-054 (Cycle 26) — IndexedDB persistence + 연결 상태 추적.
   useEffect(() => {
     if (!editable) return;
     const ydoc = new Y.Doc();
@@ -150,13 +166,55 @@ export default function CollaborativeEditor({
       name: `page-${pageId}`,
       document: ydoc,
     });
+    // FR-054 — Y.Doc을 IndexedDB에 영속 → 오프라인에서도 마지막 상태 복원 +
+    // 편집 즉시 영속. 재연결 시 Yjs CRDT가 자동 merge.
+    const persistence = new IndexeddbPersistence(
+      `docspace-page-${pageId}`,
+      ydoc,
+    );
+
+    // 연결 상태 추적 — HocuspocusProvider status + navigator.onLine.
+    const updateState = () => {
+      const navOnline =
+        typeof navigator === "undefined" ? true : navigator.onLine;
+      if (!navOnline) {
+        onConnectionStateChange?.("offline");
+        return;
+      }
+      // provider.status: 'connecting' | 'connected' | 'disconnected'
+      const status = provider.status as string;
+      if (status === "connected") {
+        onConnectionStateChange?.(
+          provider.synced ? "online-synced" : "online-syncing",
+        );
+      } else if (status === "connecting") {
+        onConnectionStateChange?.("reconnecting");
+      } else {
+        onConnectionStateChange?.("offline");
+      }
+    };
+    provider.on("status", updateState);
+    provider.on("synced", updateState);
+    provider.on("disconnect", updateState);
+    const onOnline = () => updateState();
+    const onOffline = () => onConnectionStateChange?.("offline");
+    window.addEventListener("online", onOnline);
+    window.addEventListener("offline", onOffline);
+    updateState();
+
     setInstance({ ydoc, provider });
     return () => {
+      provider.off("status", updateState);
+      provider.off("synced", updateState);
+      provider.off("disconnect", updateState);
+      window.removeEventListener("online", onOnline);
+      window.removeEventListener("offline", onOffline);
+      void persistence.destroy();
       provider.destroy();
       ydoc.destroy();
       setInstance(null);
     };
-  }, [editable, pageId]);
+  }, [editable, pageId, onConnectionStateChange]);
 
   const editor = useEditor(
     {
