@@ -21,6 +21,11 @@ export default function SignupPage() {
   const [name, setName] = useState("");
   const [department, setDepartment] = useState("");
   const [clientError, setClientError] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+
+  // FR-001 개선 — 비밀번호 확인 불일치 시 인풋 바로 아래 인라인 경고
+  const confirmMismatch = confirm.length > 0 && confirm !== password;
 
   useEffect(() => {
     if (!isLoading && user) router.replace("/home");
@@ -105,25 +110,54 @@ export default function SignupPage() {
 
         <label className="block">
           <span className="text-[12px] font-semibold text-[#42526e]">비밀번호</span>
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="8자 이상"
-            autoComplete="new-password"
-            className="mt-1 w-full px-3 py-2 text-[13px] border border-[#dfe1e6] rounded focus:outline-none focus:border-[#0052cc]"
-          />
+          <div className="relative mt-1">
+            <input
+              type={showPassword ? "text" : "password"}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="8자 이상"
+              autoComplete="new-password"
+              className="w-full px-3 py-2 pr-10 text-[13px] border border-[#dfe1e6] rounded focus:outline-none focus:border-[#0052cc]"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword((v) => !v)}
+              aria-label={showPassword ? "비밀번호 숨기기" : "비밀번호 보기"}
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-[#6b778c] hover:text-[#172b4d]"
+            >
+              <EyeIcon visible={showPassword} />
+            </button>
+          </div>
         </label>
 
         <label className="block">
           <span className="text-[12px] font-semibold text-[#42526e]">비밀번호 확인</span>
-          <input
-            type="password"
-            value={confirm}
-            onChange={(e) => setConfirm(e.target.value)}
-            autoComplete="new-password"
-            className="mt-1 w-full px-3 py-2 text-[13px] border border-[#dfe1e6] rounded focus:outline-none focus:border-[#0052cc]"
-          />
+          <div className="relative mt-1">
+            <input
+              type={showConfirm ? "text" : "password"}
+              value={confirm}
+              onChange={(e) => setConfirm(e.target.value)}
+              autoComplete="new-password"
+              className={`w-full px-3 py-2 pr-10 text-[13px] border rounded focus:outline-none ${
+                confirmMismatch
+                  ? "border-[#de350b] focus:border-[#de350b]"
+                  : "border-[#dfe1e6] focus:border-[#0052cc]"
+              }`}
+            />
+            <button
+              type="button"
+              onClick={() => setShowConfirm((v) => !v)}
+              aria-label={showConfirm ? "비밀번호 숨기기" : "비밀번호 보기"}
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-[#6b778c] hover:text-[#172b4d]"
+            >
+              <EyeIcon visible={showConfirm} />
+            </button>
+          </div>
+          {confirmMismatch && (
+            <div className="mt-1 text-[12px] text-[#de350b]">
+              비밀번호 확인이 일치하지 않습니다.
+            </div>
+          )}
         </label>
 
         <label className="block">
@@ -172,5 +206,43 @@ export default function SignupPage() {
         </div>
       </form>
     </div>
+  );
+}
+
+// 표준 SVG 눈 아이콘 (이모지 X). visible=true면 열린 눈, false면 사선이 그어진 눈.
+function EyeIcon({ visible }: { visible: boolean }) {
+  if (visible) {
+    return (
+      <svg
+        width="16"
+        height="16"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+        <circle cx="12" cy="12" r="3" />
+      </svg>
+    );
+  }
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
+      <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
+      <path d="M14.12 14.12a3 3 0 1 1-4.24-4.24" />
+      <line x1="1" y1="1" x2="23" y2="23" />
+    </svg>
   );
 }

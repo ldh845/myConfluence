@@ -8,6 +8,13 @@
 /* FR-040 (Cycle 20) — KaTeX 기본 폰트/레이아웃 */
 @import "katex/dist/katex.min.css";
 
+/* 브라우저 내장 패스워드 미리보기/지우기 버튼 제거 (Edge ::-ms-reveal, ::-ms-clear).
+   signup/login 페이지의 커스텀 SVG 토글 버튼과 중복 표시 방지. */
+input[type="password"]::-ms-reveal,
+input[type="password"]::-ms-clear {
+  display: none;
+}
+
 /* FR-121 (Cycle 21) — 인쇄(PDF) 최적화.
    본문만 풀폭, 사이드바·툴바·헤더 버튼은 숨김. 표/코드/이미지 페이지 경계 보존. */
 @media print {
