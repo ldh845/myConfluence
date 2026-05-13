@@ -65,6 +65,7 @@ export class CommentsService {
       type: 'comment.created',
       spaceId: page.spaceId,
       pageId: page.id,
+      actorId: actor?.id ?? null,
       actorName: actor?.name ?? null,
       payload: {
         commentId: created.id,

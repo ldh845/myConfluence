@@ -1,16 +1,27 @@
 // FR-131 (Cycle 24) — 활동 type별 한국어 문구 + 시간 포맷.
 // 홈 카드와 /activity 페이지에서 공통 사용.
 
+export type ActivityActor = {
+  id: string;
+  username: string;
+  name: string;
+  department: string;
+  role: string;
+};
+
 export type ActivityItem = {
   id: string;
   type: string;
   spaceId: string | null;
   pageId: string | null;
+  actorId: string | null;
   actorName: string | null;
   payload: Record<string, unknown> | null;
   createdAt: string;
   space: { id: string; name: string } | null;
   page: { id: string; title: string; deletedAt: string | null } | null;
+  // FR-001 (Cycle 27e) — actor join. user 삭제 후엔 null이며 actorName으로 fallback.
+  actor: ActivityActor | null;
 };
 
 export const ACTIVITY_TYPES: Array<{ value: string; label: string }> = [
@@ -35,7 +46,8 @@ export type FormattedActivity = {
 };
 
 export function formatActivity(item: ActivityItem): FormattedActivity {
-  const actor = item.actorName ?? "누군가";
+  // FR-001 (Cycle 27e) — actor join 우선, 없으면 snapshot actorName fallback.
+  const actor = item.actor?.name ?? item.actorName ?? "누군가";
   const spaceName = item.space?.name ?? null;
   const payload = item.payload ?? {};
   const payloadTitle =

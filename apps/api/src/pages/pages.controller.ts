@@ -21,6 +21,11 @@ import { PublishPageDto } from './dto/publish-page.dto';
 import { CreateDiagramDto } from './dto/create-diagram.dto';
 import { CopyPageDto } from './dto/copy-page.dto';
 
+// FR-001 (Cycle 27e) — actor 헬퍼 통일. 모든 mutation이 같은 형태로 전달.
+function actorFromReq(req: Request): { id: string; name: string } | null {
+  return req.user ? { id: req.user.id, name: req.user.name } : null;
+}
+
 @Controller('pages')
 export class PagesController {
   constructor(private readonly pages: PagesService) {}
@@ -33,7 +38,7 @@ export class PagesController {
   @Post()
   @UseGuards(JwtAuthGuard)
   create(@Body() dto: CreatePageDto, @Req() req: Request) {
-    return this.pages.create(dto, req.user?.id);
+    return this.pages.create(dto, actorFromReq(req));
   }
 
   // FR-090 / FR-092 (Cycle 15-1a) — 전문 검색(제목 + 본문).
@@ -99,7 +104,7 @@ export class PagesController {
     @Body() dto: UpdatePageDto,
     @Req() req: Request,
   ) {
-    return this.pages.update(id, dto, req.user?.id);
+    return this.pages.update(id, dto, actorFromReq(req));
   }
 
   // 이슈 2 (Cycle 10-1) — 임시 저장. PageVersion 미적재.
@@ -110,7 +115,7 @@ export class PagesController {
     @Body() dto: UpdateDraftDto,
     @Req() req: Request,
   ) {
-    return this.pages.updateDraft(id, dto, req.user?.id);
+    return this.pages.updateDraft(id, dto, actorFromReq(req));
   }
 
   // 이슈 2 (Cycle 10-1) — 발행. draft → content + PageVersion 스냅샷.
@@ -122,16 +127,13 @@ export class PagesController {
     @Body() dto: PublishPageDto,
     @Req() req: Request,
   ) {
-    return this.pages.publish(id, dto, req.user?.id);
+    return this.pages.publish(id, dto, actorFromReq(req));
   }
 
   @Delete(':id')
   @UseGuards(JwtAuthGuard)
   remove(@Param('id') id: string, @Req() req: Request) {
-    return this.pages.remove(
-      id,
-      req.user ? { id: req.user.id, name: req.user.name } : null,
-    );
+    return this.pages.remove(id, actorFromReq(req));
   }
 
   // FR-024 (Cycle 18-1a) — 휴지통 복구.
@@ -139,20 +141,14 @@ export class PagesController {
   @UseGuards(JwtAuthGuard)
   @HttpCode(200)
   restore(@Param('id') id: string, @Req() req: Request) {
-    return this.pages.restore(
-      id,
-      req.user ? { id: req.user.id, name: req.user.name } : null,
-    );
+    return this.pages.restore(id, actorFromReq(req));
   }
 
   // FR-024 (Cycle 18-1a) — 영구 삭제. 휴지통에 있는 페이지만 가능.
   @Delete(':id/permanent')
   @UseGuards(JwtAuthGuard)
   permanentDelete(@Param('id') id: string, @Req() req: Request) {
-    return this.pages.permanentDelete(
-      id,
-      req.user ? { id: req.user.id, name: req.user.name } : null,
-    );
+    return this.pages.permanentDelete(id, actorFromReq(req));
   }
 
   // FR-023 (Cycle 18-4a) — 페이지 깊은 복사. recursive=true면 자손 트리까지.
@@ -164,7 +160,7 @@ export class PagesController {
     @Body() dto: CopyPageDto,
     @Req() req: Request,
   ) {
-    return this.pages.copy(id, dto, req.user?.id);
+    return this.pages.copy(id, dto, actorFromReq(req));
   }
 
   @Get(':id/diagrams')

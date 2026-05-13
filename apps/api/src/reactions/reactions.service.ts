@@ -3,10 +3,20 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 // FR-073 (Cycle 25) — 이모지 반응 toggle + 그룹 조회.
-// (pageId XOR commentId, emoji, reactorId) 조합으로 idempotent 토글.
+// FR-001 (Cycle 27e) — userId(User FK)로 식별. 동일 (target, emoji, user)
+// 조합은 DB unique 제약. 재호출 시 unique 위반은 idempotent toggle로 해석.
+
+const USER_SELECT = {
+  id: true,
+  username: true,
+  name: true,
+  department: true,
+  role: true,
+} as const;
 
 @Injectable()
 export class ReactionsService {
@@ -16,14 +26,11 @@ export class ReactionsService {
     pageId?: string;
     commentId?: string;
     emoji: string;
-    reactorId: string;
-    reactorName?: string | null;
+    userId: string;
   }) {
-    const { pageId, commentId, emoji, reactorId, reactorName } = params;
-    if (!emoji || !reactorId) {
-      throw new BadRequestException({
-        error: 'emoji and reactorId required',
-      });
+    const { pageId, commentId, emoji, userId } = params;
+    if (!emoji || !userId) {
+      throw new BadRequestException({ error: 'emoji and user required' });
     }
     if ((pageId && commentId) || (!pageId && !commentId)) {
       throw new BadRequestException({
@@ -50,26 +57,37 @@ export class ReactionsService {
         pageId: pageId ?? null,
         commentId: commentId ?? null,
         emoji,
-        reactorId,
+        userId,
       },
     });
     if (existing) {
       await this.prisma.reaction.delete({ where: { id: existing.id } });
       return { reacted: false, reaction: null };
     }
-    const reaction = await this.prisma.reaction.create({
-      data: {
-        emoji,
-        reactorId,
-        reactorName: reactorName ?? null,
-        pageId: pageId ?? null,
-        commentId: commentId ?? null,
-      },
-    });
-    return { reacted: true, reaction };
+    try {
+      const reaction = await this.prisma.reaction.create({
+        data: {
+          emoji,
+          userId,
+          pageId: pageId ?? null,
+          commentId: commentId ?? null,
+        },
+        include: { user: { select: USER_SELECT } },
+      });
+      return { reacted: true, reaction };
+    } catch (err) {
+      // 동시 토글 race — unique 위반은 이미 누군가 만든 상태로 간주.
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2002'
+      ) {
+        return { reacted: true, reaction: null };
+      }
+      throw err;
+    }
   }
 
-  // emoji별 그룹: count + reactorIds + reactorNames.
+  // emoji별 그룹: count + users 배열(name 포함).
   async listByPage(pageId: string) {
     return this.groupByEmoji({ pageId });
   }
@@ -85,21 +103,26 @@ export class ReactionsService {
         commentId: where.commentId ?? null,
       },
       orderBy: { createdAt: 'asc' },
-      select: { emoji: true, reactorId: true, reactorName: true },
+      include: { user: { select: USER_SELECT } },
     });
     const map = new Map<
       string,
-      { emoji: string; count: number; reactorIds: string[]; reactorNames: (string | null)[] }
+      {
+        emoji: string;
+        count: number;
+        userIds: string[];
+        userNames: string[];
+      }
     >();
     for (const r of rows) {
       let g = map.get(r.emoji);
       if (!g) {
-        g = { emoji: r.emoji, count: 0, reactorIds: [], reactorNames: [] };
+        g = { emoji: r.emoji, count: 0, userIds: [], userNames: [] };
         map.set(r.emoji, g);
       }
       g.count += 1;
-      g.reactorIds.push(r.reactorId);
-      g.reactorNames.push(r.reactorName);
+      g.userIds.push(r.userId);
+      g.userNames.push(r.user?.name ?? '익명');
     }
     return Array.from(map.values());
   }

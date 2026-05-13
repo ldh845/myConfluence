@@ -247,21 +247,26 @@ export class PagesService {
   }
 
   // FR-001 (Cycle 27c) — author/lastEditor 자동 세팅.
-  async create(dto: CreatePageDto, userId?: string | null) {
+  async create(
+    dto: CreatePageDto,
+    actor?: { id: string; name: string } | null,
+  ) {
     const page = await this.prisma.page.create({
       data: {
         title: dto.title,
         content: dto.content ?? '',
         spaceId: dto.spaceId,
         parentId: dto.parentId ?? null,
-        authorId: userId ?? null,
-        lastEditorId: userId ?? null,
+        authorId: actor?.id ?? null,
+        lastEditorId: actor?.id ?? null,
       },
     });
     await this.activities.log({
       type: 'page.created',
       spaceId: page.spaceId,
       pageId: page.id,
+      actorId: actor?.id ?? null,
+      actorName: actor?.name ?? null,
       payload: { title: page.title },
     });
     return page;
@@ -274,7 +279,12 @@ export class PagesService {
   // FR-022 (Cycle 18-3a) — spaceId/parentId 변경(페이지 이동) 시 자손 spaceId
   // 동기화 + 순환 참조 가드.
   // FR-001 (Cycle 27c) — 제목/본문 변경 시 lastEditorId 갱신.
-  async update(id: string, dto: UpdatePageDto, userId?: string | null) {
+  async update(
+    id: string,
+    dto: UpdatePageDto,
+    actor?: { id: string; name: string } | null,
+  ) {
+    const userId = actor?.id ?? null;
     const current = await this.prisma.page.findFirst({
       where: { id, deletedAt: null },
       select: { id: true, spaceId: true, parentId: true },
@@ -423,7 +433,8 @@ export class PagesService {
         type: 'page.moved',
         spaceId: result.spaceId,
         pageId: result.id,
-        actorName: dto.authorName ?? null,
+        actorId: actor?.id ?? null,
+        actorName: actor?.name ?? dto.authorName ?? null,
         payload: {
           title: result.title,
           fromSpaceId: current.spaceId,
@@ -448,8 +459,9 @@ export class PagesService {
   async updateDraft(
     id: string,
     dto: UpdateDraftDto,
-    userId?: string | null,
+    actor?: { id: string; name: string } | null,
   ) {
+    const userId = actor?.id ?? null;
     const page = await this.prisma.page.findUnique({
       where: { id },
       select: { id: true },
@@ -470,8 +482,9 @@ export class PagesService {
   async publish(
     id: string,
     dto: PublishPageDto,
-    userId?: string | null,
+    actor?: { id: string; name: string } | null,
   ) {
+    const userId = actor?.id ?? null;
     const published = await this.prisma.$transaction(async (tx) => {
       const page = await tx.page.findUnique({ where: { id } });
       if (!page) throw new NotFoundException({ error: 'page not found' });
@@ -507,7 +520,8 @@ export class PagesService {
       type: 'page.published',
       spaceId: published.spaceId,
       pageId: published.id,
-      actorName: dto.authorName ?? null,
+      actorId: actor?.id ?? null,
+      actorName: actor?.name ?? dto.authorName ?? null,
       payload: { title: published.title },
     });
     return published;
@@ -571,6 +585,7 @@ export class PagesService {
       type: 'page.soft_deleted',
       spaceId: page.spaceId,
       pageId: page.id,
+      actorId: actor?.id ?? null,
       actorName: actor?.name ?? null,
       payload: { title: page.title, descendants: targetIds.length - 1 },
     });
@@ -596,6 +611,7 @@ export class PagesService {
       type: 'page.restored',
       spaceId: page.spaceId,
       pageId: page.id,
+      actorId: actor?.id ?? null,
       actorName: actor?.name ?? null,
       payload: { title: page.title, descendants: targetIds.length - 1 },
     });
@@ -634,6 +650,7 @@ export class PagesService {
       type: 'page.permanent_deleted',
       spaceId: null,
       pageId: null,
+      actorId: actor?.id ?? null,
       actorName: actor?.name ?? null,
       payload: {
         deletedTitle: page.title,
@@ -669,7 +686,12 @@ export class PagesService {
   // 안정성:
   //  - 디스크 복사는 트랜잭션 직전에 수행 → 실패 시 throw, DB 영향 0
   //  - 트랜잭션 실패 시 이미 복사한 파일은 cleanup
-  async copy(id: string, dto: CopyPageDto, userId?: string | null) {
+  async copy(
+    id: string,
+    dto: CopyPageDto,
+    actor?: { id: string; name: string } | null,
+  ) {
+    const userId = actor?.id ?? null;
     const source = await this.prisma.page.findFirst({
       where: { id, deletedAt: null },
       select: {
@@ -847,6 +869,8 @@ export class PagesService {
         type: 'page.copied',
         spaceId: resultPage.spaceId,
         pageId: resultPage.id,
+        actorId: actor?.id ?? null,
+        actorName: actor?.name ?? null,
         payload: {
           title: resultPage.title,
           sourcePageId: source.id,

@@ -25,6 +25,7 @@ export class ActivitiesService {
     type: ActivityType;
     spaceId?: string | null;
     pageId?: string | null;
+    actorId?: string | null;
     actorName?: string | null;
     payload?: Record<string, unknown> | null;
   }): Promise<void> {
@@ -34,6 +35,7 @@ export class ActivitiesService {
           type: params.type,
           spaceId: params.spaceId ?? null,
           pageId: params.pageId ?? null,
+          actorId: params.actorId ?? null,
           actorName: params.actorName ?? null,
           payload: (params.payload ?? Prisma.JsonNull) as Prisma.InputJsonValue,
         },
@@ -69,6 +71,15 @@ export class ActivitiesService {
         include: {
           space: { select: { id: true, name: true } },
           page: { select: { id: true, title: true, deletedAt: true } },
+          actor: {
+            select: {
+              id: true,
+              username: true,
+              name: true,
+              department: true,
+              role: true,
+            },
+          },
         },
       }),
       this.prisma.activityLog.count({ where }),

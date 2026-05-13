@@ -2,19 +2,18 @@
 
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useReactorStore } from "@/lib/stores/useReactorStore";
-import { getIdentity } from "@/lib/userIdentity";
+import { useAuth } from "@/lib/auth/useAuth";
 
 // FR-073 (Cycle 25) — 페이지/댓글 이모지 반응.
-// 자주 쓰는 8개 set. 칩 클릭/피커 선택 → toggle.
+// FR-001 (Cycle 27e) — JWT user 기반. 익명 reactorId 폐지.
 
 const EMOJI_SET = ["👍", "❤️", "🎉", "🚀", "😀", "😢", "👀", "🔥"];
 
 type ReactionGroup = {
   emoji: string;
   count: number;
-  reactorIds: string[];
-  reactorNames: (string | null)[];
+  userIds: string[];
+  userNames: string[];
 };
 
 type Props = {
@@ -24,7 +23,7 @@ type Props = {
 
 export default function ReactionBar({ target, targetId }: Props) {
   const queryClient = useQueryClient();
-  const reactorId = useReactorStore((s) => s.reactorId);
+  const { user } = useAuth();
   const [pickerOpen, setPickerOpen] = useState(false);
 
   const queryKey = ["reactions", target, targetId];
@@ -43,25 +42,21 @@ export default function ReactionBar({ target, targetId }: Props) {
     enabled: !!targetId,
   });
 
-  const toggle = useMutation<
-    { reacted: boolean },
-    Error,
-    string
-  >({
+  const toggle = useMutation<{ reacted: boolean }, Error, string>({
     mutationFn: async (emoji) => {
-      const body: Record<string, unknown> = {
-        emoji,
-        reactorId,
-        reactorName: getIdentity().name,
-      };
+      const body: Record<string, unknown> = { emoji };
       if (target === "page") body.pageId = targetId;
       else body.commentId = targetId;
       const r = await fetch(`/api/reactions/toggle`, {
         method: "POST",
         headers: { "Content-Type": "application/json; charset=utf-8" },
+        credentials: "include",
         body: JSON.stringify(body),
       });
-      if (!r.ok) throw new Error("반응을 저장하지 못했습니다.");
+      if (!r.ok) {
+        if (r.status === 401) throw new Error("로그인이 필요합니다.");
+        throw new Error("반응을 저장하지 못했습니다.");
+      }
       return (await r.json()) as { reacted: boolean };
     },
     onSettled: () => {
@@ -75,7 +70,7 @@ export default function ReactionBar({ target, targetId }: Props) {
   return (
     <div className="flex flex-wrap items-center gap-1.5 mt-2">
       {groups.map((g) => {
-        const mine = g.reactorIds.includes(reactorId);
+        const mine = !!user && g.userIds.includes(user.id);
         return (
           <button
             key={g.emoji}
@@ -83,7 +78,7 @@ export default function ReactionBar({ target, targetId }: Props) {
             onClick={() => toggle.mutate(g.emoji)}
             disabled={toggle.isPending}
             title={
-              g.reactorNames.filter(Boolean).join(", ") || `반응 ${g.count}개`
+              g.userNames.filter(Boolean).join(", ") || `반응 ${g.count}개`
             }
             className={
               "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[12px] border transition-colors " +

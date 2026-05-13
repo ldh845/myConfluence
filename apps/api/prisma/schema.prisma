@@ -18,20 +18,24 @@ enum Role {
 }
 
 model User {
-  id               String      @id @default(cuid())
-  username         String      @unique
+  id               String        @id @default(cuid())
+  username         String        @unique
   passwordHash     String
   name             String
   department       String
-  role             Role        @default(DEVELOPER)
-  createdAt        DateTime    @default(now())
-  updatedAt        DateTime    @updatedAt
-  authoredPages    Page[]      @relation("PageAuthor")
-  editedPages      Page[]      @relation("PageEditor")
+  role             Role          @default(DEVELOPER)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  authoredPages    Page[]        @relation("PageAuthor")
+  editedPages      Page[]        @relation("PageEditor")
   // FR-001 / FR-002 (Cycle 27d) — Comment / PageShare 작성자 양방향 관계.
   // user 삭제 시 SetNull → authorName / 시스템 표기로 fallback.
-  authoredComments Comment[]   @relation("CommentAuthor")
-  createdShares    PageShare[] @relation("ShareCreator")
+  authoredComments Comment[]     @relation("CommentAuthor")
+  createdShares    PageShare[]   @relation("ShareCreator")
+  // FR-001 (Cycle 27e) — ActivityLog actor / Reaction user 양방향 관계.
+  // activities는 SetNull(로그 보존), reactions는 Cascade(개인 반응이라 같이 정리).
+  activities       ActivityLog[] @relation("ActivityActor")
+  reactions        Reaction[]    @relation("UserReaction")
 }
 
 model Space {
@@ -102,12 +106,16 @@ model ActivityLog {
   space     Space?   @relation(fields: [spaceId], references: [id], onDelete: SetNull)
   pageId    String?
   page      Page?    @relation(fields: [pageId], references: [id], onDelete: SetNull)
+  // FR-001 (Cycle 27e) — actor FK. user 삭제 시 SetNull → actorName fallback.
+  actorId   String?
+  actor     User?    @relation("ActivityActor", fields: [actorId], references: [id], onDelete: SetNull)
   actorName String?
   payload   Json?
   createdAt DateTime @default(now())
 
   @@index([createdAt(sort: Desc)])
   @@index([spaceId, createdAt(sort: Desc)])
+  @@index([actorId])
 }
 
 // FR-120 (Cycle 23) — 페이지 공유 링크.
@@ -157,21 +165,23 @@ model Comment {
 }
 
 // FR-073 (Cycle 25) — 이모지 반응. page 또는 comment 둘 중 하나에 연결.
-// 인증 도입 전엔 reactorId(브라우저 UUID)로 식별. 같은 reactor가 같은 대상에
-// 같은 emoji 한 번만 (NULL 처리는 Postgres가 distinct로 보지만 service에서 가드).
+// FR-001 (Cycle 27e) — userId = User FK (Cascade). 익명 reactorId/Name 컬럼 폐지.
+// 동일 (target, emoji, user) 조합은 unique — service 가드 대신 DB 제약으로 강제.
 model Reaction {
-  id          String   @id @default(cuid())
-  emoji       String
-  reactorId   String
-  reactorName String?
-  pageId      String?
-  page        Page?    @relation(fields: [pageId], references: [id], onDelete: Cascade)
-  commentId   String?
-  comment     Comment? @relation(fields: [commentId], references: [id], onDelete: Cascade)
-  createdAt   DateTime @default(now())
+  id        String   @id @default(cuid())
+  emoji     String
+  userId    String
+  user      User     @relation("UserReaction", fields: [userId], references: [id], onDelete: Cascade)
+  pageId    String?
+  page      Page?    @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  commentId String?
+  comment   Comment? @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
 
+  @@unique([pageId, commentId, emoji, userId], map: "Reaction_target_emoji_user_key")
   @@index([pageId])
   @@index([commentId])
+  @@index([userId])
 }
 
 model Attachment {
