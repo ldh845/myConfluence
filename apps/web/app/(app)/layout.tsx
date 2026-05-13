@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import TopNav from "@/components/TopNav";
 import Sidebar from "@/components/Sidebar";
+import SystemSidebar from "@/components/SystemSidebar";
 import TrashSheet from "@/components/TrashSheet";
 import { useRecentPagesStore } from "@/lib/stores/useRecentPagesStore";
 import type { PageFull, SpaceWithPages } from "@/lib/types";
@@ -130,15 +131,20 @@ function AppShell({ children }: { children: React.ReactNode }) {
       />
       <div className="flex flex-1 min-h-0">
         {sidebarOpen ? (
-          <Sidebar
-            space={activeSpace}
-            selectedPageId={selectedPageId}
-            onSelect={handleSelectPage}
-            onCreatePage={handleCreatePage}
-            onDeletePage={handleDeletePage}
-            onOpenTrash={() => setTrashOpen(true)}
-            onReorder={invalidateSpaces}
-          />
+          // Cycle 29 — 시스템 홈은 SystemSidebar, 스페이스 뷰는 Sidebar(=SpaceSidebar).
+          pathname === "/home" ? (
+            <SystemSidebar />
+          ) : (
+            <Sidebar
+              space={activeSpace}
+              selectedPageId={selectedPageId}
+              onSelect={handleSelectPage}
+              onCreatePage={handleCreatePage}
+              onDeletePage={handleDeletePage}
+              onOpenTrash={() => setTrashOpen(true)}
+              onReorder={invalidateSpaces}
+            />
+          )
         ) : (
           <button
             onClick={() => setSidebarOpen(true)}
