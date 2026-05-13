@@ -221,18 +221,41 @@ export class PagesService {
   async findOne(id: string) {
     const page = await this.prisma.page.findFirst({
       where: { id, deletedAt: null },
+      include: {
+        author: {
+          select: {
+            id: true,
+            username: true,
+            name: true,
+            department: true,
+            role: true,
+          },
+        },
+        lastEditor: {
+          select: {
+            id: true,
+            username: true,
+            name: true,
+            department: true,
+            role: true,
+          },
+        },
+      },
     });
     if (!page) throw new NotFoundException({ error: 'not found' });
     return page;
   }
 
-  async create(dto: CreatePageDto) {
+  // FR-001 (Cycle 27c) — author/lastEditor 자동 세팅.
+  async create(dto: CreatePageDto, userId?: string | null) {
     const page = await this.prisma.page.create({
       data: {
         title: dto.title,
         content: dto.content ?? '',
         spaceId: dto.spaceId,
         parentId: dto.parentId ?? null,
+        authorId: userId ?? null,
+        lastEditorId: userId ?? null,
       },
     });
     await this.activities.log({
@@ -250,7 +273,8 @@ export class PagesService {
   // 익명 이름을 그대로 보관한다.
   // FR-022 (Cycle 18-3a) — spaceId/parentId 변경(페이지 이동) 시 자손 spaceId
   // 동기화 + 순환 참조 가드.
-  async update(id: string, dto: UpdatePageDto) {
+  // FR-001 (Cycle 27c) — 제목/본문 변경 시 lastEditorId 갱신.
+  async update(id: string, dto: UpdatePageDto, userId?: string | null) {
     const current = await this.prisma.page.findFirst({
       where: { id, deletedAt: null },
       select: { id: true, spaceId: true, parentId: true },
@@ -305,6 +329,12 @@ export class PagesService {
       (dto.spaceId !== undefined && dto.spaceId !== current.spaceId) ||
       (dto.parentId !== undefined && dto.parentId !== current.parentId);
 
+    // FR-001 — 본문/제목이 실제로 변경됐을 때만 lastEditor 갱신.
+    const editorChange =
+      (dto.title !== undefined || dto.content !== undefined) && userId
+        ? { lastEditorId: userId }
+        : {};
+
     const result = await this.prisma.$transaction(async (tx) => {
       const page = await tx.page.update({
         where: { id },
@@ -313,6 +343,7 @@ export class PagesService {
           ...(dto.content !== undefined ? { content: dto.content } : {}),
           ...(dto.parentId !== undefined ? { parentId: dto.parentId } : {}),
           ...(dto.spaceId !== undefined ? { spaceId: dto.spaceId } : {}),
+          ...editorChange,
         },
       });
 
@@ -414,7 +445,11 @@ export class PagesService {
 
   // 이슈 2 (Cycle 10-1) — 임시 저장.
   // PageVersion은 만들지 않는다 (drafts는 발행 시점에만 history에 적재).
-  async updateDraft(id: string, dto: UpdateDraftDto) {
+  async updateDraft(
+    id: string,
+    dto: UpdateDraftDto,
+    userId?: string | null,
+  ) {
     const page = await this.prisma.page.findUnique({
       where: { id },
       select: { id: true },
@@ -422,14 +457,21 @@ export class PagesService {
     if (!page) throw new NotFoundException({ error: 'page not found' });
     return this.prisma.page.update({
       where: { id },
-      data: { draftContent: dto.content },
+      data: {
+        draftContent: dto.content,
+        ...(userId ? { lastEditorId: userId } : {}),
+      },
     });
   }
 
   // 이슈 2 (Cycle 10-1) — 발행.
   // draft → content 승격 + draft 비움 + PageVersion 스냅샷 + retention cap.
   // 모두 같은 트랜잭션이므로 한쪽 실패 시 함께 롤백.
-  async publish(id: string, dto: PublishPageDto) {
+  async publish(
+    id: string,
+    dto: PublishPageDto,
+    userId?: string | null,
+  ) {
     const published = await this.prisma.$transaction(async (tx) => {
       const page = await tx.page.findUnique({ where: { id } });
       if (!page) throw new NotFoundException({ error: 'page not found' });
@@ -438,7 +480,11 @@ export class PagesService {
       }
       const published = await tx.page.update({
         where: { id },
-        data: { content: page.draftContent, draftContent: null },
+        data: {
+          content: page.draftContent,
+          draftContent: null,
+          ...(userId ? { lastEditorId: userId } : {}),
+        },
       });
       const last = await tx.pageVersion.findFirst({
         where: { pageId: id },
@@ -507,7 +553,7 @@ export class PagesService {
 
   // FR-024 (Cycle 18-1a) — 휴지통(soft delete). 자식까지 재귀 cascade.
   // 영구 삭제는 permanentDelete. 디스크 첨부 파일 정리는 permanentDelete 시점에만.
-  async remove(id: string) {
+  async remove(id: string, actor?: { id: string; name: string } | null) {
     const page = await this.prisma.page.findUnique({
       where: { id },
       select: { id: true, title: true, spaceId: true, deletedAt: true },
@@ -525,13 +571,14 @@ export class PagesService {
       type: 'page.soft_deleted',
       spaceId: page.spaceId,
       pageId: page.id,
+      actorName: actor?.name ?? null,
       payload: { title: page.title, descendants: targetIds.length - 1 },
     });
     return { ok: true };
   }
 
   // FR-024 (Cycle 18-1a) — 휴지통 복구. 휴지통에 있는 자식까지 함께 복구.
-  async restore(id: string) {
+  async restore(id: string, actor?: { id: string; name: string } | null) {
     const page = await this.prisma.page.findUnique({
       where: { id },
       select: { id: true, title: true, spaceId: true, deletedAt: true },
@@ -549,6 +596,7 @@ export class PagesService {
       type: 'page.restored',
       spaceId: page.spaceId,
       pageId: page.id,
+      actorName: actor?.name ?? null,
       payload: { title: page.title, descendants: targetIds.length - 1 },
     });
     return { ok: true };
@@ -557,7 +605,7 @@ export class PagesService {
   // FR-024 (Cycle 18-1a) — 영구 삭제. 휴지통에 있는 페이지만 가능.
   // Prisma cascade로 자식·다이어그램·첨부·댓글·버전 row 자동 정리.
   // 디스크 첨부 파일은 best-effort로 별도 청소.
-  async permanentDelete(id: string) {
+  async permanentDelete(id: string, actor?: { id: string; name: string } | null) {
     const page = await this.prisma.page.findUnique({
       where: { id },
       select: {
@@ -586,6 +634,7 @@ export class PagesService {
       type: 'page.permanent_deleted',
       spaceId: null,
       pageId: null,
+      actorName: actor?.name ?? null,
       payload: {
         deletedTitle: page.title,
         deletedSpaceName: page.space?.name ?? null,
@@ -620,7 +669,7 @@ export class PagesService {
   // 안정성:
   //  - 디스크 복사는 트랜잭션 직전에 수행 → 실패 시 throw, DB 영향 0
   //  - 트랜잭션 실패 시 이미 복사한 파일은 cleanup
-  async copy(id: string, dto: CopyPageDto) {
+  async copy(id: string, dto: CopyPageDto, userId?: string | null) {
     const source = await this.prisma.page.findFirst({
       where: { id, deletedAt: null },
       select: {
@@ -749,6 +798,8 @@ export class PagesService {
               spaceId: targetSpaceId,
               parentId: newParentId,
               draftContent: null,
+              authorId: userId ?? null,
+              lastEditorId: userId ?? null,
             },
           });
           idMap.set(sid, created.id);

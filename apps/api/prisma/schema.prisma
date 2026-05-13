@@ -18,14 +18,16 @@ enum Role {
 }
 
 model User {
-  id           String   @id @default(cuid())
-  username     String   @unique
-  passwordHash String
-  name         String
-  department   String
-  role         Role     @default(DEVELOPER)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id            String   @id @default(cuid())
+  username      String   @unique
+  passwordHash  String
+  name          String
+  department    String
+  role          Role     @default(DEVELOPER)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  authoredPages Page[]   @relation("PageAuthor")
+  editedPages   Page[]   @relation("PageEditor")
 }
 
 model Space {
@@ -63,6 +65,11 @@ model Page {
   // FR-021 (Cycle 19a) — 사이드바 트리 정렬용. 같은 (spaceId, parentId) 그룹
   // 안에서 0,1,2,... 순서. reorder 시 한 그룹의 position을 일괄 재부여.
   position     Int           @default(0)
+  // FR-001 (Cycle 27c) — 작성자 / 마지막 편집자. user 삭제 시 SetNull.
+  authorId     String?
+  author       User?         @relation("PageAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+  lastEditorId String?
+  lastEditor   User?         @relation("PageEditor", fields: [lastEditorId], references: [id], onDelete: SetNull)
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
 
@@ -70,6 +77,8 @@ model Page {
   @@index([parentId])
   @@index([deletedAt])
   @@index([parentId, position], map: "Page_parent_position_idx")
+  @@index([authorId])
+  @@index([lastEditorId])
   // FR-090 (Cycle 15-1a / 17) — 한글 부분 일치 ILIKE 가속용 GIN trigram 인덱스.
   // schema에 명시함으로써 향후 prisma migrate가 자동 DROP하지 않도록 차단.
   @@index([title(ops: raw("gin_trgm_ops"))], type: Gin, map: "Page_title_trgm_idx")

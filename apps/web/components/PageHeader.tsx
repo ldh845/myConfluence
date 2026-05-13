@@ -240,11 +240,25 @@ export default function PageHeader({
 
       <div className="mt-2 flex items-center gap-2 text-[12px] text-[#6b778c]">
         <div className="w-5 h-5 rounded-full bg-[#0052cc] text-white flex items-center justify-center text-[10px] font-semibold">
-          U
+          {page.author?.name?.slice(0, 1).toUpperCase() ?? "U"}
         </div>
-        <span>작성자: Unknown</span>
+        <span>
+          작성자: {page.author?.name ?? "알 수 없음"}
+          {page.author?.department && (
+            <span className="text-[#a5adba] ml-1">
+              ({page.author.department})
+            </span>
+          )}
+        </span>
         <span>|</span>
-        <span>최근 수정: {formatDateTime(page.updatedAt)}</span>
+        <span>
+          최근 수정: {formatDateTime(page.updatedAt)}
+          {page.lastEditor?.name && (
+            <span className="text-[#a5adba] ml-1">
+              ({page.lastEditor.name})
+            </span>
+          )}
+        </span>
         <span>|</span>
         <span>{relativeTime(page.updatedAt)}</span>
         {isBodyEditable && (
