@@ -1,0 +1,457 @@
+"use client";
+
+import dynamic from "next/dynamic";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+// SRS 5.9 검색·AI 사이클에서 재구현 예정 (Cycle 2-5 일시 비활성)
+// import ChatPanel from "@/components/ChatPanel";
+import PageHeader from "@/components/PageHeader";
+import WelcomeBanner from "@/components/WelcomeBanner";
+import DiagramList from "@/components/DiagramList";
+import AttachmentList from "@/components/AttachmentList";
+import TableOfContents from "@/components/TableOfContents";
+import PageVersionHistory from "@/components/PageVersionHistory";
+import QuickSearchDialog from "@/components/QuickSearchDialog";
+import PageComments from "@/components/PageComments";
+import InlineCommentsList from "@/components/InlineCommentsList";
+import MovePageDialog from "@/components/MovePageDialog";
+import CopyPageDialog from "@/components/CopyPageDialog";
+import SharePageDialog from "@/components/SharePageDialog";
+import ReactionBar from "@/components/ReactionBar";
+import { getIdentity } from "@/lib/userIdentity";
+import { usePageStore } from "@/lib/stores/usePageStore";
+import { useRecentPagesStore } from "@/lib/stores/useRecentPagesStore";
+import type {
+  ConnectionState,
+  PresenceUser,
+  SaveStatus,
+} from "@/components/CollaborativeEditor";
+import type { PageFull, SpaceWithPages } from "@/lib/types";
+import type { Editor } from "@tiptap/react";
+
+const CollaborativeEditor = dynamic(
+  () => import("@/components/CollaborativeEditor"),
+  { ssr: false }
+);
+
+// Cycle 28 — TopNav + Sidebar는 (app)/layout.tsx의 셸이 마운트한다.
+// 이 라우트는 main 안의 페이지 본문만 책임진다.
+// spaces는 ["spaces"] queryKey로 layout과 동일 캐시 공유.
+
+export default function HomePage() {
+  // Cycle 11-2 — selectedPageId의 진실은 URL의 ?pageId=<id>.
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+  const pageIdFromUrl = searchParams.get("pageId");
+
+  const queryClient = useQueryClient();
+
+  const { data: spacesData } = useQuery<SpaceWithPages[]>({
+    queryKey: ["spaces"],
+    queryFn: async () => {
+      const r = await fetch("/api/spaces");
+      if (!r.ok) return [];
+      return (await r.json()) as SpaceWithPages[];
+    },
+  });
+  const spaces = spacesData ?? [];
+
+  const invalidateSpaces = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ["spaces"] });
+  }, [queryClient]);
+
+  const [currentPage, setCurrentPage] = useState<PageFull | null>(null);
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
+  const [presence, setPresence] = useState<PresenceUser[]>([]);
+  // FR-054 (Cycle 26) — 협업 연결 상태(헤더 뱃지/배너용).
+  const [connectionState, setConnectionState] =
+    useState<ConnectionState>("online-synced");
+  const [isBodyEditable, setIsBodyEditable] = useState(false);
+  // FR-039 — TableOfContents에 editor 참조를 넘기기 위한 상태.
+  const [editor, setEditor] = useState<Editor | null>(null);
+  // FR-061 — 버전 히스토리 슬라이드 패널 토글.
+  const [historyOpen, setHistoryOpen] = useState(false);
+  // FR-093 (Cycle 15-1b) — Ctrl/Cmd+K 빠른 검색 popup 토글.
+  const [quickSearchOpen, setQuickSearchOpen] = useState(false);
+  // FR-022 (Cycle 18-3b) — 이동 다이얼로그 토글.
+  const [moveOpen, setMoveOpen] = useState(false);
+  // FR-023 (Cycle 18-4b) — 복사 다이얼로그 토글.
+  const [copyOpen, setCopyOpen] = useState(false);
+  // FR-120 (Cycle 23) — 공유 다이얼로그 토글.
+  const [shareOpen, setShareOpen] = useState(false);
+
+  // URL에 pageId가 없을 때의 fallback — 첫 스페이스의 첫 페이지.
+  const defaultPageId = useMemo<string | null>(() => {
+    return spaces[0]?.pages[0]?.id ?? null;
+  }, [spaces]);
+
+  const selectedPageId = pageIdFromUrl ?? defaultPageId;
+
+  const selectPage = useCallback(
+    (id: string) => {
+      router.push(`${pathname}?pageId=${id}`);
+    },
+    [router, pathname],
+  );
+
+  const clearPageSelection = useCallback(() => {
+    router.push(pathname);
+  }, [router, pathname]);
+
+  const loadCurrentPage = useCallback(async (pageId: string) => {
+    const r = await fetch(`/api/pages/${pageId}`);
+    const p = r.ok ? ((await r.json()) as PageFull) : null;
+    setCurrentPage(p);
+  }, []);
+
+  useEffect(() => {
+    setIsBodyEditable(false);
+    if (!selectedPageId) {
+      setCurrentPage(null);
+      return;
+    }
+    setSaveStatus("idle");
+    loadCurrentPage(selectedPageId);
+  }, [selectedPageId, loadCurrentPage]);
+
+  // Cycle 10-2b-2 — TaskItemNodeView가 조회 모드에서 즉시 발행할 때 쓰는
+  // pageId/authorName을 store에 동기화.
+  useEffect(() => {
+    if (currentPage) {
+      usePageStore.getState().setPage(currentPage.id, getIdentity().name);
+    } else {
+      usePageStore.getState().reset();
+    }
+  }, [currentPage]);
+
+  // FR-130 (Cycle 22) — 최근 방문 기록.
+  useEffect(() => {
+    if (currentPage) {
+      useRecentPagesStore.getState().record(currentPage.id);
+    }
+  }, [currentPage]);
+
+  // FR-093 (Cycle 15-1b) — Ctrl+K / Cmd+K 글로벌 단축키.
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setQuickSearchOpen(true);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
+
+  // Cycle 11-2 / FR-034 — 본문 안의 내부 페이지 링크(/?pageId=<id>)를 SPA로.
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (e.defaultPrevented || e.button !== 0) return;
+      if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      const target = e.target as HTMLElement | null;
+      const anchor = target?.closest?.("a");
+      if (!anchor) return;
+      const href = anchor.getAttribute("href");
+      if (!href) return;
+      try {
+        const url = new URL(href, window.location.href);
+        if (url.origin !== window.location.origin) return;
+        if (url.pathname !== window.location.pathname) return;
+        const newPageId = url.searchParams.get("pageId");
+        if (!newPageId) return;
+        e.preventDefault();
+        router.push(`${pathname}?pageId=${newPageId}`);
+      } catch {
+        // 잘못된 URL은 default 동작 그대로.
+      }
+    };
+    document.addEventListener("click", handler);
+    return () => document.removeEventListener("click", handler);
+  }, [router, pathname]);
+
+  // Cycle 10-2a — 발행 흐름.
+  const publish = useMutation({
+    mutationFn: async (pageId: string) => {
+      const r = await fetch(`/api/pages/${pageId}/publish`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json; charset=utf-8" },
+        body: JSON.stringify({ authorName: getIdentity().name }),
+      });
+      if (!r.ok) {
+        if (r.status === 400) throw new Error("발행할 변경 사항이 없습니다.");
+        throw new Error("발행에 실패했습니다.");
+      }
+      return (await r.json()) as PageFull;
+    },
+    onSuccess: async (_data, pageId) => {
+      window.alert("발행되었습니다.");
+      queryClient.invalidateQueries({ queryKey: ["page-versions", pageId] });
+      await loadCurrentPage(pageId);
+    },
+    onError: (err: Error) => {
+      window.alert(err.message);
+    },
+  });
+
+  const handlePublish = useCallback(() => {
+    if (!currentPage) return;
+    publish.mutate(currentPage.id);
+  }, [currentPage, publish]);
+
+  const enterEditMode = useCallback(() => {
+    setIsBodyEditable(true);
+    requestAnimationFrame(() => {
+      const el = document.querySelector<HTMLElement>(".ProseMirror");
+      el?.focus({ preventScroll: true });
+    });
+  }, []);
+
+  const exitEditMode = useCallback(() => {
+    setIsBodyEditable(false);
+  }, []);
+
+  const toggleEditMode = useCallback(() => {
+    if (isBodyEditable) exitEditMode();
+    else enterEditMode();
+  }, [isBodyEditable, enterEditMode, exitEditMode]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!currentPage) return;
+      const t = e.target as HTMLElement | null;
+      const tag = t?.tagName;
+      const inInput =
+        tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
+      const inBody = !!t?.isContentEditable;
+
+      if ((e.key === "e" || e.key === "E") && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        if (inInput || inBody) return;
+        e.preventDefault();
+        toggleEditMode();
+        return;
+      }
+
+      if (e.key === "Escape") {
+        if (inBody && isBodyEditable) {
+          e.preventDefault();
+          (t as HTMLElement | null)?.blur?.();
+          exitEditMode();
+        }
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [currentPage, isBodyEditable, toggleEditMode, exitEditMode]);
+
+  // PageHeader breadcrumb / WelcomeBanner / CopyPageDialog가 참조하는 활성 스페이스.
+  // currentPage가 로드돼 있으면 그 페이지의 스페이스, 아니면 첫 스페이스.
+  const activeSpace = useMemo<SpaceWithPages | null>(
+    () =>
+      spaces.find((s) => s.id === currentPage?.spaceId) ?? spaces[0] ?? null,
+    [spaces, currentPage],
+  );
+
+  const isFirstPageOfSpace = useMemo(() => {
+    if (!currentPage || !activeSpace) return false;
+    const firstRoot = activeSpace.pages
+      .filter((p) => !p.parentId)
+      .sort((a, b) => (a.updatedAt < b.updatedAt ? -1 : 1))[0];
+    return firstRoot?.id === currentPage.id;
+  }, [currentPage, activeSpace]);
+
+  const handleTitleChange = async (title: string) => {
+    if (!currentPage) return;
+    setSaveStatus("saving");
+    const res = await fetch(`/api/pages/${currentPage.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ title }),
+    });
+    if (res.ok) {
+      const updated = (await res.json()) as PageFull;
+      setCurrentPage(updated);
+      setSaveStatus("saved");
+      invalidateSpaces();
+    } else {
+      setSaveStatus("error");
+    }
+  };
+
+  const handleDeleteCurrentPage = async (pageId: string) => {
+    const res = await fetch(`/api/pages/${pageId}`, {
+      method: "DELETE",
+      credentials: "include",
+    });
+    if (res.ok) {
+      if (selectedPageId === pageId) clearPageSelection();
+      useRecentPagesStore.getState().remove(pageId);
+      invalidateSpaces();
+    } else if (res.status === 401) {
+      window.alert("로그인이 필요합니다.");
+    }
+  };
+
+  const confirmDeleteCurrent = () => {
+    if (!currentPage) return;
+    if (
+      confirm(
+        `"${currentPage.title}" 페이지를 삭제할까요? 하위 페이지도 함께 삭제됩니다.`,
+      )
+    )
+      handleDeleteCurrentPage(currentPage.id);
+  };
+
+  return (
+    <>
+      <div className="max-w-[960px] mx-auto px-10 pt-2 pb-16">
+        {!currentPage ? (
+          <div className="mt-24 text-center text-[#6b778c]">
+            왼쪽에서 페이지를 선택하거나 새 페이지를 만드세요.
+          </div>
+        ) : (
+          <>
+            {isFirstPageOfSpace && activeSpace && (
+              <WelcomeBanner spaceName={activeSpace.name} />
+            )}
+            <PageHeader
+              page={currentPage}
+              space={activeSpace}
+              saveStatus={saveStatus}
+              presence={presence}
+              connectionState={connectionState}
+              isBodyEditable={isBodyEditable}
+              onToggleEdit={toggleEditMode}
+              onTitleChange={handleTitleChange}
+              onDelete={confirmDeleteCurrent}
+              onSelectAncestor={selectPage}
+              onHistoryClick={() => setHistoryOpen(true)}
+              hasDraft={currentPage.draftContent !== null}
+              publishing={publish.isPending}
+              onPublish={handlePublish}
+              onMoveClick={() => setMoveOpen(true)}
+              onCopyClick={() => setCopyOpen(true)}
+              onShareClick={() => setShareOpen(true)}
+            />
+            <hr className="my-4 border-[#dfe1e6]" />
+            <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_220px] gap-8">
+              <div className="min-w-0">
+                <CollaborativeEditor
+                  key={`${currentPage.id}-${
+                    isBodyEditable ? "edit" : "view"
+                  }`}
+                  pageId={currentPage.id}
+                  initialMarkdown={
+                    isBodyEditable
+                      ? currentPage.draftContent ?? currentPage.content
+                      : currentPage.content
+                  }
+                  editable={isBodyEditable}
+                  onSaveStatusChange={setSaveStatus}
+                  onPresenceChange={setPresence}
+                  onEditor={setEditor}
+                  onConnectionStateChange={setConnectionState}
+                />
+                <DiagramList
+                  pageId={currentPage.id}
+                  editable={isBodyEditable}
+                />
+                <AttachmentList
+                  pageId={currentPage.id}
+                  editable={isBodyEditable}
+                />
+                {/* FR-073 (Cycle 25) — 페이지 이모지 반응 바. */}
+                <ReactionBar target="page" targetId={currentPage.id} />
+                <InlineCommentsList
+                  pageId={currentPage.id}
+                  editable={isBodyEditable}
+                />
+                <PageComments
+                  pageId={currentPage.id}
+                  editable={isBodyEditable}
+                />
+              </div>
+              <aside className="hidden lg:block sticky top-4 h-fit max-h-[calc(100vh-2rem)] overflow-y-auto pl-4 border-l border-[#dfe1e6]">
+                <TableOfContents editor={editor} />
+              </aside>
+            </div>
+            <div className="mt-10 flex items-center justify-between border-t border-[#dfe1e6] pt-4">
+              <div className="flex items-center gap-2 text-[13px] text-[#6b778c]">
+                <button className="hover:text-[#0052cc]">👍</button>
+                <span>처음으로 좋아하는 사람이 돼볼까요?</span>
+              </div>
+              <div className="text-[13px] text-[#6b778c]">
+                🏷️ 레이블 없음
+              </div>
+            </div>
+
+            <div className="mt-6 flex items-start gap-3">
+              <div className="w-8 h-8 rounded-full bg-[#0052cc] text-white flex items-center justify-center text-xs font-semibold shrink-0">
+                U
+              </div>
+              <input
+                placeholder="댓글 작성..."
+                disabled
+                className="flex-1 px-3 py-2 text-sm bg-[#f4f5f7] border border-[#dfe1e6] rounded cursor-not-allowed"
+              />
+            </div>
+          </>
+        )}
+      </div>
+
+      <PageVersionHistory
+        pageId={selectedPageId}
+        open={historyOpen}
+        onOpenChange={setHistoryOpen}
+      />
+      <QuickSearchDialog
+        open={quickSearchOpen}
+        onOpenChange={setQuickSearchOpen}
+        onSelect={selectPage}
+      />
+      {currentPage && (
+        <MovePageDialog
+          open={moveOpen}
+          onOpenChange={setMoveOpen}
+          page={{
+            id: currentPage.id,
+            title: currentPage.title,
+            spaceId: currentPage.spaceId,
+            parentId: currentPage.parentId,
+          }}
+          onMoved={async () => {
+            invalidateSpaces();
+            await loadCurrentPage(currentPage.id);
+          }}
+        />
+      )}
+      {currentPage && (
+        <CopyPageDialog
+          open={copyOpen}
+          onOpenChange={setCopyOpen}
+          page={{
+            id: currentPage.id,
+            title: currentPage.title,
+            spaceId: currentPage.spaceId,
+            parentId: currentPage.parentId,
+          }}
+          onCopied={async (newPage) => {
+            invalidateSpaces();
+            if (newPage.spaceId === activeSpace?.id) {
+              selectPage(newPage.id);
+            }
+          }}
+        />
+      )}
+      {currentPage && (
+        <SharePageDialog
+          open={shareOpen}
+          onOpenChange={setShareOpen}
+          page={{ id: currentPage.id, title: currentPage.title }}
+        />
+      )}
+    </>
+  );
+}
