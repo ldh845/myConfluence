@@ -2,7 +2,11 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { SpaceWithPages } from "@/lib/types";
+import { useAuth } from "@/lib/auth/useAuth";
+import { apiFetch } from "@/lib/api";
 
 type Props = {
   spaces: SpaceWithPages[];
@@ -72,13 +76,104 @@ export default function TopNav({
       >
         ⚙️
       </button>
-      <div
-        aria-label="프로필"
-        className="w-8 h-8 rounded-full bg-[#0052cc] text-white flex items-center justify-center text-xs font-semibold"
-      >
-        U
-      </div>
+      <UserMenu />
     </header>
+  );
+}
+
+// FR-001 (Cycle 27b) — 로그인한 사용자 메뉴. 미로그인 시 "로그인" 링크.
+function UserMenu() {
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const { user, isLoading } = useAuth();
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [open]);
+
+  const logout = useMutation<void, Error>({
+    mutationFn: async () => {
+      const r = await apiFetch("/api/auth/logout", { method: "POST" });
+      if (!r.ok && r.status !== 204) throw new Error("로그아웃 실패");
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["me"] });
+      router.replace("/login");
+    },
+    onError: (err) => window.alert(err.message),
+  });
+
+  if (isLoading) {
+    return (
+      <div className="w-8 h-8 rounded-full bg-[#dfe1e6] animate-pulse" />
+    );
+  }
+  if (!user) {
+    return (
+      <Link
+        href="/login"
+        className="text-[13px] text-[#0052cc] hover:underline"
+      >
+        로그인
+      </Link>
+    );
+  }
+
+  const initial = user.name?.slice(0, 1).toUpperCase() ?? "U";
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className={`flex items-center gap-2 pr-2 rounded ${
+          open ? "bg-[#ebecf0]" : "hover:bg-[#ebecf0]"
+        }`}
+      >
+        <div
+          aria-label="프로필"
+          className="w-8 h-8 rounded-full bg-[#0052cc] text-white flex items-center justify-center text-xs font-semibold"
+        >
+          {initial}
+        </div>
+        <span className="text-sm text-[#172b4d] hidden sm:inline">
+          {user.name}
+        </span>
+      </button>
+      {open && (
+        <div className="absolute right-0 top-full mt-1 w-60 bg-white border border-[#dfe1e6] rounded shadow-lg z-30 py-2">
+          <div className="px-3 py-2 border-b border-[#dfe1e6]">
+            <div className="text-[13px] font-semibold text-[#172b4d]">
+              {user.name}
+            </div>
+            <div className="text-[11px] text-[#6b778c]">
+              {user.department} · {user.role}
+            </div>
+            <div className="text-[11px] text-[#6b778c] mt-0.5">
+              @{user.username}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setOpen(false);
+              logout.mutate();
+            }}
+            disabled={logout.isPending}
+            className="w-full text-left px-3 py-2 text-[13px] text-[#de350b] hover:bg-[#ffebe6] disabled:opacity-50"
+          >
+            {logout.isPending ? "로그아웃 중..." : "로그아웃"}
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
 
