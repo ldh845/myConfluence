@@ -7,6 +7,27 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// FR-001 / FR-002 (Cycle 27a) — 사용자 + 역할.
+// 첫 가입자만 자동 ADMIN, 이후는 DEVELOPER. Role은 추후 ADMIN이 조정.
+enum Role {
+  ADMIN
+  PART_LEADER
+  DEVELOPER
+  DESIGNER
+  PM
+}
+
+model User {
+  id           String   @id @default(cuid())
+  username     String   @unique
+  passwordHash String
+  name         String
+  department   String
+  role         Role     @default(DEVELOPER)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
 model Space {
   id           String        @id @default(cuid())
   name         String

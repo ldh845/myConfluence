@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { PrismaModule } from './prisma/prisma.module';
@@ -12,9 +13,12 @@ import { CommentsModule } from './comments/comments.module';
 import { PageSharesModule } from './page-shares/page-shares.module';
 import { ActivitiesModule } from './activities/activities.module';
 import { ReactionsModule } from './reactions/reactions.module';
+import { AuthModule } from './auth/auth.module';
 
 @Module({
   imports: [
+    // FR-001 (Cycle 27a) — .env 로드(JWT_SECRET 등).
+    ConfigModule.forRoot({ isGlobal: true }),
     PrismaModule,
     SpacesModule,
     PagesModule,
@@ -25,6 +29,7 @@ import { ReactionsModule } from './reactions/reactions.module';
     PageSharesModule,
     ActivitiesModule,
     ReactionsModule,
+    AuthModule,
   ],
   controllers: [AppController, HealthController],
   providers: [AppService],
