@@ -365,32 +365,39 @@ function SpaceCard({
   onEnter: (sp: SpaceWithPages) => void;
   starHoverOnly: boolean;
 }) {
+  // 카드 자체를 <button>이 아니라 onClick div로 두면 별표 <button>이 명실상부
+  // 별개의 클릭 대상이 된다 (nested button 회피).
   return (
-    <div className="group relative">
-      <button
-        type="button"
-        onClick={() => onEnter(sp)}
-        className="w-full text-left border border-[#dfe1e6] rounded-md p-4 bg-white hover:border-[#0052cc] hover:bg-[#f4f5f7] transition-colors"
-      >
-        <div className="flex items-start gap-3">
-          <div className="w-10 h-10 rounded bg-[#0052cc] text-white flex items-center justify-center font-bold shrink-0">
-            {sp.name.slice(0, 1).toUpperCase()}
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={() => onEnter(sp)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onEnter(sp);
+        }
+      }}
+      className="group relative text-left border border-[#dfe1e6] rounded-md p-4 bg-white hover:border-[#0052cc] hover:bg-[#f4f5f7] transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#0052cc]"
+    >
+      <div className="flex items-start gap-3">
+        <div className="w-10 h-10 rounded bg-[#0052cc] text-white flex items-center justify-center font-bold shrink-0">
+          {sp.name.slice(0, 1).toUpperCase()}
+        </div>
+        <div className="flex-1 min-w-0 pr-7">
+          <div className="text-[14px] font-semibold text-[#172b4d] truncate">
+            {sp.name}
           </div>
-          <div className="flex-1 min-w-0 pr-7">
-            <div className="text-[14px] font-semibold text-[#172b4d] truncate">
-              {sp.name}
+          {sp.description && (
+            <div className="text-[12px] text-[#6b778c] truncate mt-0.5">
+              {sp.description}
             </div>
-            {sp.description && (
-              <div className="text-[12px] text-[#6b778c] truncate mt-0.5">
-                {sp.description}
-              </div>
-            )}
-            <div className="text-[11px] text-[#6b778c] mt-1">
-              페이지 {sp.pages.length}개
-            </div>
+          )}
+          <div className="text-[11px] text-[#6b778c] mt-1">
+            페이지 {sp.pages.length}개
           </div>
         </div>
-      </button>
+      </div>
       <div className="absolute top-3 right-3">
         <SpaceStarButton
           spaceId={sp.id}
