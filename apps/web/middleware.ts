@@ -6,7 +6,7 @@ import type { NextRequest } from "next/server";
 // (서명 검증은 백엔드 /auth/me가 담당 — middleware에서 secret 접근 안 함).
 
 const PUBLIC_PATHS = new Set(["/login", "/signup"]);
-const PUBLIC_PREFIXES = ["/share/", "/api/", "/_next/", "/static/"];
+const PUBLIC_PREFIXES = ["/share/", "/api/", "/_next/", "/static/", "/icons/"];
 const PUBLIC_FILES = new Set(["/favicon.ico"]);
 
 export function middleware(req: NextRequest) {

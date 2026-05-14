@@ -365,40 +365,50 @@ function SpaceCard({
   onEnter: (sp: SpaceWithPages) => void;
   starHoverOnly: boolean;
 }) {
-  // 카드 자체를 <button>이 아니라 onClick div로 두면 별표 <button>이 명실상부
-  // 별개의 클릭 대상이 된다 (nested button 회피).
+  // 카드 자체는 클릭 가능한 div, 별표는 우상단 별도 <button>.
+  // 별표 클릭이 카드 진입으로 위임되지 않도록 별표 button 안에서 stopPropagation.
   return (
-    <div
-      role="button"
-      tabIndex={0}
-      onClick={() => onEnter(sp)}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
+    <div className="group relative border border-[#dfe1e6] rounded-md bg-white hover:border-[#0052cc] hover:bg-[#f4f5f7] transition-colors">
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={() => {
+          // eslint-disable-next-line no-console
+          console.log("[SpaceCard] card onClick → enter", sp.id);
           onEnter(sp);
-        }
-      }}
-      className="group relative text-left border border-[#dfe1e6] rounded-md p-4 bg-white hover:border-[#0052cc] hover:bg-[#f4f5f7] transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#0052cc]"
-    >
-      <div className="flex items-start gap-3">
-        <div className="w-10 h-10 rounded bg-[#0052cc] text-white flex items-center justify-center font-bold shrink-0">
-          {sp.name.slice(0, 1).toUpperCase()}
-        </div>
-        <div className="flex-1 min-w-0 pr-7">
-          <div className="text-[14px] font-semibold text-[#172b4d] truncate">
-            {sp.name}
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onEnter(sp);
+          }
+        }}
+        className="text-left p-4 cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#0052cc] rounded-md"
+      >
+        <div className="flex items-start gap-3">
+          <div className="w-10 h-10 rounded bg-[#0052cc] text-white flex items-center justify-center font-bold shrink-0">
+            {sp.name.slice(0, 1).toUpperCase()}
           </div>
-          {sp.description && (
-            <div className="text-[12px] text-[#6b778c] truncate mt-0.5">
-              {sp.description}
+          <div className="flex-1 min-w-0 pr-9">
+            <div className="text-[14px] font-semibold text-[#172b4d] truncate">
+              {sp.name}
             </div>
-          )}
-          <div className="text-[11px] text-[#6b778c] mt-1">
-            페이지 {sp.pages.length}개
+            {sp.description && (
+              <div className="text-[12px] text-[#6b778c] truncate mt-0.5">
+                {sp.description}
+              </div>
+            )}
+            <div className="text-[11px] text-[#6b778c] mt-1">
+              페이지 {sp.pages.length}개
+            </div>
           </div>
         </div>
       </div>
-      <div className="absolute top-3 right-3">
+      {/* 별표는 클릭 div 바깥의 sibling — 어떤 위임도 받지 않는다 */}
+      <div
+        className="absolute top-2 right-2 z-30"
+        style={{ pointerEvents: "auto" }}
+      >
         <SpaceStarButton
           spaceId={sp.id}
           size="md"
