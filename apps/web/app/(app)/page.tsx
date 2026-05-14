@@ -86,18 +86,21 @@ export default function HomePage() {
   const [shareOpen, setShareOpen] = useState(false);
 
   // URL에 pageId가 없을 때의 fallback.
-  // 우선순위: spaceId 지정 시 그 스페이스의 첫 페이지 > 첫 스페이스의 첫 페이지.
+  // spaceId가 지정됐고 그 스페이스에 페이지가 있으면 첫 페이지로.
+  // spaceId 지정됐는데 빈 스페이스면 null (UI에서 빈 상태 안내) — 다른 스페이스로
+  // 자동 폴백하지 않는다. 그래야 빈 스페이스 카드를 클릭한 의도가 무시되지 않는다.
+  // 어떤 spaceId도 없을 때만 첫 스페이스의 첫 페이지로 폴백.
   const defaultPageId = useMemo<string | null>(() => {
     if (spaceIdFromUrl) {
       const sp = spaces.find((s) => s.id === spaceIdFromUrl);
-      if (sp?.pages[0]) return sp.pages[0].id;
+      return sp?.pages[0]?.id ?? null;
     }
     return spaces[0]?.pages[0]?.id ?? null;
   }, [spaces, spaceIdFromUrl]);
 
   const selectedPageId = pageIdFromUrl ?? defaultPageId;
 
-  // /?spaceId=X 로 진입한 경우 첫 페이지 URL로 깔끔하게 replace.
+  // /?spaceId=X 로 진입한 경우 (페이지가 있을 때만) 첫 페이지 URL로 replace.
   useEffect(() => {
     if (!pageIdFromUrl && spaceIdFromUrl && defaultPageId) {
       router.replace(`/?pageId=${defaultPageId}`);
@@ -261,11 +264,19 @@ export default function HomePage() {
   }, [currentPage, isBodyEditable, toggleEditMode, exitEditMode]);
 
   // PageHeader breadcrumb / WelcomeBanner / CopyPageDialog가 참조하는 활성 스페이스.
-  // currentPage가 로드돼 있으면 그 페이지의 스페이스, 아니면 첫 스페이스.
+  // 우선순위: URL의 spaceId > currentPage.spaceId > 첫 스페이스.
+  // 빈 스페이스(/?spaceId=Y, currentPage=null)에서도 사용자가 클릭한 그 스페이스를 표시한다.
   const activeSpace = useMemo<SpaceWithPages | null>(
-    () =>
-      spaces.find((s) => s.id === currentPage?.spaceId) ?? spaces[0] ?? null,
-    [spaces, currentPage],
+    () => {
+      if (spaceIdFromUrl) {
+        const sp = spaces.find((s) => s.id === spaceIdFromUrl);
+        if (sp) return sp;
+      }
+      return (
+        spaces.find((s) => s.id === currentPage?.spaceId) ?? spaces[0] ?? null
+      );
+    },
+    [spaces, currentPage, spaceIdFromUrl],
   );
 
   const isFirstPageOfSpace = useMemo(() => {
@@ -323,9 +334,21 @@ export default function HomePage() {
     <>
       <div className="max-w-[960px] mx-auto px-10 pt-2 pb-16">
         {!currentPage ? (
-          <div className="mt-24 text-center text-[#6b778c]">
-            왼쪽에서 페이지를 선택하거나 새 페이지를 만드세요.
-          </div>
+          // 빈 스페이스로 진입한 경우 그 스페이스 이름을 안내.
+          spaceIdFromUrl && activeSpace && activeSpace.pages.length === 0 ? (
+            <div className="mt-24 text-center text-[#6b778c]">
+              <div className="text-[16px] font-semibold text-[#172b4d] mb-1">
+                {activeSpace.name} 공간에 페이지가 아직 없습니다
+              </div>
+              <div className="text-[13px]">
+                왼쪽 사이드바의 &lsquo;＋ 새 페이지&rsquo;로 첫 페이지를 만들어보세요.
+              </div>
+            </div>
+          ) : (
+            <div className="mt-24 text-center text-[#6b778c]">
+              왼쪽에서 페이지를 선택하거나 새 페이지를 만드세요.
+            </div>
+          )
         ) : (
           <>
             {isFirstPageOfSpace && activeSpace && (

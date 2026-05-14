@@ -39,15 +39,33 @@ function AppShell({ children }: { children: React.ReactNode }) {
     if (!selectedSpaceId && spaces[0]) setSelectedSpaceId(spaces[0].id);
   }, [spaces, selectedSpaceId]);
 
-  const activeSpace = useMemo<SpaceWithPages | null>(
-    () => spaces.find((s) => s.id === selectedSpaceId) ?? spaces[0] ?? null,
-    [spaces, selectedSpaceId],
-  );
+  // Cycle 29 (bugfix) — activeSpace를 URL 기준으로 도출한다.
+  // 사용자가 /home에서 "내 공간"의 다른 카드(빈 스페이스 포함)를 클릭하면
+  // URL이 /?spaceId=X 또는 /?pageId=Y로 바뀌는데, selectedSpaceId state는
+  // TopNav combobox로만 갱신되므로 사이드바 컨텍스트가 어긋난다.
+  // URL 우선: spaceId > pageId로 역방향 lookup > selectedSpaceId state > 첫 스페이스.
+  const pageIdParam =
+    pathname === "/" ? searchParams.get("pageId") : null;
+  const spaceIdParam =
+    pathname === "/" ? searchParams.get("spaceId") : null;
+
+  const activeSpace = useMemo<SpaceWithPages | null>(() => {
+    if (spaceIdParam) {
+      const sp = spaces.find((s) => s.id === spaceIdParam);
+      if (sp) return sp;
+    }
+    if (pageIdParam) {
+      const sp = spaces.find((s) =>
+        s.pages.some((p) => p.id === pageIdParam),
+      );
+      if (sp) return sp;
+    }
+    return spaces.find((s) => s.id === selectedSpaceId) ?? spaces[0] ?? null;
+  }, [spaces, selectedSpaceId, pageIdParam, spaceIdParam]);
 
   // 사이드바 트리에서 어떤 페이지가 활성으로 표시되어야 하는지.
   // / 라우트에서만 URL의 ?pageId를 따라가고, /home·/activity·/search에선 null.
-  const selectedPageId =
-    pathname === "/" ? searchParams.get("pageId") : null;
+  const selectedPageId = pageIdParam;
 
   const invalidateSpaces = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ["spaces"] });
