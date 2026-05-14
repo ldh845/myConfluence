@@ -119,9 +119,6 @@ export default function SystemSidebar() {
                   {sp.name.slice(0, 1).toUpperCase()}
                 </div>
                 <span className="flex-1 truncate">{sp.name}</span>
-                <span className="text-[11px] text-[#6b778c]">
-                  {sp.pages.length}
-                </span>
               </button>
               <SpaceStarButton
                 spaceId={sp.id}
