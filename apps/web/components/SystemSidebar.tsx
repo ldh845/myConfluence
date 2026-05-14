@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import type { SpaceWithPages } from "@/lib/types";
+import { useStarredSpacesStore } from "@/lib/stores/useStarredSpacesStore";
+import SpaceStarButton from "@/components/SpaceStarButton";
 
 // Cycle 29 — 시스템 홈(/home) 전용 사이드바.
 // Confluence Cloud 패턴: h2 섹션 헤더(발견 / 내 작업 / 내 공간) + sub-item.
@@ -74,7 +76,9 @@ export default function SystemSidebar() {
       return (await r.json()) as SpaceWithPages[];
     },
   });
-  const spaces = spacesData ?? [];
+  // Cycle 29 (별표) — "내 공간"은 별표한 스페이스만.
+  const starredIds = useStarredSpacesStore((s) => s.ids);
+  const spaces = (spacesData ?? []).filter((s) => starredIds.includes(s.id));
 
   const scrollTo = useCallback((id: string) => {
     const el = document.getElementById(id);
@@ -140,30 +144,38 @@ export default function SystemSidebar() {
         ))}
       </div>
 
-      {/* 내 공간 */}
+      {/* 내 공간 — 별표한 스페이스만 */}
       <SectionHeader icon="🌐">내 공간</SectionHeader>
       <div className="px-2 pb-4 space-y-0.5">
         {spaces.length === 0 ? (
           <div className="pl-7 pr-3 py-1.5 text-[12px] text-[#6b778c]">
-            가입한 공간이 없습니다.
+            별표한 공간이 없습니다. 홈의 &lsquo;모든 공간&rsquo;에서 ☆을
+            눌러 추가하세요.
           </div>
         ) : (
           spaces.map((sp) => (
-            <button
-              key={sp.id}
-              type="button"
-              onClick={() => enterSpace(sp)}
-              title={sp.description ?? sp.name}
-              className="w-full flex items-center gap-2 pl-4 pr-3 py-1.5 rounded text-[13px] text-left text-[#172b4d] hover:bg-[#ebecf0]"
-            >
-              <div className="w-5 h-5 rounded bg-[#0052cc] text-white flex items-center justify-center text-[10px] font-bold shrink-0">
-                {sp.name.slice(0, 1).toUpperCase()}
-              </div>
-              <span className="flex-1 truncate">{sp.name}</span>
-              <span className="text-[11px] text-[#6b778c]">
-                {sp.pages.length}
-              </span>
-            </button>
+            <div key={sp.id} className="group flex items-center">
+              <button
+                type="button"
+                onClick={() => enterSpace(sp)}
+                title={sp.description ?? sp.name}
+                className="flex-1 flex items-center gap-2 pl-4 pr-1 py-1.5 rounded text-[13px] text-left text-[#172b4d] hover:bg-[#ebecf0]"
+              >
+                <div className="w-5 h-5 rounded bg-[#0052cc] text-white flex items-center justify-center text-[10px] font-bold shrink-0">
+                  {sp.name.slice(0, 1).toUpperCase()}
+                </div>
+                <span className="flex-1 truncate">{sp.name}</span>
+                <span className="text-[11px] text-[#6b778c]">
+                  {sp.pages.length}
+                </span>
+              </button>
+              {/* hover 시 우측에 ⭐(=내 공간에서 제거) 노출 */}
+              <SpaceStarButton
+                spaceId={sp.id}
+                size="sm"
+                className="mr-2"
+              />
+            </div>
           ))
         )}
       </div>

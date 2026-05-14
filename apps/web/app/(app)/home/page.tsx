@@ -6,7 +6,9 @@ import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { useFavoritesStore } from "@/lib/stores/useFavoritesStore";
 import { useRecentPagesStore } from "@/lib/stores/useRecentPagesStore";
+import { useStarredSpacesStore } from "@/lib/stores/useStarredSpacesStore";
 import PageCard from "@/components/PageCard";
+import SpaceStarButton from "@/components/SpaceStarButton";
 import type { SpaceWithPages, PageNode } from "@/lib/types";
 import {
   formatActivity,
@@ -84,6 +86,7 @@ export default function HomePage() {
   const router = useRouter();
   const recentEntries = useRecentPagesStore((s) => s.entries);
   const favIds = useFavoritesStore((s) => s.ids);
+  const starredSpaceIds = useStarredSpacesStore((s) => s.ids);
 
   const { data: spaces } = useQuery<SpaceWithPages[]>({
     queryKey: ["spaces"],
@@ -283,45 +286,118 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* ────────── 내 공간 ────────── */}
+      {/* ────────── 내 공간 (별표한 공간만) ────────── */}
       <SectionH1 id="spaces">내 공간</SectionH1>
-      {!spaces ? (
-        <div className="text-[12px] text-[#6b778c]">불러오는 중...</div>
-      ) : spaces.length === 0 ? (
-        <div className="text-[12px] text-[#6b778c] border border-dashed border-[#dfe1e6] rounded p-4">
-          가입한 공간이 없습니다.
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {spaces.map((sp) => (
-            <button
-              key={sp.id}
-              type="button"
-              onClick={() => enterSpace(sp)}
-              className="text-left border border-[#dfe1e6] rounded-md p-4 bg-white hover:border-[#0052cc] hover:bg-[#f4f5f7] transition-colors"
-            >
-              <div className="flex items-start gap-3">
-                <div className="w-10 h-10 rounded bg-[#0052cc] text-white flex items-center justify-center font-bold shrink-0">
-                  {sp.name.slice(0, 1).toUpperCase()}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-[14px] font-semibold text-[#172b4d] truncate">
-                    {sp.name}
-                  </div>
-                  {sp.description && (
-                    <div className="text-[12px] text-[#6b778c] truncate mt-0.5">
-                      {sp.description}
-                    </div>
-                  )}
-                  <div className="text-[11px] text-[#6b778c] mt-1">
-                    페이지 {sp.pages.length}개
-                  </div>
-                </div>
+      <StarredSpacesGrid
+        spaces={spaces ?? []}
+        starredIds={starredSpaceIds}
+        onEnter={enterSpace}
+      />
+
+      {/* ────────── 모든 공간 (별표 토글로 발견) ────────── */}
+      <SectionH1 id="all-spaces">모든 공간</SectionH1>
+      <AllSpacesGrid spaces={spaces ?? null} onEnter={enterSpace} />
+    </div>
+  );
+}
+
+// 별표한 스페이스만. 카드 hover 시 우상단에 ⭐(=내 공간에서 제거).
+function StarredSpacesGrid({
+  spaces,
+  starredIds,
+  onEnter,
+}: {
+  spaces: SpaceWithPages[];
+  starredIds: string[];
+  onEnter: (sp: SpaceWithPages) => void;
+}) {
+  const starred = spaces.filter((sp) => starredIds.includes(sp.id));
+  if (starred.length === 0) {
+    return (
+      <div className="text-[12px] text-[#6b778c] border border-dashed border-[#dfe1e6] rounded p-4">
+        별표한 공간이 없습니다. 아래 &lsquo;모든 공간&rsquo;에서 ☆을 눌러
+        내 공간에 추가하세요.
+      </div>
+    );
+  }
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+      {starred.map((sp) => (
+        <SpaceCard key={sp.id} sp={sp} onEnter={onEnter} starHoverOnly />
+      ))}
+    </div>
+  );
+}
+
+// 모든 스페이스. 별표는 항상 보이고 클릭으로 토글.
+function AllSpacesGrid({
+  spaces,
+  onEnter,
+}: {
+  spaces: SpaceWithPages[] | null;
+  onEnter: (sp: SpaceWithPages) => void;
+}) {
+  if (!spaces) {
+    return <div className="text-[12px] text-[#6b778c]">불러오는 중...</div>;
+  }
+  if (spaces.length === 0) {
+    return (
+      <div className="text-[12px] text-[#6b778c] border border-dashed border-[#dfe1e6] rounded p-4">
+        가입한 공간이 없습니다.
+      </div>
+    );
+  }
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+      {spaces.map((sp) => (
+        <SpaceCard key={sp.id} sp={sp} onEnter={onEnter} starHoverOnly={false} />
+      ))}
+    </div>
+  );
+}
+
+function SpaceCard({
+  sp,
+  onEnter,
+  starHoverOnly,
+}: {
+  sp: SpaceWithPages;
+  onEnter: (sp: SpaceWithPages) => void;
+  starHoverOnly: boolean;
+}) {
+  return (
+    <div className="group relative">
+      <button
+        type="button"
+        onClick={() => onEnter(sp)}
+        className="w-full text-left border border-[#dfe1e6] rounded-md p-4 bg-white hover:border-[#0052cc] hover:bg-[#f4f5f7] transition-colors"
+      >
+        <div className="flex items-start gap-3">
+          <div className="w-10 h-10 rounded bg-[#0052cc] text-white flex items-center justify-center font-bold shrink-0">
+            {sp.name.slice(0, 1).toUpperCase()}
+          </div>
+          <div className="flex-1 min-w-0 pr-7">
+            <div className="text-[14px] font-semibold text-[#172b4d] truncate">
+              {sp.name}
+            </div>
+            {sp.description && (
+              <div className="text-[12px] text-[#6b778c] truncate mt-0.5">
+                {sp.description}
               </div>
-            </button>
-          ))}
+            )}
+            <div className="text-[11px] text-[#6b778c] mt-1">
+              페이지 {sp.pages.length}개
+            </div>
+          </div>
         </div>
-      )}
+      </button>
+      <div className="absolute top-3 right-3">
+        <SpaceStarButton
+          spaceId={sp.id}
+          size="md"
+          alwaysVisible={!starHoverOnly}
+        />
+      </div>
     </div>
   );
 }

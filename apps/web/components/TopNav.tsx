@@ -7,6 +7,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { SpaceWithPages } from "@/lib/types";
 import { useAuth } from "@/lib/auth/useAuth";
 import { apiFetch } from "@/lib/api";
+import SpaceStarButton from "@/components/SpaceStarButton";
 
 type Props = {
   spaces: SpaceWithPages[];
@@ -229,33 +230,41 @@ function SpaceCombobox({
             {spaces.map((s) => {
               const active = s.id === activeSpaceId;
               return (
-                <button
+                <div
                   key={s.id}
-                  onClick={() => {
-                    onSelectSpace(s.id);
-                    setOpen(false);
-                  }}
-                  className={`w-full flex items-center gap-2 px-3 py-2 text-left text-sm ${
+                  className={`flex items-center gap-1 pr-1 ${
                     active
                       ? "bg-[#deebff] text-[#0052cc]"
                       : "text-[#172b4d] hover:bg-[#ebecf0]"
                   }`}
                 >
-                  <div className="w-6 h-6 rounded bg-[#0052cc] text-white flex items-center justify-center text-[11px] font-bold shrink-0">
-                    {s.name.slice(0, 1).toUpperCase()}
+                  {/* Cycle 29 (별표) — 좌측 ☆ 토글로 내 공간 추가/제거 */}
+                  <div className="pl-2">
+                    <SpaceStarButton spaceId={s.id} size="sm" alwaysVisible />
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="truncate font-medium">{s.name}</div>
-                    {s.description && (
-                      <div className="text-[11px] text-[#6b778c] truncate">
-                        {s.description}
-                      </div>
+                  <button
+                    onClick={() => {
+                      onSelectSpace(s.id);
+                      setOpen(false);
+                    }}
+                    className="flex-1 flex items-center gap-2 px-2 py-2 text-left text-sm"
+                  >
+                    <div className="w-6 h-6 rounded bg-[#0052cc] text-white flex items-center justify-center text-[11px] font-bold shrink-0">
+                      {s.name.slice(0, 1).toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="truncate font-medium">{s.name}</div>
+                      {s.description && (
+                        <div className="text-[11px] text-[#6b778c] truncate">
+                          {s.description}
+                        </div>
+                      )}
+                    </div>
+                    {active && (
+                      <span className="text-[#0052cc] text-xs">✓</span>
                     )}
-                  </div>
-                  {active && (
-                    <span className="text-[#0052cc] text-xs">✓</span>
-                  )}
-                </button>
+                  </button>
+                </div>
               );
             })}
           </div>
