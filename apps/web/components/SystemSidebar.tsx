@@ -1,29 +1,27 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import type { SpaceWithPages } from "@/lib/types";
 import { useStarredSpacesStore } from "@/lib/stores/useStarredSpacesStore";
 import SpaceStarButton from "@/components/SpaceStarButton";
 
-// Cycle 29 — 시스템 홈(/home) 전용 사이드바.
-// Confluence Cloud 패턴: h2 섹션 헤더(발견 / 내 작업 / 내 공간) + sub-item.
-// 발견 sub-item과 내 작업 sub-item은 anchor scroll, 내 공간 sub-item은 스페이스 진입.
+// Cycle 29 — 시스템 홈(/home) 사이드바.
+// 발견 / 내 작업 sub-item 은 /home?view=<id> 로 view 전환.
+// 내 공간 행은 그 스페이스로 진입 (/?pageId=<첫 페이지> 또는 /?spaceId=<id>).
 
 type SubItem = { id: string; label: string };
 
 const DISCOVER_ITEMS: SubItem[] = [
-  { id: "discover-updates", label: "모든 변경사항" },
+  { id: "updates", label: "모든 변경사항" },
 ];
 
 const MYWORK_ITEMS: SubItem[] = [
-  { id: "mywork-recent", label: "최근 작업" },
-  { id: "mywork-visited", label: "최근 방문" },
-  { id: "mywork-saved", label: "나중을 위해 저장" },
+  { id: "recent", label: "최근 작업" },
+  { id: "visited", label: "최근 방문" },
+  { id: "saved", label: "나중을 위해 저장" },
 ];
-
-const ALL_ANCHOR_IDS = [...DISCOVER_ITEMS, ...MYWORK_ITEMS].map((s) => s.id);
 
 function SectionHeader({ children }: { children: React.ReactNode }) {
   return (
@@ -33,19 +31,18 @@ function SectionHeader({ children }: { children: React.ReactNode }) {
   );
 }
 
-function SubItemRow({
+function SubItemLink({
+  view,
   active,
-  onClick,
   children,
 }: {
+  view: string;
   active: boolean;
-  onClick: () => void;
   children: React.ReactNode;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
+    <Link
+      href={`/home?view=${view}`}
       className={`w-full flex items-center gap-2 pl-7 pr-3 py-1.5 rounded text-[13px] text-left ${
         active
           ? "bg-[#deebff] text-[#0052cc] font-semibold"
@@ -53,13 +50,14 @@ function SubItemRow({
       }`}
     >
       {children}
-    </button>
+    </Link>
   );
 }
 
 export default function SystemSidebar() {
   const router = useRouter();
-  const [active, setActive] = useState<string>(ALL_ANCHOR_IDS[0]);
+  const params = useSearchParams();
+  const currentView = params.get("view") ?? "updates";
 
   const { data: spacesData } = useQuery<SpaceWithPages[]>({
     queryKey: ["spaces"],
@@ -73,34 +71,6 @@ export default function SystemSidebar() {
   const starredIds = useStarredSpacesStore((s) => s.ids);
   const spaces = (spacesData ?? []).filter((s) => starredIds.includes(s.id));
 
-  const scrollTo = useCallback((id: string) => {
-    const el = document.getElementById(id);
-    if (el) {
-      el.scrollIntoView({ behavior: "smooth", block: "start" });
-      setActive(id);
-    }
-  }, []);
-
-  // 사이드바 sub-item 스크롤 따라가기. <main overflow-auto>가 스크롤 컨테이너.
-  useEffect(() => {
-    const root = document.querySelector("main");
-    if (!root) return;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const visible = entries
-          .filter((e) => e.isIntersecting)
-          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
-        if (visible[0]) setActive(visible[0].target.id);
-      },
-      { root, rootMargin: "-30% 0px -60% 0px", threshold: 0 },
-    );
-    ALL_ANCHOR_IDS.forEach((id) => {
-      const el = document.getElementById(id);
-      if (el) observer.observe(el);
-    });
-    return () => observer.disconnect();
-  }, []);
-
   const enterSpace = (sp: SpaceWithPages) => {
     const first = sp.pages[0];
     if (first) router.push(`/?pageId=${first.id}`);
@@ -113,13 +83,9 @@ export default function SystemSidebar() {
       <SectionHeader>발견</SectionHeader>
       <div className="px-2 space-y-0.5">
         {DISCOVER_ITEMS.map((s) => (
-          <SubItemRow
-            key={s.id}
-            active={active === s.id}
-            onClick={() => scrollTo(s.id)}
-          >
+          <SubItemLink key={s.id} view={s.id} active={currentView === s.id}>
             {s.label}
-          </SubItemRow>
+          </SubItemLink>
         ))}
       </div>
 
@@ -127,13 +93,9 @@ export default function SystemSidebar() {
       <SectionHeader>내 작업</SectionHeader>
       <div className="px-2 space-y-0.5">
         {MYWORK_ITEMS.map((s) => (
-          <SubItemRow
-            key={s.id}
-            active={active === s.id}
-            onClick={() => scrollTo(s.id)}
-          >
+          <SubItemLink key={s.id} view={s.id} active={currentView === s.id}>
             {s.label}
-          </SubItemRow>
+          </SubItemLink>
         ))}
       </div>
 
@@ -142,8 +104,7 @@ export default function SystemSidebar() {
       <div className="px-2 pb-4 space-y-0.5">
         {spaces.length === 0 ? (
           <div className="pl-7 pr-3 py-1.5 text-[12px] text-[#6b778c]">
-            별표한 공간이 없습니다. 홈의 &lsquo;모든 공간&rsquo;에서 ☆을
-            눌러 추가하세요.
+            별표한 공간이 없습니다. 상단 공간 메뉴에서 ☆을 눌러 추가하세요.
           </div>
         ) : (
           spaces.map((sp) => (
@@ -162,7 +123,6 @@ export default function SystemSidebar() {
                   {sp.pages.length}
                 </span>
               </button>
-              {/* hover 시 우측에 ⭐(=내 공간에서 제거) 노출 */}
               <SpaceStarButton
                 spaceId={sp.id}
                 size="sm"

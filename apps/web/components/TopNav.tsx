@@ -24,11 +24,18 @@ export default function TopNav({
 }: Props) {
   return (
     <header className="h-14 shrink-0 flex items-center gap-4 px-4 bg-white border-b border-[#dfe1e6]">
-      {/* FR-130 (Cycle 22) — 로고 클릭 시 홈 대시보드로. */}
-      <Link
+      {/* FR-130 (Cycle 22) — 로고 클릭 시 홈으로. /home에 이미 있을 때도 full reload. */}
+      <a
         href="/home"
         className="flex items-center gap-2 pr-2 rounded hover:bg-[#ebecf0]"
         aria-label="홈으로"
+        onClick={(e) => {
+          // Next Link 대신 <a> 사용 — 항상 full navigation 이므로 /home?view=X
+          // 같은 상태가 깔끔히 리셋된다.
+          if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+          e.preventDefault();
+          window.location.href = "/home";
+        }}
       >
         <div className="w-7 h-7 rounded bg-[#0052cc] text-white flex items-center justify-center font-bold text-sm">
           M
@@ -36,7 +43,7 @@ export default function TopNav({
         <span className="font-semibold text-[#172b4d]">
           my<span className="text-[#0052cc]">Confluence</span>
         </span>
-      </Link>
+      </a>
 
       <nav className="flex items-center gap-1 text-sm text-[#172b4d]">
         <SpaceCombobox
