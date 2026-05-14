@@ -10,6 +10,7 @@ import SpaceStarButton from "@/components/SpaceStarButton";
 // Cycle 29 — 시스템 홈(/home) 사이드바.
 // 발견 / 내 작업 sub-item 은 /home?view=<id> 로 view 전환.
 // 내 공간 행은 그 스페이스로 진입 (/?pageId=<첫 페이지> 또는 /?spaceId=<id>).
+// collapsed=true 면 아이콘 전용 미니 사이드바 (56px).
 
 type SubItem = { id: string; label: string };
 
@@ -22,6 +23,50 @@ const MYWORK_ITEMS: SubItem[] = [
   { id: "visited", label: "최근 방문" },
   { id: "saved", label: "나중을 위해 저장" },
 ];
+
+// view id 별 SVG 아이콘 (이모지 X — 표준 라인 아이콘).
+function ViewIcon({ id }: { id: string }) {
+  const common = {
+    width: 16,
+    height: 16,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 2,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+  };
+  switch (id) {
+    case "updates": // 모든 변경사항 — activity
+      return (
+        <svg {...common}>
+          <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+        </svg>
+      );
+    case "recent": // 최근 작업 — edit
+      return (
+        <svg {...common}>
+          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+        </svg>
+      );
+    case "visited": // 최근 방문 — clock
+      return (
+        <svg {...common}>
+          <circle cx="12" cy="12" r="10" />
+          <polyline points="12 6 12 12 16 14" />
+        </svg>
+      );
+    case "saved": // 나중을 위해 저장 — bookmark
+      return (
+        <svg {...common}>
+          <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+        </svg>
+      );
+    default:
+      return null;
+  }
+}
 
 function SectionHeader({ children }: { children: React.ReactNode }) {
   return (
@@ -43,18 +88,25 @@ function SubItemLink({
   return (
     <Link
       href={`/home?view=${view}`}
-      className={`w-full flex items-center gap-2 pl-7 pr-3 py-1.5 rounded text-[13px] text-left ${
+      className={`w-full flex items-center gap-2 pl-3 pr-3 py-1.5 rounded text-[13px] text-left ${
         active
           ? "bg-[#deebff] text-[#0052cc] font-semibold"
           : "text-[#172b4d] hover:bg-[#ebecf0]"
       }`}
     >
+      <span className="shrink-0 flex items-center">
+        <ViewIcon id={view} />
+      </span>
       {children}
     </Link>
   );
 }
 
-export default function SystemSidebar() {
+export default function SystemSidebar({
+  collapsed = false,
+}: {
+  collapsed?: boolean;
+}) {
   const router = useRouter();
   const params = useSearchParams();
   const currentView = params.get("view") ?? "updates";
@@ -77,6 +129,53 @@ export default function SystemSidebar() {
     else router.push(`/?spaceId=${sp.id}`);
   };
 
+  // ── 접힌 모드 — 아이콘 전용 (56px) ─────────────────────────────────────
+  if (collapsed) {
+    const allItems = [...DISCOVER_ITEMS, ...MYWORK_ITEMS];
+    return (
+      <aside className="w-14 shrink-0 bg-[#f4f5f7] border-r border-[#dfe1e6] h-full overflow-y-auto flex flex-col items-center py-3 gap-1 pb-12">
+        {allItems.map((item) => {
+          const active = currentView === item.id;
+          return (
+            <Link
+              key={item.id}
+              href={`/home?view=${item.id}`}
+              title={item.label}
+              aria-label={item.label}
+              className={`w-9 h-9 flex items-center justify-center rounded ${
+                active
+                  ? "bg-[#deebff] text-[#0052cc]"
+                  : "text-[#42526e] hover:bg-[#ebecf0]"
+              }`}
+            >
+              <ViewIcon id={item.id} />
+            </Link>
+          );
+        })}
+
+        {spaces.length > 0 && (
+          <div className="w-8 border-t border-[#dfe1e6] my-1.5" />
+        )}
+
+        {spaces.map((sp) => (
+          <button
+            key={sp.id}
+            type="button"
+            onClick={() => enterSpace(sp)}
+            title={sp.name}
+            aria-label={sp.name}
+            className="w-9 h-9 flex items-center justify-center rounded hover:bg-[#ebecf0]"
+          >
+            <div className="w-6 h-6 rounded bg-[#0052cc] text-white flex items-center justify-center text-[11px] font-bold">
+              {sp.name.slice(0, 1).toUpperCase()}
+            </div>
+          </button>
+        ))}
+      </aside>
+    );
+  }
+
+  // ── 펼친 모드 — 라벨 포함 (260px) ──────────────────────────────────────
   return (
     <aside className="w-[260px] shrink-0 bg-[#f4f5f7] border-r border-[#dfe1e6] h-full overflow-y-auto flex flex-col">
       {/* 발견 */}
@@ -120,11 +219,7 @@ export default function SystemSidebar() {
                 </div>
                 <span className="flex-1 truncate">{sp.name}</span>
               </button>
-              <SpaceStarButton
-                spaceId={sp.id}
-                size="sm"
-                className="mr-2"
-              />
+              <SpaceStarButton spaceId={sp.id} size="sm" className="mr-2" />
             </div>
           ))
         )}
