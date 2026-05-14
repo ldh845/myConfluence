@@ -158,6 +158,16 @@ export default function HomePage() {
     }
   }, [currentPage, spaceIdFromUrl]);
 
+  // Cycle 32 — ?edit=1 (TopNav "만들기"로 갓 생성된 페이지)이면 편집 모드로 진입.
+  // 진입 직후 URL에서 edit 파라미터를 정리 — 새로고침 시 다시 편집모드로
+  // 들어가지 않도록.
+  useEffect(() => {
+    if (currentPage && searchParams.get("edit") === "1") {
+      setIsBodyEditable(true);
+      router.replace(`/?pageId=${currentPage.id}`);
+    }
+  }, [currentPage, searchParams, router]);
+
   // Cycle 31 — Ctrl/Cmd+K 글로벌 단축키는 TopNav 의 SearchOverlay 로 이관됨.
 
   // Cycle 11-2 / FR-034 — 본문 안의 내부 페이지 링크(/?pageId=<id>)를 SPA로.

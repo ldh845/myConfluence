@@ -17,6 +17,12 @@ enum Role {
   PM
 }
 
+// Cycle 32 — 스페이스 유형. SITE=공용 스페이스, PERSONAL=사용자 개인 공간.
+enum SpaceType {
+  SITE
+  PERSONAL
+}
+
 model User {
   id               String        @id @default(cuid())
   username         String        @unique
@@ -36,15 +42,23 @@ model User {
   // activities는 SetNull(로그 보존), reactions는 Cascade(개인 반응이라 같이 정리).
   activities       ActivityLog[] @relation("ActivityActor")
   reactions        Reaction[]    @relation("UserReaction")
+  // Cycle 32 — 사용자가 소유한 개인 공간.
+  ownedSpaces      Space[]       @relation("SpaceOwner")
 }
 
 model Space {
   id           String        @id @default(cuid())
   name         String
   description  String?
+  // Cycle 32 — 개인 공간 지원. PERSONAL은 ownerId 소유자에게만 노출.
+  type         SpaceType     @default(SITE)
+  ownerId      String?
+  owner        User?         @relation("SpaceOwner", fields: [ownerId], references: [id], onDelete: SetNull)
   createdAt    DateTime      @default(now())
   pages        Page[]
   activityLogs ActivityLog[]
+
+  @@index([ownerId])
 }
 
 model Page {

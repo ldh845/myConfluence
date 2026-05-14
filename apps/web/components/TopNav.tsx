@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { SpaceWithPages } from "@/lib/types";
 import { useAuth } from "@/lib/auth/useAuth";
@@ -78,10 +78,7 @@ export default function TopNav({
         </button>
       </nav>
 
-      <button className="ml-2 inline-flex items-center gap-1.5 bg-[#0052cc] hover:bg-[#0747a6] text-white text-sm font-medium px-3 py-1.5 rounded">
-        <span className="text-base leading-none">＋</span>
-        만들기
-      </button>
+      <CreateSplitButton spaces={spaces} onCreateSpace={onCreateSpace} />
 
       <div className="flex-1" />
 
@@ -294,6 +291,153 @@ function SpaceCombobox({ spaces, onSelectSpace, onCreateSpace }: Props) {
           >
             <span className="w-4 text-center text-base leading-none">＋</span>
             공간 만들기
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Cycle 32 — 분할 "만들기" 버튼. 좌측 main = 컨텍스트 기반 빠른 페이지 생성,
+// 우측 ⋯ = 드롭다운(새 페이지 / 새 공간).
+function CreateSplitButton({
+  spaces,
+  onCreateSpace,
+}: {
+  spaces: SpaceWithPages[];
+  onCreateSpace: () => void;
+}) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const queryClient = useQueryClient();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [menuOpen]);
+
+  // 현재 컨텍스트로 타깃 스페이스/부모를 결정해 페이지를 즉시 생성하고
+  // 편집 모드(?edit=1)로 진입한다.
+  const handleQuickCreate = async () => {
+    if (creating) return;
+    setCreating(true);
+    try {
+      let spaceId: string | null = null;
+      let parentId: string | null = null;
+
+      if (pathname === "/") {
+        const pageId = searchParams.get("pageId");
+        const spaceIdParam = searchParams.get("spaceId");
+        if (pageId) {
+          // 현재 페이지의 자식으로 생성.
+          const owner = spaces.find((s) =>
+            s.pages.some((p) => p.id === pageId),
+          );
+          spaceId = owner?.id ?? null;
+          parentId = pageId;
+        } else if (spaceIdParam) {
+          spaceId = spaceIdParam;
+        }
+      }
+
+      // 스페이스 컨텍스트가 없으면 내 개인 공간으로.
+      if (!spaceId) {
+        const pr = await fetch("/api/spaces/personal", {
+          credentials: "include",
+        });
+        if (pr.status === 401) {
+          alert("로그인이 필요합니다.");
+          return;
+        }
+        if (!pr.ok) {
+          alert("개인 공간을 준비하지 못했습니다.");
+          return;
+        }
+        const personal = (await pr.json()) as { id: string };
+        spaceId = personal.id;
+        parentId = null;
+      }
+
+      const res = await fetch("/api/pages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          title: "제목 없음",
+          content: "",
+          spaceId,
+          parentId,
+        }),
+      });
+      if (res.status === 401) {
+        alert("로그인이 필요합니다.");
+        return;
+      }
+      if (!res.ok) {
+        alert("페이지 생성에 실패했습니다.");
+        return;
+      }
+      const page = (await res.json()) as { id: string };
+      queryClient.invalidateQueries({ queryKey: ["spaces"] });
+      router.push(`/?pageId=${page.id}&edit=1`);
+    } finally {
+      setCreating(false);
+      setMenuOpen(false);
+    }
+  };
+
+  return (
+    <div className="relative ml-2" ref={ref}>
+      <div className="inline-flex items-stretch rounded overflow-hidden">
+        <button
+          type="button"
+          onClick={handleQuickCreate}
+          disabled={creating}
+          className="inline-flex items-center gap-1.5 bg-[#0052cc] hover:bg-[#0747a6] text-white text-sm font-medium px-3 py-1.5 disabled:opacity-60"
+        >
+          <span className="text-base leading-none">＋</span>
+          {creating ? "생성 중..." : "만들기"}
+        </button>
+        <div className="w-px bg-[#ffffff44]" />
+        <button
+          type="button"
+          aria-label="만들기 옵션"
+          onClick={() => setMenuOpen((v) => !v)}
+          className="px-2 bg-[#0052cc] hover:bg-[#0747a6] text-white text-sm"
+        >
+          ⋯
+        </button>
+      </div>
+      {menuOpen && (
+        <div className="absolute right-0 top-full mt-1 w-44 bg-white border border-[#dfe1e6] rounded shadow-lg z-30 py-1">
+          <button
+            type="button"
+            onClick={handleQuickCreate}
+            className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-[#172b4d] hover:bg-[#ebecf0]"
+          >
+            <span className="w-4 text-center">📄</span>
+            새 페이지
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setMenuOpen(false);
+              onCreateSpace();
+            }}
+            className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-[#172b4d] hover:bg-[#ebecf0]"
+          >
+            <span className="w-4 text-center">📁</span>
+            새 공간
           </button>
         </div>
       )}
