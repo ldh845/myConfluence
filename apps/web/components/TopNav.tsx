@@ -52,11 +52,14 @@ export default function TopNav({
           onSelectSpace={onSelectSpace}
           onCreateSpace={onCreateSpace}
         />
-        <button className="px-3 py-1.5 rounded hover:bg-[#ebecf0]">
-          페이지
-        </button>
-        <button className="px-3 py-1.5 rounded hover:bg-[#ebecf0]">
-          최근 항목
+        {/* 달력 — 일정 관리 캘린더 뷰. 추후 구현 예정. */}
+        <button
+          type="button"
+          disabled
+          title="달력 기능은 추후 제공 예정입니다."
+          className="px-3 py-1.5 rounded text-[#a5adba] cursor-not-allowed"
+        >
+          달력
         </button>
       </nav>
 
