@@ -22,8 +22,8 @@ export default function SpaceStarButton({
   const starred = useStarredSpacesStore((s) => s.ids.includes(spaceId));
   const toggle = useStarredSpacesStore((s) => s.toggle);
 
-  const px = size === "sm" ? 18 : 22;
-  const box = size === "sm" ? "w-6 h-6" : "w-8 h-8";
+  const px = size === "sm" ? 12 : 14;
+  const box = size === "sm" ? "w-5 h-5" : "w-6 h-6";
   const visibility = alwaysVisible
     ? ""
     : "opacity-0 group-hover:opacity-100 focus-within:opacity-100";
