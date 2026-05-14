@@ -51,6 +51,71 @@ function timeAgo(iso: string): string {
   return `${d}일 전`;
 }
 
+// ── 시간대 분류 (최근 작업 / 최근 방문 공용) ───────────────────────────
+// 한 달 이내 이력만 노출. 그보다 오래된 것은 null → 제외.
+type TimeBucket = "today" | "yesterday" | "week" | "month";
+
+const BUCKET_LABELS: Record<TimeBucket, string> = {
+  today: "오늘",
+  yesterday: "어제",
+  week: "지난 주",
+  month: "지난 달",
+};
+
+const BUCKET_ORDER: readonly TimeBucket[] = [
+  "today",
+  "yesterday",
+  "week",
+  "month",
+];
+
+function bucketOf(iso: string): TimeBucket | null {
+  const d = new Date(iso);
+  const now = new Date();
+  const startOfToday = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate(),
+  );
+  const startOfYesterday = new Date(startOfToday);
+  startOfYesterday.setDate(startOfYesterday.getDate() - 1);
+  const sevenDaysAgo = new Date(startOfToday);
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+  const thirtyDaysAgo = new Date(startOfToday);
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+  if (d >= startOfToday) return "today";
+  if (d >= startOfYesterday) return "yesterday";
+  if (d >= sevenDaysAgo) return "week";
+  if (d >= thirtyDaysAgo) return "month";
+  return null;
+}
+
+function groupByBucket<T>(
+  items: T[],
+  getDate: (item: T) => string,
+): Record<TimeBucket, T[]> {
+  const groups: Record<TimeBucket, T[]> = {
+    today: [],
+    yesterday: [],
+    week: [],
+    month: [],
+  };
+  for (const item of items) {
+    const b = bucketOf(getDate(item));
+    if (b) groups[b].push(item);
+  }
+  return groups;
+}
+
+function BucketHeading({ children }: { children: React.ReactNode }) {
+  return (
+    <h2 className="text-[14px] font-semibold text-[#42526e] mt-5 mb-2 first:mt-0">
+      {children}
+    </h2>
+  );
+}
+
 function HomeContent() {
   const params = useSearchParams();
   const raw = params.get("view");
@@ -60,7 +125,7 @@ function HomeContent() {
       : DEFAULT_VIEW;
 
   return (
-    <div className="max-w-[880px] mx-auto px-6 pt-6 pb-16">
+    <div className="max-w-[880px] px-6 pt-6 pb-16">
       <h1 className="text-[22px] font-semibold text-[#172b4d] mb-5">
         {VIEW_TITLES[view]}
       </h1>
@@ -88,9 +153,9 @@ function UpdatesView() {
     items: ActivityItem[];
     total: number;
   }>({
-    queryKey: ["activities", { limit: 20 }],
+    queryKey: ["activities", { limit: 100 }],
     queryFn: async () => {
-      const r = await fetch("/api/activities?limit=20");
+      const r = await fetch("/api/activities?limit=100");
       if (!r.ok) return { items: [], total: 0 };
       return (await r.json()) as { items: ActivityItem[]; total: number };
     },
@@ -107,87 +172,94 @@ function UpdatesView() {
     );
   }
   return (
-    <>
-      <ul className="border border-[#dfe1e6] rounded-md divide-y divide-[#dfe1e6] bg-white">
-        {activities.items.map((it) => {
-          const fmt = formatActivity(it);
-          const row = (
-            <div className="flex items-start gap-2 px-3 py-2.5 hover:bg-[#f4f5f7]">
-              <span className="text-[14px] leading-none mt-0.5">
-                {fmt.icon}
-              </span>
-              <div className="flex-1 min-w-0">
-                <div className="text-[13px] text-[#172b4d] truncate">
-                  {fmt.text}
-                </div>
-                <div className="text-[11px] text-[#6b778c]">
-                  {fmt.spaceName && <span>{fmt.spaceName} · </span>}
-                  {relativeTime(it.createdAt)}
-                </div>
+    <ul className="border border-[#dfe1e6] rounded-md divide-y divide-[#dfe1e6] bg-white">
+      {activities.items.map((it) => {
+        const fmt = formatActivity(it);
+        const row = (
+          <div className="flex items-start gap-2 px-3 py-2.5 hover:bg-[#f4f5f7]">
+            <span className="text-[14px] leading-none mt-0.5">
+              {fmt.icon}
+            </span>
+            <div className="flex-1 min-w-0">
+              <div className="text-[13px] text-[#172b4d] truncate">
+                {fmt.text}
+              </div>
+              <div className="text-[11px] text-[#6b778c]">
+                {fmt.spaceName && <span>{fmt.spaceName} · </span>}
+                {relativeTime(it.createdAt)}
               </div>
             </div>
-          );
-          return (
-            <li key={it.id}>
-              {fmt.pageId ? (
-                <Link href={`/?pageId=${fmt.pageId}`} className="block">
-                  {row}
-                </Link>
-              ) : (
-                row
-              )}
-            </li>
-          );
-        })}
-      </ul>
-      <div className="mt-3 text-right">
-        <Link
-          href="/activity"
-          className="text-[12px] text-[#0052cc] hover:underline"
-        >
-          전체 활동 보기 →
-        </Link>
-      </div>
-    </>
+          </div>
+        );
+        return (
+          <li key={it.id}>
+            {fmt.pageId ? (
+              <Link href={`/?pageId=${fmt.pageId}`} className="block">
+                {row}
+              </Link>
+            ) : (
+              row
+            )}
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 
 // ── 최근 작업 (recently edited) ────────────────────────────────────────
+// 한 달 이내 이력을 오늘 / 어제 / 지난 주 / 지난 달로 분류.
 function RecentView() {
   const { data: recentEdited } = useQuery<RecentApiPage[]>({
-    queryKey: ["pages-recent", 20],
+    queryKey: ["pages-recent", 50],
     queryFn: async () => {
-      const r = await fetch("/api/pages/recent?limit=20");
+      const r = await fetch("/api/pages/recent?limit=50");
       if (!r.ok) return [];
       return (await r.json()) as RecentApiPage[];
     },
   });
 
+  const grouped = useMemo(
+    () => groupByBucket(recentEdited ?? [], (p) => p.updatedAt),
+    [recentEdited],
+  );
+
   if (!recentEdited) {
     return <div className="text-[12px] text-[#6b778c]">불러오는 중...</div>;
   }
-  if (recentEdited.length === 0) {
+
+  const hasAny = BUCKET_ORDER.some((b) => grouped[b].length > 0);
+  if (!hasAny) {
     return (
       <div className="text-[13px] text-[#6b778c] border border-dashed border-[#dfe1e6] rounded p-4">
-        아직 편집한 페이지가 없습니다.
+        최근 한 달 내 편집한 페이지가 없습니다.
       </div>
     );
   }
   return (
     <>
-      <div className="space-y-2">
-        {recentEdited.map((p) => (
-          <PageCard
-            key={p.id}
-            id={p.id}
-            title={p.title}
-            spaceName={p.space?.name}
-            subtitle={timeAgo(p.updatedAt)}
-            icon="✏️"
-          />
-        ))}
-      </div>
-      <p className="text-[11px] text-[#6b778c] mt-3">
+      {BUCKET_ORDER.map((bucket) => {
+        const items = grouped[bucket];
+        if (items.length === 0) return null;
+        return (
+          <section key={bucket}>
+            <BucketHeading>{BUCKET_LABELS[bucket]}</BucketHeading>
+            <div className="space-y-2">
+              {items.map((p) => (
+                <PageCard
+                  key={p.id}
+                  id={p.id}
+                  title={p.title}
+                  spaceName={p.space?.name}
+                  subtitle={timeAgo(p.updatedAt)}
+                  icon="✏️"
+                />
+              ))}
+            </div>
+          </section>
+        );
+      })}
+      <p className="text-[11px] text-[#6b778c] mt-4">
         * 인증 도입 후 &lsquo;내가 편집한 페이지&rsquo;로 정밀화 예정.
       </p>
     </>
@@ -230,26 +302,43 @@ function VisitedView() {
       .filter((x): x is NonNullable<typeof x> => !!x);
   }, [recentEntries, pageLookup]);
 
-  if (recentVisited.length === 0) {
+  const grouped = useMemo(
+    () => groupByBucket(recentVisited, (p) => p.visitedAt),
+    [recentVisited],
+  );
+
+  const hasAny = BUCKET_ORDER.some((b) => grouped[b].length > 0);
+  if (!hasAny) {
     return (
       <div className="text-[13px] text-[#6b778c] border border-dashed border-[#dfe1e6] rounded p-4">
-        아직 방문한 페이지가 없습니다.
+        최근 한 달 내 방문한 페이지가 없습니다.
       </div>
     );
   }
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-      {recentVisited.map((p) => (
-        <PageCard
-          key={p.id}
-          id={p.id}
-          title={p.title}
-          spaceName={p.spaceName}
-          subtitle={timeAgo(p.visitedAt)}
-          icon="🕘"
-        />
-      ))}
-    </div>
+    <>
+      {BUCKET_ORDER.map((bucket) => {
+        const items = grouped[bucket];
+        if (items.length === 0) return null;
+        return (
+          <section key={bucket}>
+            <BucketHeading>{BUCKET_LABELS[bucket]}</BucketHeading>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              {items.map((p) => (
+                <PageCard
+                  key={p.id}
+                  id={p.id}
+                  title={p.title}
+                  spaceName={p.spaceName}
+                  subtitle={timeAgo(p.visitedAt)}
+                  icon="🕘"
+                />
+              ))}
+            </div>
+          </section>
+        );
+      })}
+    </>
   );
 }
 
