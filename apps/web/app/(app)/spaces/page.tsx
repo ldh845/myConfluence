@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import SpaceStarButton from "@/components/SpaceStarButton";
-import { useAuth } from "@/lib/auth/useAuth";
+import { useStarredSpacesStore } from "@/lib/stores/useStarredSpacesStore";
 import type { SpaceWithPages } from "@/lib/types";
 
 // Cycle 30 — 공간 디렉터리. Confluence Space Directory 패턴.
@@ -78,7 +78,7 @@ function EmptyState({ tab, query }: { tab: TabId; query: string }) {
   } else if (tab === "archived") {
     msg = "보관된 공간은 추후 지원 예정입니다.";
   } else if (tab === "my") {
-    msg = "아직 작성한 페이지가 있는 공간이 없습니다.";
+    msg = "아직 별표한 공간이 없습니다. 각 공간의 ☆을 클릭해 추가하세요.";
   } else if (query.trim()) {
     msg = `'${query.trim()}'에 일치하는 공간이 없습니다.`;
   } else {
@@ -95,7 +95,7 @@ function SpacesDirectory() {
   const router = useRouter();
   const params = useSearchParams();
   const queryClient = useQueryClient();
-  const { user } = useAuth();
+  const starredIds = useStarredSpacesStore((s) => s.ids);
 
   const tab = parseTab(params.get("tab"));
   const [q, setQ] = useState(params.get("q") ?? "");
@@ -124,10 +124,8 @@ function SpacesDirectory() {
     if (tab === "personal" || tab === "archived") {
       base = [];
     } else if (tab === "my") {
-      // 내가 작성한 페이지가 하나라도 있는 공간.
-      base = user
-        ? all.filter((s) => s.pages.some((p) => p.authorId === user.id))
-        : [];
+      // SystemSidebar "내 공간"과 동일 — 별표한 공간 (useStarredSpacesStore).
+      base = all.filter((s) => starredIds.includes(s.id));
     } else {
       // all / site — 현재 personal space 개념이 없어 동일 데이터.
       base = all;
@@ -139,7 +137,7 @@ function SpacesDirectory() {
         s.name.toLowerCase().includes(needle) ||
         (s.description ?? "").toLowerCase().includes(needle),
     );
-  }, [spaces, tab, q, user]);
+  }, [spaces, tab, q, starredIds]);
 
   const handleCreateSpace = async () => {
     const name = prompt("새 공간 이름?");
@@ -216,8 +214,7 @@ function SpacesDirectory() {
                 <th className="py-2 w-12" />
                 <th className="py-2">공간</th>
                 <th className="py-2">설명</th>
-                <th className="py-2 w-24 text-center">페이지</th>
-                <th className="py-2 w-12 text-center">즐겨찾기</th>
+                <th className="py-2 w-12" />
               </tr>
             </thead>
             <tbody>
@@ -241,9 +238,6 @@ function SpacesDirectory() {
                   </td>
                   <td className="text-[#6b778c]">
                     {space.description || "-"}
-                  </td>
-                  <td className="text-center text-[#6b778c]">
-                    {space.pages.length}
                   </td>
                   <td className="text-center">
                     <div className="flex justify-center">
