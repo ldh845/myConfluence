@@ -21,6 +21,8 @@ export class SpacesService {
             parentId: true,
             spaceId: true,
             updatedAt: true,
+            // Cycle 30 — /spaces "내 공간" 탭(작성자 기준 필터)용.
+            authorId: true,
           },
         },
       },

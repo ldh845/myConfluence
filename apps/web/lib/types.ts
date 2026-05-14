@@ -4,6 +4,8 @@ export type PageNode = {
   parentId: string | null;
   spaceId: string;
   updatedAt: string;
+  // Cycle 30 — /spaces "내 공간" 탭 필터용. 레거시 페이지는 null 가능.
+  authorId?: string | null;
 };
 
 export type SpaceWithPages = {

@@ -1,20 +1,104 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
+import { Suspense, useMemo, useState } from "react";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import SpaceStarButton from "@/components/SpaceStarButton";
+import { useAuth } from "@/lib/auth/useAuth";
 import type { SpaceWithPages } from "@/lib/types";
 
-// Cycle 29 — 공간 검색. 사이드바 없는 전체 폭 페이지.
-// 전체 공간을 검색 + 페이지네이션으로 탐색. ☆로 "내 공간" 추가/제거.
+// Cycle 30 — 공간 디렉터리. Confluence Space Directory 패턴.
+// 좌측 sub-nav (모든/사이트/개인/내/보관) + 우측 검색 + 공간 만들기 + 테이블.
+// 사이드바 없는 전체 폭 페이지 ((app)/layout.tsx 가 /spaces 를 분기 처리).
 
-const PAGE_SIZE = 8;
+type TabId = "all" | "site" | "personal" | "my" | "archived";
 
-export default function SpacesSearchPage() {
+const TAB_LABELS: Record<TabId, string> = {
+  all: "모든 공간",
+  site: "사이트 공간",
+  personal: "개인 공간",
+  my: "내 공간",
+  archived: "보관된 공간",
+};
+
+const TABS: { id: TabId; disabled?: boolean }[] = [
+  { id: "all" },
+  { id: "site" },
+  { id: "personal", disabled: true },
+  { id: "my" },
+  { id: "archived", disabled: true },
+];
+
+function parseTab(raw: string | null): TabId {
+  if (raw && raw in TAB_LABELS) return raw as TabId;
+  return "all";
+}
+
+function TabLink({
+  tab,
+  current,
+  disabled,
+}: {
+  tab: TabId;
+  current: TabId;
+  disabled?: boolean;
+}) {
+  const label = TAB_LABELS[tab];
+  const active = tab === current;
+  if (disabled) {
+    return (
+      <div
+        className="px-3 py-1.5 rounded text-[13px] text-[#a5adba] cursor-not-allowed"
+        title="추후 지원 예정"
+      >
+        {label}
+      </div>
+    );
+  }
+  return (
+    <Link
+      href={`/spaces?tab=${tab}`}
+      replace
+      className={`block px-3 py-1.5 rounded text-[13px] ${
+        active
+          ? "bg-[#deebff] text-[#0052cc] font-semibold"
+          : "text-[#172b4d] hover:bg-[#ebecf0]"
+      }`}
+    >
+      {label}
+    </Link>
+  );
+}
+
+function EmptyState({ tab, query }: { tab: TabId; query: string }) {
+  let msg: string;
+  if (tab === "personal") {
+    msg = "개인 공간은 추후 지원 예정입니다.";
+  } else if (tab === "archived") {
+    msg = "보관된 공간은 추후 지원 예정입니다.";
+  } else if (tab === "my") {
+    msg = "아직 작성한 페이지가 있는 공간이 없습니다.";
+  } else if (query.trim()) {
+    msg = `'${query.trim()}'에 일치하는 공간이 없습니다.`;
+  } else {
+    msg = "공간이 없습니다. 첫 공간을 만들어보세요.";
+  }
+  return (
+    <div className="mt-4 text-[13px] text-[#6b778c] border border-dashed border-[#dfe1e6] rounded p-6 text-center">
+      {msg}
+    </div>
+  );
+}
+
+function SpacesDirectory() {
   const router = useRouter();
-  const [query, setQuery] = useState("");
-  const [page, setPage] = useState(1);
+  const params = useSearchParams();
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+
+  const tab = parseTab(params.get("tab"));
+  const [q, setQ] = useState(params.get("q") ?? "");
 
   const { data: spaces } = useQuery<SpaceWithPages[]>({
     queryKey: ["spaces"],
@@ -25,126 +109,169 @@ export default function SpacesSearchPage() {
     },
   });
 
-  const filtered = useMemo(() => {
-    const all = spaces ?? [];
-    const q = query.trim().toLowerCase();
-    if (!q) return all;
-    return all.filter(
-      (s) =>
-        s.name.toLowerCase().includes(q) ||
-        (s.description ?? "").toLowerCase().includes(q),
-    );
-  }, [spaces, query]);
-
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const safePage = Math.min(page, totalPages);
-  const pageItems = filtered.slice(
-    (safePage - 1) * PAGE_SIZE,
-    safePage * PAGE_SIZE,
-  );
-
-  const enterSpace = (sp: SpaceWithPages) => {
-    const first = sp.pages[0];
-    if (first) router.push(`/?pageId=${first.id}`);
-    else router.push(`/?spaceId=${sp.id}`);
+  // 검색어를 URL ?q= 에도 동기화 (새로고침 시 유지).
+  const onSearchChange = (value: string) => {
+    setQ(value);
+    const next = new URLSearchParams(params.toString());
+    if (value.trim()) next.set("q", value);
+    else next.delete("q");
+    router.replace(`/spaces?${next.toString()}`);
   };
 
+  const filteredSpaces = useMemo(() => {
+    const all = spaces ?? [];
+    let base: SpaceWithPages[];
+    if (tab === "personal" || tab === "archived") {
+      base = [];
+    } else if (tab === "my") {
+      // 내가 작성한 페이지가 하나라도 있는 공간.
+      base = user
+        ? all.filter((s) => s.pages.some((p) => p.authorId === user.id))
+        : [];
+    } else {
+      // all / site — 현재 personal space 개념이 없어 동일 데이터.
+      base = all;
+    }
+    const needle = q.trim().toLowerCase();
+    if (!needle) return base;
+    return base.filter(
+      (s) =>
+        s.name.toLowerCase().includes(needle) ||
+        (s.description ?? "").toLowerCase().includes(needle),
+    );
+  }, [spaces, tab, q, user]);
+
+  const handleCreateSpace = async () => {
+    const name = prompt("새 공간 이름?");
+    if (!name || !name.trim()) return;
+    const description = prompt("설명 (선택)?") || null;
+    const res = await fetch("/api/spaces", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: name.trim(), description }),
+    });
+    if (!res.ok) {
+      alert("공간 생성에 실패했습니다.");
+      return;
+    }
+    queryClient.invalidateQueries({ queryKey: ["spaces"] });
+  };
+
+  const showTable = tab === "all" || tab === "site" || tab === "my";
+
   return (
-    <div className="max-w-4xl px-10 pt-8 pb-16">
-      <h1 className="text-[24px] font-semibold text-[#172b4d] mb-1">
-        공간 검색
-      </h1>
-      <p className="text-[13px] text-[#6b778c] mb-5">
-        사이트의 모든 공간을 검색하고, ☆을 눌러 &lsquo;내 공간&rsquo;에
-        추가하세요.
-      </p>
-
-      {/* 검색 입력 */}
-      <div className="relative mb-5">
-        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6b778c] text-sm">
-          🔍
-        </span>
-        <input
-          type="text"
-          value={query}
-          onChange={(e) => {
-            setQuery(e.target.value);
-            setPage(1);
-          }}
-          placeholder="공간 이름 또는 설명으로 검색..."
-          className="w-full pl-9 pr-3 py-2 text-[13px] border border-[#dfe1e6] rounded-md focus:outline-none focus:border-[#0052cc]"
-        />
-      </div>
-
-      <p className="text-[12px] text-[#6b778c] mb-3">
-        총 {filtered.length}개 공간
-      </p>
-
-      {!spaces ? (
-        <div className="text-[13px] text-[#6b778c]">불러오는 중...</div>
-      ) : filtered.length === 0 ? (
-        <div className="text-[13px] text-[#6b778c] border border-dashed border-[#dfe1e6] rounded p-4">
-          {query.trim()
-            ? "검색 결과가 없습니다."
-            : "아직 공간이 없습니다. 상단 공간 메뉴의 ‘공간 만들기’로 추가하세요."}
-        </div>
-      ) : (
-        <ul className="border border-[#dfe1e6] rounded-md divide-y divide-[#dfe1e6] bg-white">
-          {pageItems.map((sp) => (
-            <li key={sp.id} className="flex items-center">
-              <button
-                type="button"
-                onClick={() => enterSpace(sp)}
-                className="flex-1 flex items-center gap-3 px-4 py-3 text-left hover:bg-[#f4f5f7]"
-              >
-                <div className="w-9 h-9 rounded bg-[#0052cc] text-white flex items-center justify-center font-bold shrink-0">
-                  {sp.name.slice(0, 1).toUpperCase()}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-[14px] font-semibold text-[#172b4d] truncate">
-                    {sp.name}
-                  </div>
-                  {sp.description && (
-                    <div className="text-[12px] text-[#6b778c] truncate">
-                      {sp.description}
-                    </div>
-                  )}
-                </div>
-                <span className="text-[11px] text-[#6b778c] shrink-0">
-                  페이지 {sp.pages.length}개
-                </span>
-              </button>
-              <div className="px-3">
-                <SpaceStarButton spaceId={sp.id} size="md" alwaysVisible />
-              </div>
-            </li>
+    <div className="flex min-h-full">
+      {/* 좌측 sub-nav */}
+      <aside className="w-[220px] shrink-0 border-r border-[#dfe1e6] bg-white p-4">
+        <h2 className="text-[20px] font-semibold text-[#172b4d] mb-4">
+          공간
+        </h2>
+        <nav className="space-y-1">
+          {TABS.map((t) => (
+            <TabLink
+              key={t.id}
+              tab={t.id}
+              current={tab}
+              disabled={t.disabled}
+            />
           ))}
-        </ul>
-      )}
+        </nav>
+      </aside>
 
-      {totalPages > 1 && (
-        <div className="flex justify-center items-center gap-3 mt-6">
+      {/* 우측 메인 */}
+      <main className="flex-1 min-w-0 p-8">
+        <div className="flex items-center justify-between mb-6">
+          <h1 className="text-[24px] font-semibold text-[#172b4d]">
+            {TAB_LABELS[tab]}
+          </h1>
           <button
             type="button"
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
-            disabled={safePage <= 1}
-            className="px-3 py-1 text-[13px] border border-[#dfe1e6] rounded disabled:opacity-50 hover:bg-[#ebecf0]"
+            onClick={handleCreateSpace}
+            className="px-3 py-1.5 rounded bg-[#0052cc] hover:bg-[#0747a6] text-white text-[13px] font-medium"
           >
-            이전
-          </button>
-          <span className="text-[13px] text-[#42526e]">
-            {safePage} / {totalPages}
-          </span>
-          <button
-            type="button"
-            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-            disabled={safePage >= totalPages}
-            className="px-3 py-1 text-[13px] border border-[#dfe1e6] rounded disabled:opacity-50 hover:bg-[#ebecf0]"
-          >
-            다음
+            ＋ 공간 만들기
           </button>
         </div>
-      )}
+
+        {showTable && (
+          <div className="mb-4">
+            <input
+              type="search"
+              value={q}
+              onChange={(e) => onSearchChange(e.target.value)}
+              placeholder="공간 검색..."
+              className="w-full max-w-xs px-3 py-2 text-[13px] border border-[#dfe1e6] rounded focus:outline-none focus:border-[#0052cc]"
+            />
+          </div>
+        )}
+
+        {!spaces && showTable ? (
+          <div className="text-[13px] text-[#6b778c]">불러오는 중...</div>
+        ) : filteredSpaces.length === 0 ? (
+          <EmptyState tab={tab} query={q} />
+        ) : (
+          <table className="w-full text-[13px]">
+            <thead>
+              <tr className="border-b border-[#dfe1e6] text-left text-[#6b778c] text-[12px]">
+                <th className="py-2 w-12" />
+                <th className="py-2">공간</th>
+                <th className="py-2">설명</th>
+                <th className="py-2 w-24 text-center">페이지</th>
+                <th className="py-2 w-12 text-center">즐겨찾기</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredSpaces.map((space) => (
+                <tr
+                  key={space.id}
+                  className="border-b border-[#dfe1e6] hover:bg-[#f4f5f7]"
+                >
+                  <td className="py-3">
+                    <div className="w-8 h-8 rounded bg-[#0052cc] text-white flex items-center justify-center font-bold">
+                      {space.name.slice(0, 1).toUpperCase()}
+                    </div>
+                  </td>
+                  <td>
+                    <Link
+                      href={`/?spaceId=${space.id}`}
+                      className="text-[#0052cc] hover:underline font-medium"
+                    >
+                      {space.name}
+                    </Link>
+                  </td>
+                  <td className="text-[#6b778c]">
+                    {space.description || "-"}
+                  </td>
+                  <td className="text-center text-[#6b778c]">
+                    {space.pages.length}
+                  </td>
+                  <td className="text-center">
+                    <div className="flex justify-center">
+                      <SpaceStarButton
+                        spaceId={space.id}
+                        size="md"
+                        alwaysVisible
+                      />
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </main>
     </div>
+  );
+}
+
+export default function SpacesPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="p-8 text-[13px] text-[#6b778c]">로딩 중...</div>
+      }
+    >
+      <SpacesDirectory />
+    </Suspense>
   );
 }
