@@ -49,8 +49,11 @@ export class PagesController {
     @Query('q') q?: string,
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
+    // Cycle 31 — 다중 필터. spaceId/authorId(단수)는 하위호환으로 흡수.
     @Query('spaceId') spaceId?: string,
+    @Query('spaceIds') spaceIds?: string,
     @Query('authorId') authorId?: string,
+    @Query('authorIds') authorIds?: string,
     @Query('dateFrom') dateFrom?: string,
     @Query('dateTo') dateTo?: string,
     @Query('sort') sort?: string,
@@ -59,13 +62,22 @@ export class PagesController {
       sort === 'newest' || sort === 'updated' ? sort : 'relevance';
     const parsedFrom = dateFrom ? new Date(dateFrom) : undefined;
     const parsedTo = dateTo ? new Date(dateTo) : undefined;
+    // 콤마 구분 목록 + 하위호환 단수 파라미터를 하나로 병합.
+    const spaceIdList = [
+      ...(spaceId ? [spaceId] : []),
+      ...(spaceIds ? spaceIds.split(',').filter(Boolean) : []),
+    ];
+    const authorIdList = [
+      ...(authorId ? [authorId] : []),
+      ...(authorIds ? authorIds.split(',').filter(Boolean) : []),
+    ];
     return this.pages.fullSearch(
       q ?? '',
       limit ? Number(limit) : 20,
       offset ? Number(offset) : 0,
       {
-        spaceId: spaceId || undefined,
-        authorId: authorId || undefined,
+        spaceIds: spaceIdList.length ? spaceIdList : undefined,
+        authorIds: authorIdList.length ? authorIdList : undefined,
         dateFrom:
           parsedFrom && !isNaN(parsedFrom.getTime()) ? parsedFrom : undefined,
         dateTo:

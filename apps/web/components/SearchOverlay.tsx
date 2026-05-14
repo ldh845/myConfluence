@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { highlightText } from "@/lib/highlight";
@@ -8,7 +8,7 @@ import { useRecentSpacesStore } from "@/lib/stores/useRecentSpacesStore";
 import type { SpaceWithPages } from "@/lib/types";
 
 // Cycle 31 — Confluence Cloud 스타일 검색 오버레이.
-// 좌측 FILTER BY 패널(Space / Contributor / Date + disabled placeholders) +
+// 좌측 "필터링 기준" 패널(드롭다운 팝오버 버튼 + 체크박스 다중선택) +
 // 우측 결과 리스트(스페이스 + 페이지). TopNav 검색창 클릭 또는 Ctrl/Cmd+K 로 열림.
 
 type SearchResult = {
@@ -54,47 +54,99 @@ function buildBreadcrumb(
   return parts.join(" / ");
 }
 
-// 접을 수 있는 필터 섹션.
-function FilterSection({
+// 드롭다운 팝오버 필터 버튼. 클릭 시 버튼 바로 아래에 floating 팝오버.
+function FilterButton({
+  id,
+  icon,
   label,
-  expanded,
-  onToggle,
+  count,
+  openFilter,
+  setOpenFilter,
   disabled,
   disabledHint,
   children,
 }: {
+  id: string;
+  icon: string;
   label: string;
-  expanded: boolean;
-  onToggle: () => void;
+  count?: number;
+  openFilter: string | null;
+  setOpenFilter: (v: string | null) => void;
   disabled?: boolean;
   disabledHint?: string;
   children?: React.ReactNode;
 }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const isOpen = openFilter === id;
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpenFilter(null);
+      }
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [isOpen, setOpenFilter]);
+
   if (disabled) {
     return (
       <div
-        className="px-3 py-2 text-[13px] text-[#a5adba] cursor-not-allowed flex items-center justify-between"
         title={disabledHint}
+        className="flex items-center gap-2 px-2.5 py-2 rounded text-[13px] text-[#a5adba] cursor-not-allowed"
       >
-        <span>{label}</span>
-        <span className="text-[10px]">＋</span>
+        <span className="w-4 text-center">{icon}</span>
+        <span className="flex-1">{label}</span>
+        <span className="text-[10px]">▾</span>
       </div>
     );
   }
+
   return (
-    <div className="border-b border-[#f0f1f3]">
+    <div className="relative" ref={ref}>
       <button
         type="button"
-        onClick={onToggle}
-        className="w-full px-3 py-2 text-[13px] text-[#172b4d] hover:bg-[#f4f5f7] flex items-center justify-between"
+        onClick={() => setOpenFilter(isOpen ? null : id)}
+        className={`w-full flex items-center gap-2 px-2.5 py-2 rounded text-[13px] ${
+          isOpen
+            ? "bg-[#ebecf0] text-[#172b4d]"
+            : "text-[#172b4d] hover:bg-[#f4f5f7]"
+        }`}
       >
-        <span className="font-medium">{label}</span>
-        <span className="text-[10px] text-[#6b778c]">
-          {expanded ? "▾" : "▸"}
-        </span>
+        <span className="w-4 text-center">{icon}</span>
+        <span className="flex-1 text-left">{label}</span>
+        {count !== undefined && count > 0 && (
+          <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-[#0052cc] text-white text-[10px] font-semibold flex items-center justify-center">
+            {count}
+          </span>
+        )}
+        <span className="text-[10px] text-[#6b778c]">▾</span>
       </button>
-      {expanded && <div className="px-3 pb-2">{children}</div>}
+      {isOpen && (
+        <div className="absolute left-0 top-full mt-1 w-[280px] bg-white border border-[#dfe1e6] rounded-md shadow-lg z-20 py-2">
+          {children}
+        </div>
+      )}
     </div>
+  );
+}
+
+// 체크박스 행 (스페이스/사용자 공용).
+function CheckRow({
+  checked,
+  onChange,
+  children,
+}: {
+  checked: boolean;
+  onChange: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <label className="flex items-center gap-2 px-3 py-1.5 text-[13px] cursor-pointer hover:bg-[#f4f5f7]">
+      <input type="checkbox" checked={checked} onChange={onChange} />
+      <span className="flex-1 min-w-0 flex items-center gap-2">{children}</span>
+    </label>
   );
 }
 
@@ -103,15 +155,13 @@ export default function SearchOverlay({ open, onClose }: Props) {
 
   const [query, setQuery] = useState("");
   const [debouncedQ, setDebouncedQ] = useState("");
-  const [spaceId, setSpaceId] = useState("");
-  const [authorId, setAuthorId] = useState("");
+  const [selectedSpaceIds, setSelectedSpaceIds] = useState<string[]>([]);
+  const [selectedAuthorIds, setSelectedAuthorIds] = useState<string[]>([]);
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({
-    space: true,
-  });
-  // FILTER BY > Space 섹션 안의 "스페이스 찾기" 입력 (메인 검색어와 별개).
+  const [openFilter, setOpenFilter] = useState<string | null>(null);
   const [spaceFilterQuery, setSpaceFilterQuery] = useState("");
+  const [userFilterQuery, setUserFilterQuery] = useState("");
 
   const recentSpaceEntries = useRecentSpacesStore((s) => s.entries);
 
@@ -120,12 +170,13 @@ export default function SearchOverlay({ open, onClose }: Props) {
     if (open) {
       setQuery("");
       setDebouncedQ("");
-      setSpaceId("");
-      setAuthorId("");
+      setSelectedSpaceIds([]);
+      setSelectedAuthorIds([]);
       setDateFrom("");
       setDateTo("");
-      setExpanded({ space: true });
+      setOpenFilter(null);
       setSpaceFilterQuery("");
+      setUserFilterQuery("");
     }
   }, [open]);
 
@@ -171,12 +222,20 @@ export default function SearchOverlay({ open, onClose }: Props) {
   }>({
     queryKey: [
       "overlay-search",
-      { q: debouncedQ, spaceId, authorId, dateFrom, dateTo },
+      {
+        q: debouncedQ,
+        spaceIds: selectedSpaceIds,
+        authorIds: selectedAuthorIds,
+        dateFrom,
+        dateTo,
+      },
     ],
     queryFn: async () => {
       const qs = new URLSearchParams({ q: debouncedQ, limit: "30" });
-      if (spaceId) qs.set("spaceId", spaceId);
-      if (authorId) qs.set("authorId", authorId);
+      if (selectedSpaceIds.length)
+        qs.set("spaceIds", selectedSpaceIds.join(","));
+      if (selectedAuthorIds.length)
+        qs.set("authorIds", selectedAuthorIds.join(","));
       if (dateFrom) qs.set("dateFrom", dateFrom);
       if (dateTo) qs.set("dateTo", dateTo);
       const r = await fetch(`/api/pages/full-search?${qs.toString()}`);
@@ -188,67 +247,85 @@ export default function SearchOverlay({ open, onClose }: Props) {
 
   const pageResults = search?.results ?? [];
   const pageTotal = search?.total ?? 0;
-
   const allSpaces = useMemo(() => spaces ?? [], [spaces]);
 
-  // 우측 결과의 스페이스 매칭 — 메인 검색어를 스페이스 이름/설명에 ILIKE.
-  // spaceId 필터가 걸려 있으면 스페이스 섹션은 생략.
+  // 우측 결과의 스페이스 매칭 — 메인 검색어 ILIKE. 스페이스 필터 선택 시 생략.
   const matchedSpaces = useMemo(() => {
     const needle = debouncedQ.trim().toLowerCase();
-    if (!needle || spaceId) return [];
+    if (!needle || selectedSpaceIds.length) return [];
     return allSpaces.filter(
       (s) =>
         s.name.toLowerCase().includes(needle) ||
         (s.description ?? "").toLowerCase().includes(needle),
     );
-  }, [allSpaces, debouncedQ, spaceId]);
+  }, [allSpaces, debouncedQ, selectedSpaceIds]);
 
   const totalCount = pageTotal + matchedSpaces.length;
 
-  // FILTER BY > Space 섹션 — "스페이스 찾기" 결과 또는 "최근 스페이스".
-  const spaceFilterNeedle = spaceFilterQuery.trim().toLowerCase();
-  const spaceFilterMatches = useMemo(() => {
-    if (!spaceFilterNeedle) return [];
-    return allSpaces.filter((s) =>
-      s.name.toLowerCase().includes(spaceFilterNeedle),
-    );
-  }, [allSpaces, spaceFilterNeedle]);
-  const recentSpaces = useMemo(() => {
+  // 스페이스 팝오버 — "스페이스 찾기" 결과 또는 "최근 스페이스".
+  const spaceNeedle = spaceFilterQuery.trim().toLowerCase();
+  const spacePopoverList = useMemo(() => {
+    if (spaceNeedle) {
+      return allSpaces.filter((s) =>
+        s.name.toLowerCase().includes(spaceNeedle),
+      );
+    }
     return recentSpaceEntries
       .map((e) => allSpaces.find((s) => s.id === e.spaceId))
       .filter((s): s is SpaceWithPages => !!s)
       .slice(0, 5);
-  }, [recentSpaceEntries, allSpaces]);
+  }, [allSpaces, spaceNeedle, recentSpaceEntries]);
 
-  // "고급 검색" — 현재 필터를 /search 페이지로 전달.
+  // 기여자 팝오버 — 이름 매칭.
+  const userNeedle = userFilterQuery.trim().toLowerCase();
+  const userPopoverList = useMemo(() => {
+    const list = users ?? [];
+    if (!userNeedle) return list;
+    return list.filter((u) => u.name.toLowerCase().includes(userNeedle));
+  }, [users, userNeedle]);
+
+  const hasActiveFilter =
+    selectedSpaceIds.length > 0 ||
+    selectedAuthorIds.length > 0 ||
+    !!dateFrom ||
+    !!dateTo;
+
   const advancedHref = useMemo(() => {
     const qs = new URLSearchParams();
     if (debouncedQ.trim()) qs.set("q", debouncedQ.trim());
-    if (spaceId) qs.set("spaceId", spaceId);
+    if (selectedSpaceIds.length) qs.set("spaceId", selectedSpaceIds[0]);
     if (dateFrom) qs.set("dateFrom", dateFrom);
     if (dateTo) qs.set("dateTo", dateTo);
     return `/search?${qs.toString()}`;
-  }, [debouncedQ, spaceId, dateFrom, dateTo]);
+  }, [debouncedQ, selectedSpaceIds, dateFrom, dateTo]);
 
   if (!open) return null;
 
-  const toggle = (key: string) =>
-    setExpanded((prev) => ({ ...prev, [key]: !prev[key] }));
+  const toggleSpace = (id: string) =>
+    setSelectedSpaceIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    );
+  const toggleAuthor = (id: string) =>
+    setSelectedAuthorIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    );
+
+  const resetFilters = () => {
+    setSelectedSpaceIds([]);
+    setSelectedAuthorIds([]);
+    setDateFrom("");
+    setDateTo("");
+  };
 
   const openPage = (pageId: string) => {
     router.push(`/?pageId=${pageId}`);
     onClose();
   };
-
   const enterSpace = (sp: SpaceWithPages) => {
     const first = sp.pages[0];
     router.push(first ? `/?pageId=${first.id}` : `/?spaceId=${sp.id}`);
     onClose();
   };
-
-  const selectedSpaceName = spaceId
-    ? allSpaces.find((s) => s.id === spaceId)?.name ?? ""
-    : "";
 
   return (
     <div
@@ -261,138 +338,125 @@ export default function SearchOverlay({ open, onClose }: Props) {
         className="absolute right-0 top-0 h-full w-[min(1000px,85vw)] bg-white flex shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* ── 좌측 FILTER BY ── */}
-        <aside className="w-[240px] shrink-0 border-r border-[#dfe1e6] flex flex-col">
+        {/* ── 좌측 필터링 기준 ── */}
+        <aside className="w-[260px] shrink-0 border-r border-[#dfe1e6] flex flex-col">
           <div className="px-3 pt-4 pb-2 text-[11px] font-semibold uppercase tracking-wide text-[#6b778c]">
-            Filter by
+            필터링 기준
           </div>
-          <div className="flex-1 overflow-y-auto">
-            {/* Space */}
-            <FilterSection
-              label="Space"
-              expanded={!!expanded.space}
-              onToggle={() => toggle("space")}
+          <div className="flex-1 overflow-y-auto px-2 space-y-0.5">
+            {/* 스페이스 */}
+            <FilterButton
+              id="space"
+              icon="📁"
+              label="스페이스"
+              count={selectedSpaceIds.length}
+              openFilter={openFilter}
+              setOpenFilter={setOpenFilter}
             >
-              <input
-                type="text"
-                value={spaceFilterQuery}
-                onChange={(e) => setSpaceFilterQuery(e.target.value)}
-                placeholder="스페이스 찾기..."
-                className="w-full px-2 py-1 mb-2 text-[12px] border border-[#dfe1e6] rounded focus:outline-none focus:border-[#0052cc]"
-              />
-              <button
-                type="button"
-                onClick={() => setSpaceId("")}
-                className={`w-full text-left px-2 py-1 text-[13px] rounded ${
-                  spaceId === ""
-                    ? "bg-[#deebff] text-[#0052cc] font-semibold"
-                    : "text-[#172b4d] hover:bg-[#f4f5f7]"
-                }`}
-              >
-                전체 공간
-              </button>
-              {spaceFilterNeedle ? (
-                spaceFilterMatches.length === 0 ? (
-                  <div className="px-2 py-1 text-[12px] text-[#6b778c]">
-                    일치하는 스페이스 없음
+              <div className="px-3 pb-2">
+                <input
+                  type="text"
+                  value={spaceFilterQuery}
+                  onChange={(e) => setSpaceFilterQuery(e.target.value)}
+                  placeholder="스페이스 찾기..."
+                  className="w-full px-2 py-1 text-[12px] border border-[#dfe1e6] rounded focus:outline-none focus:border-[#0052cc]"
+                />
+              </div>
+              {!spaceNeedle && (
+                <div className="px-3 pb-0.5 text-[11px] font-semibold uppercase tracking-wide text-[#6b778c]">
+                  최근 스페이스
+                </div>
+              )}
+              <div className="max-h-60 overflow-y-auto">
+                {spacePopoverList.length === 0 ? (
+                  <div className="px-3 py-1.5 text-[12px] text-[#6b778c]">
+                    {spaceNeedle
+                      ? "일치하는 스페이스 없음"
+                      : "최근 사용한 스페이스 없음"}
                   </div>
                 ) : (
-                  spaceFilterMatches.map((s) => (
-                    <button
+                  spacePopoverList.map((s) => (
+                    <CheckRow
                       key={s.id}
-                      type="button"
-                      onClick={() => setSpaceId(s.id)}
-                      className={`w-full text-left px-2 py-1 text-[13px] rounded truncate ${
-                        spaceId === s.id
-                          ? "bg-[#deebff] text-[#0052cc] font-semibold"
-                          : "text-[#172b4d] hover:bg-[#f4f5f7]"
-                      }`}
+                      checked={selectedSpaceIds.includes(s.id)}
+                      onChange={() => toggleSpace(s.id)}
                     >
-                      {s.name}
-                    </button>
+                      <span className="w-5 h-5 shrink-0 rounded bg-[#0052cc] text-white flex items-center justify-center text-[10px] font-bold">
+                        {s.name.slice(0, 1).toUpperCase()}
+                      </span>
+                      <span className="truncate">{s.name}</span>
+                    </CheckRow>
                   ))
-                )
-              ) : (
-                <>
-                  <h2 className="px-2 pt-2 pb-0.5 text-[11px] font-semibold uppercase tracking-wide text-[#6b778c]">
-                    최근 스페이스
-                  </h2>
-                  {recentSpaces.length === 0 ? (
-                    <div className="px-2 py-1 text-[12px] text-[#6b778c]">
-                      최근 사용한 스페이스 없음
-                    </div>
-                  ) : (
-                    recentSpaces.map((s) => (
-                      <button
-                        key={s.id}
-                        type="button"
-                        onClick={() => setSpaceId(s.id)}
-                        className={`w-full text-left px-2 py-1 text-[13px] rounded truncate ${
-                          spaceId === s.id
-                            ? "bg-[#deebff] text-[#0052cc] font-semibold"
-                            : "text-[#172b4d] hover:bg-[#f4f5f7]"
-                        }`}
-                      >
-                        {s.name}
-                      </button>
-                    ))
-                  )}
-                </>
-              )}
-            </FilterSection>
+                )}
+              </div>
+            </FilterButton>
 
-            {/* Contributor */}
-            <FilterSection
-              label="Contributor"
-              expanded={!!expanded.contributor}
-              onToggle={() => toggle("contributor")}
+            {/* 기여자 */}
+            <FilterButton
+              id="contributor"
+              icon="👤"
+              label="기여자"
+              count={selectedAuthorIds.length}
+              openFilter={openFilter}
+              setOpenFilter={setOpenFilter}
             >
-              <label className="flex items-center gap-2 py-1 text-[13px] cursor-pointer">
+              <div className="px-3 pb-2">
                 <input
-                  type="radio"
-                  name="contributor"
-                  checked={authorId === ""}
-                  onChange={() => setAuthorId("")}
+                  type="text"
+                  value={userFilterQuery}
+                  onChange={(e) => setUserFilterQuery(e.target.value)}
+                  placeholder="사용자 찾기..."
+                  className="w-full px-2 py-1 text-[12px] border border-[#dfe1e6] rounded focus:outline-none focus:border-[#0052cc]"
                 />
-                <span>모든 작성자</span>
-              </label>
-              {(users ?? []).map((u) => (
-                <label
-                  key={u.id}
-                  className="flex items-center gap-2 py-1 text-[13px] cursor-pointer"
-                >
-                  <input
-                    type="radio"
-                    name="contributor"
-                    checked={authorId === u.id}
-                    onChange={() => setAuthorId(u.id)}
-                  />
-                  <span className="truncate">
-                    {u.name}
-                    <span className="text-[#6b778c]"> · {u.department}</span>
-                  </span>
-                </label>
-              ))}
-            </FilterSection>
+              </div>
+              <div className="max-h-60 overflow-y-auto">
+                {userPopoverList.length === 0 ? (
+                  <div className="px-3 py-1.5 text-[12px] text-[#6b778c]">
+                    사용자 없음
+                  </div>
+                ) : (
+                  userPopoverList.map((u) => (
+                    <CheckRow
+                      key={u.id}
+                      checked={selectedAuthorIds.includes(u.id)}
+                      onChange={() => toggleAuthor(u.id)}
+                    >
+                      <span className="truncate">
+                        {u.name}
+                        <span className="text-[#6b778c]">
+                          {" "}
+                          · {u.department}
+                        </span>
+                      </span>
+                    </CheckRow>
+                  ))
+                )}
+              </div>
+            </FilterButton>
 
-            {/* Type — disabled */}
-            <FilterSection
-              label="Type"
-              expanded={false}
-              onToggle={() => {}}
+            {/* 유형 — disabled */}
+            <FilterButton
+              id="type"
+              icon="🖼️"
+              label="유형"
+              openFilter={openFilter}
+              setOpenFilter={setOpenFilter}
               disabled
-              disabledHint="현재 페이지 유형만 존재합니다. 추후 지원 예정."
+              disabledHint="현재 페이지 유형만 존재합니다. 추후 확장 예정."
             />
 
-            {/* Date */}
-            <FilterSection
-              label="Date"
-              expanded={!!expanded.date}
-              onToggle={() => toggle("date")}
+            {/* 날짜 */}
+            <FilterButton
+              id="date"
+              icon="📅"
+              label="날짜"
+              count={dateFrom || dateTo ? 1 : 0}
+              openFilter={openFilter}
+              setOpenFilter={setOpenFilter}
             >
-              <div className="space-y-2 py-1">
+              <div className="px-3 py-1 space-y-2">
                 <label className="block text-[12px] text-[#6b778c]">
-                  수정일 From
+                  시작일
                   <input
                     type="date"
                     value={dateFrom}
@@ -401,7 +465,7 @@ export default function SearchOverlay({ open, onClose }: Props) {
                   />
                 </label>
                 <label className="block text-[12px] text-[#6b778c]">
-                  수정일 To
+                  종료일
                   <input
                     type="date"
                     value={dateTo}
@@ -410,35 +474,48 @@ export default function SearchOverlay({ open, onClose }: Props) {
                   />
                 </label>
               </div>
-            </FilterSection>
+            </FilterButton>
 
-            {/* Label — disabled */}
-            <FilterSection
-              label="Label"
-              expanded={false}
-              onToggle={() => {}}
+            {/* 라벨 — disabled */}
+            <FilterButton
+              id="label"
+              icon="🏷️"
+              label="라벨"
+              openFilter={openFilter}
+              setOpenFilter={setOpenFilter}
               disabled
               disabledHint="라벨 기능은 추후 지원 예정입니다."
             />
 
-            {/* Space category — disabled */}
-            <FilterSection
-              label="Space category"
-              expanded={false}
-              onToggle={() => {}}
+            {/* 공간 카테고리 — disabled */}
+            <FilterButton
+              id="category"
+              icon="📂"
+              label="공간 카테고리"
+              openFilter={openFilter}
+              setOpenFilter={setOpenFilter}
               disabled
               disabledHint="공간 카테고리는 추후 지원 예정입니다."
             />
           </div>
 
-          <div className="border-t border-[#dfe1e6] px-3 py-3">
+          <div className="border-t border-[#dfe1e6] px-3 py-3 space-y-1.5">
+            {hasActiveFilter && (
+              <button
+                type="button"
+                onClick={resetFilters}
+                className="block text-[12px] text-[#6b778c] hover:text-[#172b4d] hover:underline"
+              >
+                필터 초기화
+              </button>
+            )}
             <button
               type="button"
               onClick={() => {
                 router.push(advancedHref);
                 onClose();
               }}
-              className="text-[12px] text-[#0052cc] hover:underline"
+              className="block text-[12px] text-[#0052cc] hover:underline"
             >
               고급 검색 →
             </button>
@@ -467,12 +544,7 @@ export default function SearchOverlay({ open, onClose }: Props) {
             </div>
             {debouncedQ.trim() && (
               <div className="mt-2 text-[12px] text-[#6b778c]">
-                {isFetching
-                  ? "검색 중..."
-                  : `${totalCount}개의 검색 결과`}
-                {selectedSpaceName && (
-                  <span> · 공간: {selectedSpaceName}</span>
-                )}
+                {isFetching ? "검색 중..." : `${totalCount}개의 검색 결과`}
               </div>
             )}
           </div>

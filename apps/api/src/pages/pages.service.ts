@@ -120,8 +120,9 @@ export class PagesService {
     limit = 20,
     offset = 0,
     opts: {
-      spaceId?: string;
-      authorId?: string;
+      // Cycle 31 — 다중 스페이스/작성자 필터.
+      spaceIds?: string[];
+      authorIds?: string[];
       dateFrom?: Date;
       dateTo?: Date;
       sort?: 'relevance' | 'newest' | 'updated';
@@ -143,9 +144,13 @@ export class PagesService {
       // FR-024 (18-1a) — 휴지통 제외.
       { deletedAt: null },
     ];
-    if (opts.spaceId) filters.push({ spaceId: opts.spaceId });
-    // Cycle 31 — Contributor(작성자) 필터.
-    if (opts.authorId) filters.push({ authorId: opts.authorId });
+    // Cycle 31 — 다중 스페이스 / 작성자 필터 (IN).
+    if (opts.spaceIds?.length) {
+      filters.push({ spaceId: { in: opts.spaceIds } });
+    }
+    if (opts.authorIds?.length) {
+      filters.push({ authorId: { in: opts.authorIds } });
+    }
     if (opts.dateFrom || opts.dateTo) {
       filters.push({
         updatedAt: {
