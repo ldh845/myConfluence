@@ -244,14 +244,9 @@ function SpaceCombobox({ spaces, onSelectSpace, onCreateSpace }: Props) {
                   <div className="w-6 h-6 rounded bg-[#0052cc] text-white flex items-center justify-center text-[11px] font-bold shrink-0">
                     {s.name.slice(0, 1).toUpperCase()}
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="truncate font-medium">{s.name}</div>
-                    {s.description && (
-                      <div className="text-[11px] text-[#6b778c] truncate">
-                        {s.description}
-                      </div>
-                    )}
-                  </div>
+                  <span className="flex-1 min-w-0 truncate font-medium">
+                    {s.name}
+                  </span>
                 </button>
               ))
             )}

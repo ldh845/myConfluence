@@ -50,7 +50,7 @@ export default function SpacesSearchPage() {
   };
 
   return (
-    <div className="max-w-3xl mx-auto px-6 pt-8 pb-16">
+    <div className="max-w-4xl px-10 pt-8 pb-16">
       <h1 className="text-[24px] font-semibold text-[#172b4d] mb-1">
         공간 검색
       </h1>
