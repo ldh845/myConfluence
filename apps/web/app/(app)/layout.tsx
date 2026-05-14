@@ -139,6 +139,9 @@ function AppShell({ children }: { children: React.ReactNode }) {
     router.push(`/?pageId=${id}`);
   };
 
+  // Cycle 29 — /spaces(공간 검색)는 사이드바 없는 전체 폭 페이지.
+  const isFullWidth = pathname === "/spaces";
+
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden bg-white">
       <TopNav
@@ -147,47 +150,52 @@ function AppShell({ children }: { children: React.ReactNode }) {
         onSelectSpace={handleSelectSpace}
         onCreateSpace={handleCreateSpace}
       />
-      <div className="flex flex-1 min-h-0">
-        {sidebarOpen ? (
-          // Cycle 29 — 시스템 페이지(/home, /spaces)는 SystemSidebar,
-          // 스페이스 뷰는 Sidebar(=SpaceSidebar).
-          pathname === "/home" || pathname === "/spaces" ? (
-            <SystemSidebar />
-          ) : (
-            <Sidebar
-              space={activeSpace}
-              selectedPageId={selectedPageId}
-              onSelect={handleSelectPage}
-              onCreatePage={handleCreatePage}
-              onDeletePage={handleDeletePage}
-              onOpenTrash={() => setTrashOpen(true)}
-              onReorder={invalidateSpaces}
-            />
-          )
-        ) : (
-          <button
-            onClick={() => setSidebarOpen(true)}
-            title="사이드바 열기"
-            className="w-6 shrink-0 bg-[#f4f5f7] border-r border-[#dfe1e6] flex items-start justify-center pt-3 text-[#6b778c] hover:bg-[#ebecf0]"
-          >
-            ›
-          </button>
-        )}
-
+      {isFullWidth ? (
         <main className="flex-1 min-w-0 overflow-auto bg-white">
-          {sidebarOpen && (
-            <div className="max-w-[960px] mx-auto px-10 pt-3">
-              <button
-                onClick={() => setSidebarOpen(false)}
-                className="text-[12px] text-[#6b778c] hover:text-[#0052cc]"
-              >
-                ‹ 사이드바 접기
-              </button>
-            </div>
-          )}
           {children}
         </main>
-      </div>
+      ) : (
+        <div className="flex flex-1 min-h-0">
+          {sidebarOpen ? (
+            // Cycle 29 — 시스템 홈(/home)은 SystemSidebar, 스페이스 뷰는 Sidebar.
+            pathname === "/home" ? (
+              <SystemSidebar />
+            ) : (
+              <Sidebar
+                space={activeSpace}
+                selectedPageId={selectedPageId}
+                onSelect={handleSelectPage}
+                onCreatePage={handleCreatePage}
+                onDeletePage={handleDeletePage}
+                onOpenTrash={() => setTrashOpen(true)}
+                onReorder={invalidateSpaces}
+              />
+            )
+          ) : (
+            <button
+              onClick={() => setSidebarOpen(true)}
+              title="사이드바 열기"
+              className="w-6 shrink-0 bg-[#f4f5f7] border-r border-[#dfe1e6] flex items-start justify-center pt-3 text-[#6b778c] hover:bg-[#ebecf0]"
+            >
+              ›
+            </button>
+          )}
+
+          <main className="flex-1 min-w-0 overflow-auto bg-white">
+            {sidebarOpen && (
+              <div className="max-w-[960px] mx-auto px-10 pt-3">
+                <button
+                  onClick={() => setSidebarOpen(false)}
+                  className="text-[12px] text-[#6b778c] hover:text-[#0052cc]"
+                >
+                  ‹ 사이드바 접기
+                </button>
+              </div>
+            )}
+            {children}
+          </main>
+        </div>
+      )}
 
       <TrashSheet
         open={trashOpen}
