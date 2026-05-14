@@ -50,6 +50,7 @@ export class PagesController {
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
     @Query('spaceId') spaceId?: string,
+    @Query('authorId') authorId?: string,
     @Query('dateFrom') dateFrom?: string,
     @Query('dateTo') dateTo?: string,
     @Query('sort') sort?: string,
@@ -64,6 +65,7 @@ export class PagesController {
       offset ? Number(offset) : 0,
       {
         spaceId: spaceId || undefined,
+        authorId: authorId || undefined,
         dateFrom:
           parsedFrom && !isNaN(parsedFrom.getTime()) ? parsedFrom : undefined,
         dateTo:

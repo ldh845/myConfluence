@@ -8,6 +8,7 @@ import type { SpaceWithPages } from "@/lib/types";
 import { useAuth } from "@/lib/auth/useAuth";
 import { apiFetch } from "@/lib/api";
 import { useRecentSpacesStore } from "@/lib/stores/useRecentSpacesStore";
+import SearchOverlay from "@/components/SearchOverlay";
 
 type Props = {
   spaces: SpaceWithPages[];
@@ -22,6 +23,20 @@ export default function TopNav({
   onSelectSpace,
   onCreateSpace,
 }: Props) {
+  // Cycle 31 — 검색 오버레이. 검색창 클릭 또는 Ctrl/Cmd+K 로 열림.
+  const [searchOpen, setSearchOpen] = useState(false);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setSearchOpen(true);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   return (
     <header className="h-14 shrink-0 flex items-center gap-4 px-4 bg-white border-b border-[#dfe1e6]">
       {/* FR-130 (Cycle 22) — 로고 클릭 시 홈으로. /home에 이미 있을 때도 full reload. */}
@@ -74,10 +89,14 @@ export default function TopNav({
         <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#6b778c] text-sm">
           🔍
         </span>
+        {/* Cycle 31 — readOnly 트리거. 클릭/포커스 시 SearchOverlay 열림. */}
         <input
           type="text"
-          placeholder="검색"
-          className="w-60 pl-8 pr-3 py-1.5 text-sm bg-[#f4f5f7] border border-transparent rounded focus:bg-white focus:border-[#0052cc] focus:outline-none"
+          readOnly
+          placeholder="검색 (Ctrl+K)"
+          onClick={() => setSearchOpen(true)}
+          onFocus={() => setSearchOpen(true)}
+          className="w-60 pl-8 pr-3 py-1.5 text-sm bg-[#f4f5f7] border border-transparent rounded cursor-pointer hover:bg-white hover:border-[#dfe1e6] focus:outline-none"
         />
       </div>
 
@@ -88,6 +107,8 @@ export default function TopNav({
         ⚙️
       </button>
       <UserMenu />
+
+      <SearchOverlay open={searchOpen} onClose={() => setSearchOpen(false)} />
     </header>
   );
 }

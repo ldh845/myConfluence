@@ -12,7 +12,6 @@ import DiagramList from "@/components/DiagramList";
 import AttachmentList from "@/components/AttachmentList";
 import TableOfContents from "@/components/TableOfContents";
 import PageVersionHistory from "@/components/PageVersionHistory";
-import QuickSearchDialog from "@/components/QuickSearchDialog";
 import PageComments from "@/components/PageComments";
 import InlineCommentsList from "@/components/InlineCommentsList";
 import MovePageDialog from "@/components/MovePageDialog";
@@ -77,8 +76,6 @@ export default function HomePage() {
   const [editor, setEditor] = useState<Editor | null>(null);
   // FR-061 — 버전 히스토리 슬라이드 패널 토글.
   const [historyOpen, setHistoryOpen] = useState(false);
-  // FR-093 (Cycle 15-1b) — Ctrl/Cmd+K 빠른 검색 popup 토글.
-  const [quickSearchOpen, setQuickSearchOpen] = useState(false);
   // FR-022 (Cycle 18-3b) — 이동 다이얼로그 토글.
   const [moveOpen, setMoveOpen] = useState(false);
   // FR-023 (Cycle 18-4b) — 복사 다이얼로그 토글.
@@ -161,17 +158,7 @@ export default function HomePage() {
     }
   }, [currentPage, spaceIdFromUrl]);
 
-  // FR-093 (Cycle 15-1b) — Ctrl+K / Cmd+K 글로벌 단축키.
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
-        e.preventDefault();
-        setQuickSearchOpen(true);
-      }
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, []);
+  // Cycle 31 — Ctrl/Cmd+K 글로벌 단축키는 TopNav 의 SearchOverlay 로 이관됨.
 
   // Cycle 11-2 / FR-034 — 본문 안의 내부 페이지 링크(/?pageId=<id>)를 SPA로.
   useEffect(() => {
@@ -453,11 +440,6 @@ export default function HomePage() {
         pageId={selectedPageId}
         open={historyOpen}
         onOpenChange={setHistoryOpen}
-      />
-      <QuickSearchDialog
-        open={quickSearchOpen}
-        onOpenChange={setQuickSearchOpen}
-        onSelect={selectPage}
       />
       {currentPage && (
         <MovePageDialog

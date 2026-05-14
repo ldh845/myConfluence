@@ -121,6 +121,7 @@ export class PagesService {
     offset = 0,
     opts: {
       spaceId?: string;
+      authorId?: string;
       dateFrom?: Date;
       dateTo?: Date;
       sort?: 'relevance' | 'newest' | 'updated';
@@ -143,6 +144,8 @@ export class PagesService {
       { deletedAt: null },
     ];
     if (opts.spaceId) filters.push({ spaceId: opts.spaceId });
+    // Cycle 31 — Contributor(작성자) 필터.
+    if (opts.authorId) filters.push({ authorId: opts.authorId });
     if (opts.dateFrom || opts.dateTo) {
       filters.push({
         updatedAt: {
@@ -168,8 +171,14 @@ export class PagesService {
           id: true,
           title: true,
           spaceId: true,
+          // Cycle 31 — breadcrumb 경로 계산용 parentId.
+          parentId: true,
           updatedAt: true,
           content: true,
+          // Cycle 31 — 결과 카드 작성자 표시 + Contributor 필터 검증용.
+          author: {
+            select: { id: true, name: true, department: true },
+          },
         },
       }),
       this.prisma.page.count({ where }),
@@ -190,7 +199,9 @@ export class PagesService {
       id: r.id,
       title: r.title,
       spaceId: r.spaceId,
+      parentId: r.parentId,
       updatedAt: r.updatedAt,
+      author: r.author,
       snippet: this.extractSnippet(r.content, trimmed),
     }));
     return { results, total };
