@@ -24,6 +24,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import type { PageNode, SpaceWithPages } from "@/lib/types";
 import { useFavoritesStore } from "@/lib/stores/useFavoritesStore";
+import SpaceStarButton from "@/components/SpaceStarButton";
 
 type Props = {
   space: SpaceWithPages | null;
@@ -444,12 +445,8 @@ export default function Sidebar({
               {space.description ?? "공간"}
             </div>
           </div>
-          <button
-            title="즐겨찾기"
-            className="text-[#6b778c] hover:text-[#ffab00]"
-          >
-            ☆
-          </button>
+          {/* Cycle 29 (별표) — 스페이스 별표 토글. SystemSidebar/TopNav/홈과 store 공유. */}
+          <SpaceStarButton spaceId={space.id} size="md" alwaysVisible />
         </div>
       )}
 
