@@ -25,17 +25,10 @@ const MYWORK_ITEMS: SubItem[] = [
 
 const ALL_ANCHOR_IDS = [...DISCOVER_ITEMS, ...MYWORK_ITEMS].map((s) => s.id);
 
-function SectionHeader({
-  icon,
-  children,
-}: {
-  icon: string;
-  children: React.ReactNode;
-}) {
+function SectionHeader({ children }: { children: React.ReactNode }) {
   return (
-    <div className="px-4 pt-4 pb-1 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-[#6b778c]">
-      <span className="text-[13px] leading-none">{icon}</span>
-      <span>{children}</span>
+    <div className="px-4 pt-4 pb-1 text-[11px] font-semibold uppercase tracking-wide text-[#6b778c]">
+      {children}
     </div>
   );
 }
@@ -117,7 +110,7 @@ export default function SystemSidebar() {
   return (
     <aside className="w-[260px] shrink-0 bg-[#f4f5f7] border-r border-[#dfe1e6] h-full overflow-y-auto flex flex-col">
       {/* 발견 */}
-      <SectionHeader icon="🧭">발견</SectionHeader>
+      <SectionHeader>발견</SectionHeader>
       <div className="px-2 space-y-0.5">
         {DISCOVER_ITEMS.map((s) => (
           <SubItemRow
@@ -131,7 +124,7 @@ export default function SystemSidebar() {
       </div>
 
       {/* 내 작업 */}
-      <SectionHeader icon="💼">내 작업</SectionHeader>
+      <SectionHeader>내 작업</SectionHeader>
       <div className="px-2 space-y-0.5">
         {MYWORK_ITEMS.map((s) => (
           <SubItemRow
@@ -145,7 +138,7 @@ export default function SystemSidebar() {
       </div>
 
       {/* 내 공간 — 별표한 스페이스만 */}
-      <SectionHeader icon="🌐">내 공간</SectionHeader>
+      <SectionHeader>내 공간</SectionHeader>
       <div className="px-2 pb-4 space-y-0.5">
         {spaces.length === 0 ? (
           <div className="pl-7 pr-3 py-1.5 text-[12px] text-[#6b778c]">
