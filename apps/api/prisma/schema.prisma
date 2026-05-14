@@ -54,6 +54,10 @@ model Space {
   type         SpaceType     @default(SITE)
   ownerId      String?
   owner        User?         @relation("SpaceOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  // Cycle 33 — 공간의 명시적 홈(메인) 페이지. 공간 생성 시 자동 생성.
+  // 홈 페이지 삭제 시 SetNull → 사이드바는 첫 루트 페이지로 fallback.
+  homePageId   String?       @unique
+  homePage     Page?         @relation("SpaceHomePage", fields: [homePageId], references: [id], onDelete: SetNull)
   createdAt    DateTime      @default(now())
   pages        Page[]
   activityLogs ActivityLog[]
@@ -92,6 +96,8 @@ model Page {
   author       User?         @relation("PageAuthor", fields: [authorId], references: [id], onDelete: SetNull)
   lastEditorId String?
   lastEditor   User?         @relation("PageEditor", fields: [lastEditorId], references: [id], onDelete: SetNull)
+  // Cycle 33 — 이 페이지가 어느 공간의 홈 페이지인지 (back-relation).
+  homeOfSpace  Space?        @relation("SpaceHomePage")
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
 

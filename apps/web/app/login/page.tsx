@@ -2,25 +2,26 @@
 
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth/useAuth";
 
 // FR-001 (Cycle 27b) — 로그인 페이지. 이미 로그인된 상태면 자동 /home.
+// Cycle 32 — 로그인 후 항상 /home 으로. 이 시스템의 첫 화면은 /home.
+
+const HOME_PATH = "/home";
 
 function LoginForm() {
   const router = useRouter();
-  const params = useSearchParams();
-  const nextPath = params.get("next") || "/home";
   const queryClient = useQueryClient();
   const { user, isLoading } = useAuth();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
 
   useEffect(() => {
-    if (!isLoading && user) router.replace(nextPath);
-  }, [user, isLoading, router, nextPath]);
+    if (!isLoading && user) router.replace(HOME_PATH);
+  }, [user, isLoading, router]);
 
   const login = useMutation<void, Error>({
     mutationFn: async () => {
@@ -37,7 +38,7 @@ function LoginForm() {
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["me"] });
-      router.replace(nextPath);
+      router.replace(HOME_PATH);
     },
     onError: (err) => window.alert(err.message),
   });

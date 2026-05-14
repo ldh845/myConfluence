@@ -2,6 +2,8 @@ import {
   Body,
   Controller,
   Get,
+  Param,
+  Patch,
   Post,
   Req,
   UseGuards,
@@ -11,6 +13,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { OptionalJwtAuthGuard } from '../auth/optional-jwt-auth.guard';
 import { SpacesService } from './spaces.service';
 import { CreateSpaceDto } from './dto/create-space.dto';
+import { SetHomePageDto } from './dto/set-home-page.dto';
 
 @Controller('spaces')
 export class SpacesController {
@@ -33,8 +36,20 @@ export class SpacesController {
     });
   }
 
+  // Cycle 33 — 공간 생성 시 홈 페이지 자동 생성. 인증 시 actor 전달.
   @Post()
-  create(@Body() dto: CreateSpaceDto) {
-    return this.spaces.create(dto);
+  @UseGuards(OptionalJwtAuthGuard)
+  create(@Body() dto: CreateSpaceDto, @Req() req: Request) {
+    return this.spaces.create(
+      dto,
+      req.user ? { id: req.user.id, name: req.user.name } : null,
+    );
+  }
+
+  // Cycle 33 — 공간 홈 페이지 지정.
+  @Patch(':id')
+  @UseGuards(JwtAuthGuard)
+  setHomePage(@Param('id') id: string, @Body() dto: SetHomePageDto) {
+    return this.spaces.setHomePage(id, dto.homePageId);
   }
 }

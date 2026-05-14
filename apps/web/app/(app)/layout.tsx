@@ -8,6 +8,7 @@ import Sidebar from "@/components/Sidebar";
 import SystemSidebar from "@/components/SystemSidebar";
 import TrashSheet from "@/components/TrashSheet";
 import { useRecentPagesStore } from "@/lib/stores/useRecentPagesStore";
+import { getSpaceHomePageId } from "@/lib/spaceHome";
 import type { PageFull, SpaceWithPages } from "@/lib/types";
 
 // Cycle 28 — TopNav + Sidebar 영속 셸.
@@ -74,9 +75,10 @@ function AppShell({ children }: { children: React.ReactNode }) {
   const handleSelectSpace = (id: string) => {
     setSelectedSpaceId(id);
     const space = spaces.find((s) => s.id === id);
-    const first = space?.pages[0]?.id;
-    if (first) router.push(`/?pageId=${first}`);
-    else router.push("/");
+    // Cycle 32 — 공간 진입 시 그 공간의 홈(메인) 페이지로.
+    const homeId = getSpaceHomePageId(space);
+    if (homeId) router.push(`/?pageId=${homeId}`);
+    else router.push(`/?spaceId=${id}`);
   };
 
   const handleCreateSpace = async () => {
@@ -156,11 +158,22 @@ function AppShell({ children }: { children: React.ReactNode }) {
         </main>
       ) : (
         <div className="flex flex-1 min-h-0">
-          {sidebarOpen ? (
-            // Cycle 29 — 시스템 홈(/home)은 SystemSidebar, 스페이스 뷰는 Sidebar.
-            pathname === "/home" ? (
-              <SystemSidebar />
-            ) : (
+          {/* Cycle 29 — 시스템 홈(/home)은 SystemSidebar, 스페이스 뷰는 Sidebar.
+              시스템 홈은 접어도 아이콘 전용 미니 사이드바를 유지한다. */}
+          {pathname === "/home" ? (
+            <div className="relative shrink-0">
+              <SystemSidebar collapsed={!sidebarOpen} />
+              <button
+                onClick={() => setSidebarOpen((v) => !v)}
+                title={sidebarOpen ? "사이드바 접기" : "사이드바 펴기"}
+                aria-label={sidebarOpen ? "사이드바 접기" : "사이드바 펴기"}
+                className="absolute bottom-2 right-2 z-10 w-6 h-6 flex items-center justify-center rounded text-[16px] font-bold leading-none text-[#172b4d] hover:bg-[#ebecf0] hover:text-[#0052cc]"
+              >
+                {sidebarOpen ? "«" : "»"}
+              </button>
+            </div>
+          ) : sidebarOpen ? (
+            <div className="relative shrink-0">
               <Sidebar
                 space={activeSpace}
                 selectedPageId={selectedPageId}
@@ -170,28 +183,27 @@ function AppShell({ children }: { children: React.ReactNode }) {
                 onOpenTrash={() => setTrashOpen(true)}
                 onReorder={invalidateSpaces}
               />
-            )
+              <button
+                onClick={() => setSidebarOpen(false)}
+                title="사이드바 접기"
+                aria-label="사이드바 접기"
+                className="absolute bottom-2 right-2 z-10 w-6 h-6 flex items-center justify-center rounded text-[16px] font-bold leading-none text-[#172b4d] hover:bg-[#ebecf0] hover:text-[#0052cc]"
+              >
+                «
+              </button>
+            </div>
           ) : (
             <button
               onClick={() => setSidebarOpen(true)}
-              title="사이드바 열기"
-              className="w-6 shrink-0 bg-[#f4f5f7] border-r border-[#dfe1e6] flex items-start justify-center pt-3 text-[#6b778c] hover:bg-[#ebecf0]"
+              title="사이드바 펴기"
+              aria-label="사이드바 펴기"
+              className="w-6 shrink-0 bg-[#f4f5f7] border-r border-[#dfe1e6] flex items-end justify-center pb-3 text-[16px] font-bold text-[#172b4d] hover:bg-[#ebecf0] hover:text-[#0052cc]"
             >
-              ›
+              »
             </button>
           )}
 
           <main className="flex-1 min-w-0 overflow-auto bg-white">
-            {sidebarOpen && (
-              <div className="max-w-[960px] mx-auto px-10 pt-3">
-                <button
-                  onClick={() => setSidebarOpen(false)}
-                  className="text-[12px] text-[#6b778c] hover:text-[#0052cc]"
-                >
-                  ‹ 사이드바 접기
-                </button>
-              </div>
-            )}
             {children}
           </main>
         </div>

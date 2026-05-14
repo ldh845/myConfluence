@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { highlightText } from "@/lib/highlight";
 import { useRecentSpacesStore } from "@/lib/stores/useRecentSpacesStore";
+import { getSpaceHomePageId } from "@/lib/spaceHome";
 import type { SpaceWithPages } from "@/lib/types";
 
 // Cycle 31 — Confluence Cloud 스타일 검색 오버레이.
@@ -290,15 +291,6 @@ export default function SearchOverlay({ open, onClose }: Props) {
     !!dateFrom ||
     !!dateTo;
 
-  const advancedHref = useMemo(() => {
-    const qs = new URLSearchParams();
-    if (debouncedQ.trim()) qs.set("q", debouncedQ.trim());
-    if (selectedSpaceIds.length) qs.set("spaceId", selectedSpaceIds[0]);
-    if (dateFrom) qs.set("dateFrom", dateFrom);
-    if (dateTo) qs.set("dateTo", dateTo);
-    return `/search?${qs.toString()}`;
-  }, [debouncedQ, selectedSpaceIds, dateFrom, dateTo]);
-
   if (!open) return null;
 
   const toggleSpace = (id: string) =>
@@ -322,8 +314,9 @@ export default function SearchOverlay({ open, onClose }: Props) {
     onClose();
   };
   const enterSpace = (sp: SpaceWithPages) => {
-    const first = sp.pages[0];
-    router.push(first ? `/?pageId=${first.id}` : `/?spaceId=${sp.id}`);
+    // Cycle 32 — 공간의 홈(메인) 페이지로 진입.
+    const homeId = getSpaceHomePageId(sp);
+    router.push(homeId ? `/?pageId=${homeId}` : `/?spaceId=${sp.id}`);
     onClose();
   };
 
@@ -339,11 +332,11 @@ export default function SearchOverlay({ open, onClose }: Props) {
         onClick={(e) => e.stopPropagation()}
       >
         {/* ── 좌측 필터링 기준 ── */}
-        <aside className="w-[260px] shrink-0 border-r border-[#dfe1e6] flex flex-col">
+        <aside className="w-[300px] shrink-0 border-r border-[#dfe1e6] flex flex-col">
           <div className="px-3 pt-4 pb-2 text-[11px] font-semibold uppercase tracking-wide text-[#6b778c]">
             필터링 기준
           </div>
-          <div className="flex-1 overflow-y-auto px-2 space-y-0.5">
+          <div className="flex-1 px-2 space-y-0.5">
             {/* 스페이스 */}
             <FilterButton
               id="space"
@@ -434,17 +427,6 @@ export default function SearchOverlay({ open, onClose }: Props) {
               </div>
             </FilterButton>
 
-            {/* 유형 — disabled */}
-            <FilterButton
-              id="type"
-              icon="🖼️"
-              label="유형"
-              openFilter={openFilter}
-              setOpenFilter={setOpenFilter}
-              disabled
-              disabledHint="현재 페이지 유형만 존재합니다. 추후 확장 예정."
-            />
-
             {/* 날짜 */}
             <FilterButton
               id="date"
@@ -475,32 +457,10 @@ export default function SearchOverlay({ open, onClose }: Props) {
                 </label>
               </div>
             </FilterButton>
-
-            {/* 라벨 — disabled */}
-            <FilterButton
-              id="label"
-              icon="🏷️"
-              label="라벨"
-              openFilter={openFilter}
-              setOpenFilter={setOpenFilter}
-              disabled
-              disabledHint="라벨 기능은 추후 지원 예정입니다."
-            />
-
-            {/* 공간 카테고리 — disabled */}
-            <FilterButton
-              id="category"
-              icon="📂"
-              label="공간 카테고리"
-              openFilter={openFilter}
-              setOpenFilter={setOpenFilter}
-              disabled
-              disabledHint="공간 카테고리는 추후 지원 예정입니다."
-            />
           </div>
 
-          <div className="border-t border-[#dfe1e6] px-3 py-3 space-y-1.5">
-            {hasActiveFilter && (
+          {hasActiveFilter && (
+            <div className="border-t border-[#dfe1e6] px-3 py-3">
               <button
                 type="button"
                 onClick={resetFilters}
@@ -508,18 +468,8 @@ export default function SearchOverlay({ open, onClose }: Props) {
               >
                 필터 초기화
               </button>
-            )}
-            <button
-              type="button"
-              onClick={() => {
-                router.push(advancedHref);
-                onClose();
-              }}
-              className="block text-[12px] text-[#0052cc] hover:underline"
-            >
-              고급 검색 →
-            </button>
-          </div>
+            </div>
+          )}
         </aside>
 
         {/* ── 우측 결과 ── */}

@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import type { SpaceWithPages } from "@/lib/types";
 import { useStarredSpacesStore } from "@/lib/stores/useStarredSpacesStore";
+import { getSpaceHomePageId } from "@/lib/spaceHome";
 import SpaceStarButton from "@/components/SpaceStarButton";
 
 // Cycle 29 — 시스템 홈(/home) 사이드바.
@@ -124,9 +125,9 @@ export default function SystemSidebar({
   const spaces = (spacesData ?? []).filter((s) => starredIds.includes(s.id));
 
   const enterSpace = (sp: SpaceWithPages) => {
-    const first = sp.pages[0];
-    if (first) router.push(`/?pageId=${first.id}`);
-    else router.push(`/?spaceId=${sp.id}`);
+    // Cycle 32 — 공간의 홈(메인) 페이지로 진입.
+    const homeId = getSpaceHomePageId(sp);
+    router.push(homeId ? `/?pageId=${homeId}` : `/?spaceId=${sp.id}`);
   };
 
   // ── 접힌 모드 — 아이콘 전용 (56px) ─────────────────────────────────────

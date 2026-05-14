@@ -22,6 +22,7 @@ import { getIdentity } from "@/lib/userIdentity";
 import { usePageStore } from "@/lib/stores/usePageStore";
 import { useRecentPagesStore } from "@/lib/stores/useRecentPagesStore";
 import { useRecentSpacesStore } from "@/lib/stores/useRecentSpacesStore";
+import { getSpaceHomePageId } from "@/lib/spaceHome";
 import type {
   ConnectionState,
   PresenceUser,
@@ -88,12 +89,13 @@ export default function HomePage() {
   // spaceId 지정됐는데 빈 스페이스면 null (UI에서 빈 상태 안내) — 다른 스페이스로
   // 자동 폴백하지 않는다. 그래야 빈 스페이스 카드를 클릭한 의도가 무시되지 않는다.
   // 어떤 spaceId도 없을 때만 첫 스페이스의 첫 페이지로 폴백.
+  // Cycle 32 — 공간 진입 시 그 공간의 홈(메인) 페이지를 연다.
   const defaultPageId = useMemo<string | null>(() => {
     if (spaceIdFromUrl) {
       const sp = spaces.find((s) => s.id === spaceIdFromUrl);
-      return sp?.pages[0]?.id ?? null;
+      return getSpaceHomePageId(sp);
     }
-    return spaces[0]?.pages[0]?.id ?? null;
+    return getSpaceHomePageId(spaces[0]);
   }, [spaces, spaceIdFromUrl]);
 
   const selectedPageId = pageIdFromUrl ?? defaultPageId;

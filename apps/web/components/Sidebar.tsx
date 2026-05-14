@@ -214,15 +214,18 @@ function SortableTreeRow({
       <button
         onClick={(e) => {
           stop(e);
-          toggleCollapsed(item.id);
+          if (item.hasChildren) toggleCollapsed(item.id);
         }}
         onPointerDown={stop}
-        className="w-4 text-[#6b778c] text-xs flex items-center justify-center"
-        aria-label="toggle"
+        className="w-4 text-[#6b778c] text-[11px] flex items-center justify-center shrink-0"
+        aria-label={item.hasChildren ? "하위 페이지 펼치기/접기" : undefined}
       >
-        {item.hasChildren ? (collapsedHas ? "▸" : "▾") : ""}
+        {item.hasChildren ? (
+          collapsedHas ? "›" : "⌄"
+        ) : (
+          <span className="text-[#a5adba]">•</span>
+        )}
       </button>
-      <span className="w-4 text-center text-[13px]">📄</span>
       <span className="flex-1 truncate">{item.title}</span>
       <button
         title="하위 페이지 추가"
@@ -272,9 +275,30 @@ export default function Sidebar({
   const [dropHint, setDropHint] = useState<DropHint>(null);
 
   const pages = space?.pages ?? [];
+
+  // "홈" — 이 공간의 메인 페이지. Cycle 33: Space.homePageId 명시적 지정 우선,
+  // 없으면(백필 누락 등) 첫 루트 페이지로 fallback.
+  const mainPageId = useMemo(() => {
+    if (space?.homePageId && pages.some((p) => p.id === space.homePageId)) {
+      return space.homePageId;
+    }
+    const roots = pages.filter((p) => !p.parentId);
+    return roots[0]?.id ?? null;
+  }, [pages, space?.homePageId]);
+
+  // 페이지 트리에는 메인 페이지를 제외. 메인 페이지의 직계 자식은 루트로 승격.
+  const treePages = useMemo(() => {
+    if (!mainPageId) return pages;
+    return pages
+      .filter((p) => p.id !== mainPageId)
+      .map((p) =>
+        p.parentId === mainPageId ? { ...p, parentId: null } : p,
+      );
+  }, [pages, mainPageId]);
+
   const visible = useMemo(
-    () => flattenVisible(pages, collapsed),
-    [pages, collapsed],
+    () => flattenVisible(treePages, collapsed),
+    [treePages, collapsed],
   );
 
   // FR-025 (Cycle 18-2) — 활성 스페이스의 즐겨찾기 페이지만 노출.
@@ -347,7 +371,7 @@ export default function Sidebar({
       return;
     }
     // active의 자손은 drop target 제외.
-    const subtree = collectSubtreeIds(pages, String(e.active.id));
+    const subtree = collectSubtreeIds(treePages, String(e.active.id));
     if (subtree.has(overIdNow)) {
       setOverId(null);
       setDropHint(null);
@@ -379,12 +403,12 @@ export default function Sidebar({
     if (!finalOverId || !finalHint) return;
     if (finalOverId === finalActiveId) return;
 
-    const over = pages.find((p) => p.id === finalOverId);
-    const active = pages.find((p) => p.id === finalActiveId);
+    const over = treePages.find((p) => p.id === finalOverId);
+    const active = treePages.find((p) => p.id === finalActiveId);
     if (!over || !active) return;
 
     // 자손 drop 차단 (안전망 — onDragOver에서 이미 처리되지만 race 방지).
-    const subtree = collectSubtreeIds(pages, finalActiveId);
+    const subtree = collectSubtreeIds(treePages, finalActiveId);
     if (subtree.has(finalOverId)) return;
 
     let targetParentId: string | null;
@@ -404,7 +428,7 @@ export default function Sidebar({
     } else {
       // before / after over (over의 형제로)
       targetParentId = over.parentId;
-      const siblings = pages
+      const siblings = treePages
         .filter(
           (p) =>
             p.parentId === over.parentId &&
@@ -451,29 +475,31 @@ export default function Sidebar({
       )}
 
       <div className="px-2 py-2 space-y-0.5">
-        {/* FR-130 (Cycle 22) — 홈 대시보드 진입. */}
+        {/* 홈 — 이 공간의 메인 페이지(첫 루트 페이지)로 이동. */}
         <NavItem
           icon="🏠"
           label="홈"
-          active={pathname === "/home"}
-          onClick={() => router.push("/home")}
+          active={
+            pathname === "/" &&
+            !!mainPageId &&
+            selectedPageId === mainPageId
+          }
+          onClick={() => {
+            if (mainPageId) onSelect(mainPageId);
+            else if (space) router.push(`/?spaceId=${space.id}`);
+          }}
         />
         <NavItem
           icon="📄"
           label="페이지"
-          active={pathname !== "/home" && pathname !== "/activity"}
+          active={
+            pathname !== "/home" &&
+            pathname !== "/activity" &&
+            (!mainPageId || selectedPageId !== mainPageId)
+          }
           onClick={() => router.push("/")}
         />
-        {/* FR-131 (Cycle 24) — 활동 피드 진입. */}
-        <NavItem
-          icon="📜"
-          label="활동"
-          active={pathname === "/activity"}
-          onClick={() => router.push("/activity")}
-        />
-        <NavItem icon="📝" label="블로그" disabled />
         <NavItem icon="📅" label="캘린더" disabled />
-        <NavItem icon="📊" label="분석" disabled />
       </div>
 
       {favPages.length > 0 && (
@@ -513,18 +539,10 @@ export default function Sidebar({
 
       <div className="border-t border-[#dfe1e6] mx-2 my-1" />
 
-      <div className="px-4 pt-2 pb-1 flex items-center justify-between">
+      <div className="px-4 pt-2 pb-1">
         <span className="text-[11px] font-semibold uppercase tracking-wide text-[#6b778c]">
           페이지 트리
         </span>
-        {space && (
-          <button
-            className="text-[11px] text-[#0052cc] hover:underline"
-            onClick={() => onCreatePage(space.id, null)}
-          >
-            ＋ 새 페이지
-          </button>
-        )}
       </div>
 
       <div className="px-2 pb-4 flex-1">

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import type { PageFull, PageNode, SpaceWithPages } from "@/lib/types";
 import type {
   ConnectionState,
@@ -232,6 +233,7 @@ export default function PageHeader({
           />
           <MoreMenu
             page={page}
+            space={space}
             onDelete={onDelete}
             onShareClick={onShareClick}
           />
@@ -375,14 +377,41 @@ function ActionButton({
 
 function MoreMenu({
   page,
+  space,
   onDelete,
   onShareClick,
 }: {
   page: PageFull;
+  space: SpaceWithPages | null;
   onDelete: () => void;
   onShareClick?: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  const queryClient = useQueryClient();
+  // Cycle 33 — 현재 페이지가 이미 이 공간의 홈인지.
+  const isSpaceHome = !!space && space.homePageId === page.id;
+
+  // Cycle 33 — 이 페이지를 공간 홈으로 지정.
+  const setAsSpaceHome = async () => {
+    setOpen(false);
+    const res = await fetch(`/api/spaces/${page.spaceId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ homePageId: page.id }),
+    });
+    if (res.status === 401) {
+      alert("로그인이 필요합니다.");
+      return;
+    }
+    if (!res.ok) {
+      alert("공간 홈 지정에 실패했습니다.");
+      return;
+    }
+    queryClient.invalidateQueries({ queryKey: ["spaces"] });
+    alert("이 페이지를 공간 홈으로 지정했습니다.");
+  };
+
   return (
     <div className="relative">
       <button
@@ -432,6 +461,20 @@ function MoreMenu({
             >
               🔗 공유 링크
             </button>
+            <div className="my-1 border-t border-[#dfe1e6]" />
+            {/* Cycle 33 — 공간 홈 페이지 지정. */}
+            {isSpaceHome ? (
+              <div className="w-full text-left px-3 py-1.5 text-[#6b778c] cursor-default">
+                ✓ 공간 홈
+              </div>
+            ) : (
+              <button
+                className="w-full text-left px-3 py-1.5 text-[#172b4d] hover:bg-[#ebecf0]"
+                onClick={setAsSpaceHome}
+              >
+                🏠 공간 홈으로 지정
+              </button>
+            )}
             <div className="my-1 border-t border-[#dfe1e6]" />
             <button
               className="w-full text-left px-3 py-1.5 text-[#de350b] hover:bg-[#ffebe6]"

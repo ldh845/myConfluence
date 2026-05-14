@@ -403,9 +403,8 @@ function CreateSplitButton({
           type="button"
           onClick={handleQuickCreate}
           disabled={creating}
-          className="inline-flex items-center gap-1.5 bg-[#0052cc] hover:bg-[#0747a6] text-white text-sm font-medium px-3 py-1.5 disabled:opacity-60"
+          className="inline-flex items-center bg-[#0052cc] hover:bg-[#0747a6] text-white text-sm font-medium px-3 py-1.5 disabled:opacity-60"
         >
-          <span className="text-base leading-none">＋</span>
           {creating ? "생성 중..." : "만들기"}
         </button>
         <div className="w-px bg-[#ffffff44]" />

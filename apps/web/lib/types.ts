@@ -14,6 +14,8 @@ export type SpaceWithPages = {
   description: string | null;
   createdAt: string;
   pages: PageNode[];
+  // Cycle 33 — 공간의 명시적 홈(메인) 페이지. 없으면(백필 누락/페이지 없음) null.
+  homePageId?: string | null;
 };
 
 // FR-001 (Cycle 27c) — 페이지 작성자/마지막 편집자 요약.
