@@ -1,22 +1,80 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
+import type { SpaceWithPages } from "@/lib/types";
 
 // Cycle 29 — 시스템 홈(/home) 전용 사이드바.
-// 페이지 트리·공간 도구 대신 시스템 수준의 발견/내 작업/내 공간 섹션 anchor.
+// Confluence Cloud 패턴: h2 섹션 헤더(발견 / 내 작업 / 내 공간) + sub-item.
+// 발견 sub-item과 내 작업 sub-item은 anchor scroll, 내 공간 sub-item은 스페이스 진입.
 
-type Section = { id: string; icon: string; label: string };
+type SubItem = { id: string; label: string };
 
-const SECTIONS: Section[] = [
-  { id: "discover", icon: "🧭", label: "발견" },
-  { id: "mywork", icon: "💼", label: "내 작업" },
-  { id: "recent", icon: "🕘", label: "최근 방문" },
-  { id: "saved", icon: "⭐", label: "나중을 위해 저장" },
-  { id: "spaces", icon: "🌐", label: "내 공간" },
+const DISCOVER_ITEMS: SubItem[] = [
+  { id: "discover-updates", label: "모든 변경사항" },
 ];
 
+const MYWORK_ITEMS: SubItem[] = [
+  { id: "mywork-recent", label: "최근 작업" },
+  { id: "mywork-visited", label: "최근 방문" },
+  { id: "mywork-saved", label: "나중을 위해 저장" },
+];
+
+const ALL_ANCHOR_IDS = [...DISCOVER_ITEMS, ...MYWORK_ITEMS].map((s) => s.id);
+
+function SectionHeader({
+  icon,
+  children,
+}: {
+  icon: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="px-4 pt-4 pb-1 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-[#6b778c]">
+      <span className="text-[13px] leading-none">{icon}</span>
+      <span>{children}</span>
+    </div>
+  );
+}
+
+function SubItemRow({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`w-full flex items-center gap-2 pl-7 pr-3 py-1.5 rounded text-[13px] text-left ${
+        active
+          ? "bg-[#deebff] text-[#0052cc] font-semibold"
+          : "text-[#172b4d] hover:bg-[#ebecf0]"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
 export default function SystemSidebar() {
-  const [active, setActive] = useState<string>("discover");
+  const router = useRouter();
+  const [active, setActive] = useState<string>(ALL_ANCHOR_IDS[0]);
+
+  const { data: spacesData } = useQuery<SpaceWithPages[]>({
+    queryKey: ["spaces"],
+    queryFn: async () => {
+      const r = await fetch("/api/spaces");
+      if (!r.ok) return [];
+      return (await r.json()) as SpaceWithPages[];
+    },
+  });
+  const spaces = spacesData ?? [];
 
   const scrollTo = useCallback((id: string) => {
     const el = document.getElementById(id);
@@ -26,8 +84,7 @@ export default function SystemSidebar() {
     }
   }, []);
 
-  // 스크롤 시 viewport에 들어온 섹션 자동 강조. IntersectionObserver.
-  // 셸 layout이 <main overflow-auto>를 스크롤 컨테이너로 쓰므로 root를 main으로.
+  // 사이드바 sub-item 스크롤 따라가기. <main overflow-auto>가 스크롤 컨테이너.
   useEffect(() => {
     const root = document.querySelector("main");
     if (!root) return;
@@ -40,52 +97,75 @@ export default function SystemSidebar() {
       },
       { root, rootMargin: "-30% 0px -60% 0px", threshold: 0 },
     );
-    SECTIONS.forEach((s) => {
-      const el = document.getElementById(s.id);
+    ALL_ANCHOR_IDS.forEach((id) => {
+      const el = document.getElementById(id);
       if (el) observer.observe(el);
     });
     return () => observer.disconnect();
   }, []);
 
+  const enterSpace = (sp: SpaceWithPages) => {
+    const first = sp.pages[0];
+    if (first) router.push(`/?pageId=${first.id}`);
+    else router.push(`/?spaceId=${sp.id}`);
+  };
+
   return (
     <aside className="w-[260px] shrink-0 bg-[#f4f5f7] border-r border-[#dfe1e6] h-full overflow-y-auto flex flex-col">
-      <div className="px-4 py-3 border-b border-[#dfe1e6]">
-        <div className="text-[11px] font-semibold uppercase tracking-wide text-[#6b778c]">
-          시스템 홈
-        </div>
-        <div className="text-sm font-semibold text-[#172b4d] mt-0.5">
-          내 워크스페이스
-        </div>
+      {/* 발견 */}
+      <SectionHeader icon="🧭">발견</SectionHeader>
+      <div className="px-2 space-y-0.5">
+        {DISCOVER_ITEMS.map((s) => (
+          <SubItemRow
+            key={s.id}
+            active={active === s.id}
+            onClick={() => scrollTo(s.id)}
+          >
+            {s.label}
+          </SubItemRow>
+        ))}
       </div>
 
-      <nav className="px-2 py-2 space-y-0.5">
-        {SECTIONS.map((s) => {
-          const isActive = active === s.id;
-          return (
+      {/* 내 작업 */}
+      <SectionHeader icon="💼">내 작업</SectionHeader>
+      <div className="px-2 space-y-0.5">
+        {MYWORK_ITEMS.map((s) => (
+          <SubItemRow
+            key={s.id}
+            active={active === s.id}
+            onClick={() => scrollTo(s.id)}
+          >
+            {s.label}
+          </SubItemRow>
+        ))}
+      </div>
+
+      {/* 내 공간 */}
+      <SectionHeader icon="🌐">내 공간</SectionHeader>
+      <div className="px-2 pb-4 space-y-0.5">
+        {spaces.length === 0 ? (
+          <div className="pl-7 pr-3 py-1.5 text-[12px] text-[#6b778c]">
+            가입한 공간이 없습니다.
+          </div>
+        ) : (
+          spaces.map((sp) => (
             <button
-              key={s.id}
+              key={sp.id}
               type="button"
-              onClick={() => scrollTo(s.id)}
-              className={`w-full flex items-center gap-2 px-3 py-1.5 rounded text-sm text-left ${
-                isActive
-                  ? "bg-[#deebff] text-[#0052cc] font-semibold"
-                  : "text-[#172b4d] hover:bg-[#ebecf0]"
-              }`}
+              onClick={() => enterSpace(sp)}
+              title={sp.description ?? sp.name}
+              className="w-full flex items-center gap-2 pl-4 pr-3 py-1.5 rounded text-[13px] text-left text-[#172b4d] hover:bg-[#ebecf0]"
             >
-              <span className="w-4 text-center">{s.icon}</span>
-              <span>{s.label}</span>
+              <div className="w-5 h-5 rounded bg-[#0052cc] text-white flex items-center justify-center text-[10px] font-bold shrink-0">
+                {sp.name.slice(0, 1).toUpperCase()}
+              </div>
+              <span className="flex-1 truncate">{sp.name}</span>
+              <span className="text-[11px] text-[#6b778c]">
+                {sp.pages.length}
+              </span>
             </button>
-          );
-        })}
-      </nav>
-
-      <div className="border-t border-[#dfe1e6] mx-2 my-1" />
-
-      <div className="px-4 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-[#6b778c]">
-        도움말
-      </div>
-      <div className="px-2 pb-4 text-[12px] text-[#6b778c]">
-        <div className="px-3 py-1">사이드바의 항목을 클릭하면 해당 섹션으로 스크롤됩니다.</div>
+          ))
+        )}
       </div>
     </aside>
   );

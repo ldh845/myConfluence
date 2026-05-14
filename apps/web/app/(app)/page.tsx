@@ -45,6 +45,9 @@ export default function HomePage() {
   const router = useRouter();
   const pathname = usePathname();
   const pageIdFromUrl = searchParams.get("pageId");
+  // Cycle 29 — SystemSidebar의 "내 공간" 카드는 /?spaceId=X로 진입한다.
+  // pageId가 없으면 그 스페이스의 첫 페이지로 자동 이동.
+  const spaceIdFromUrl = searchParams.get("spaceId");
 
   const queryClient = useQueryClient();
 
@@ -82,12 +85,24 @@ export default function HomePage() {
   // FR-120 (Cycle 23) — 공유 다이얼로그 토글.
   const [shareOpen, setShareOpen] = useState(false);
 
-  // URL에 pageId가 없을 때의 fallback — 첫 스페이스의 첫 페이지.
+  // URL에 pageId가 없을 때의 fallback.
+  // 우선순위: spaceId 지정 시 그 스페이스의 첫 페이지 > 첫 스페이스의 첫 페이지.
   const defaultPageId = useMemo<string | null>(() => {
+    if (spaceIdFromUrl) {
+      const sp = spaces.find((s) => s.id === spaceIdFromUrl);
+      if (sp?.pages[0]) return sp.pages[0].id;
+    }
     return spaces[0]?.pages[0]?.id ?? null;
-  }, [spaces]);
+  }, [spaces, spaceIdFromUrl]);
 
   const selectedPageId = pageIdFromUrl ?? defaultPageId;
+
+  // /?spaceId=X 로 진입한 경우 첫 페이지 URL로 깔끔하게 replace.
+  useEffect(() => {
+    if (!pageIdFromUrl && spaceIdFromUrl && defaultPageId) {
+      router.replace(`/?pageId=${defaultPageId}`);
+    }
+  }, [pageIdFromUrl, spaceIdFromUrl, defaultPageId, router]);
 
   const selectPage = useCallback(
     (id: string) => {
