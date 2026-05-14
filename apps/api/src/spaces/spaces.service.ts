@@ -61,7 +61,8 @@ export class SpacesService {
       });
       const homePage = await tx.page.create({
         data: {
-          title: `${space.name} 홈`,
+          // Cycle 33 — 공간 홈 페이지 제목은 "Main Page"로 고정.
+          title: 'Main Page',
           content: `# ${space.name}\n\n이 공간의 홈 페이지입니다. 자유롭게 편집하세요.`,
           spaceId: space.id,
           parentId: null,
@@ -137,7 +138,8 @@ export class SpacesService {
       });
       const homePage = await tx.page.create({
         data: {
-          title: `${space.name} 홈`,
+          // Cycle 33 — 홈 페이지 제목은 "Main Page"로 고정.
+          title: 'Main Page',
           content: `# ${space.name}\n\n개인 작업 공간의 홈 페이지입니다.`,
           spaceId: space.id,
           parentId: null,
