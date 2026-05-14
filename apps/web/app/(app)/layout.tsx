@@ -149,8 +149,9 @@ function AppShell({ children }: { children: React.ReactNode }) {
       />
       <div className="flex flex-1 min-h-0">
         {sidebarOpen ? (
-          // Cycle 29 — 시스템 홈은 SystemSidebar, 스페이스 뷰는 Sidebar(=SpaceSidebar).
-          pathname === "/home" ? (
+          // Cycle 29 — 시스템 페이지(/home, /spaces)는 SystemSidebar,
+          // 스페이스 뷰는 Sidebar(=SpaceSidebar).
+          pathname === "/home" || pathname === "/spaces" ? (
             <SystemSidebar />
           ) : (
             <Sidebar

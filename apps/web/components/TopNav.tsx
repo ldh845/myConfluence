@@ -7,7 +7,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { SpaceWithPages } from "@/lib/types";
 import { useAuth } from "@/lib/auth/useAuth";
 import { apiFetch } from "@/lib/api";
-import SpaceStarButton from "@/components/SpaceStarButton";
+import { useRecentSpacesStore } from "@/lib/stores/useRecentSpacesStore";
 
 type Props = {
   spaces: SpaceWithPages[];
@@ -185,12 +185,9 @@ function UserMenu() {
   );
 }
 
-function SpaceCombobox({
-  spaces,
-  activeSpaceId,
-  onSelectSpace,
-  onCreateSpace,
-}: Props) {
+// Cycle 29 — 공간 드롭다운. 버튼은 "공간"만 표시.
+// 드롭다운: "최근에 사용한 공간" 목록(최대 10) + "공간 목록"(/spaces) + "공간 만들기".
+function SpaceCombobox({ spaces, onSelectSpace, onCreateSpace }: Props) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -205,8 +202,12 @@ function SpaceCombobox({
     return () => document.removeEventListener("mousedown", onDown);
   }, [open]);
 
-  const activeName =
-    spaces.find((s) => s.id === activeSpaceId)?.name ?? "공간";
+  const recentEntries = useRecentSpacesStore((s) => s.entries);
+  // 최근 사용 순서대로, 현재 존재하는 공간만 매핑.
+  const recentSpaces = recentEntries
+    .map((e) => spaces.find((s) => s.id === e.spaceId))
+    .filter((s): s is SpaceWithPages => !!s)
+    .slice(0, 10);
 
   return (
     <div className="relative" ref={ref}>
@@ -217,65 +218,54 @@ function SpaceCombobox({
         }`}
       >
         <span>공간</span>
-        <span className="text-[#6b778c] max-w-[140px] truncate">
-          : {activeName}
-        </span>
         <span className="text-[#6b778c] text-[10px]">▾</span>
       </button>
 
       {open && (
         <div className="absolute left-0 top-full mt-1 w-72 bg-white border border-[#dfe1e6] rounded shadow-lg z-30 py-1">
           <div className="px-3 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-[#6b778c]">
-            내 공간
+            최근에 사용한 공간
           </div>
           <div className="max-h-72 overflow-y-auto">
-            {spaces.length === 0 && (
+            {recentSpaces.length === 0 ? (
               <div className="px-3 py-2 text-sm text-[#6b778c]">
-                공간이 없습니다.
+                최근 사용한 공간이 없습니다.
               </div>
-            )}
-            {spaces.map((s) => {
-              const active = s.id === activeSpaceId;
-              return (
-                <div
+            ) : (
+              recentSpaces.map((s) => (
+                <button
                   key={s.id}
-                  className={`flex items-center gap-1 pr-1 ${
-                    active
-                      ? "bg-[#deebff] text-[#0052cc]"
-                      : "text-[#172b4d] hover:bg-[#ebecf0]"
-                  }`}
+                  onClick={() => {
+                    onSelectSpace(s.id);
+                    setOpen(false);
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-[#172b4d] hover:bg-[#ebecf0]"
                 >
-                  {/* Cycle 29 (별표) — 좌측 ☆ 토글로 내 공간 추가/제거 */}
-                  <div className="pl-2">
-                    <SpaceStarButton spaceId={s.id} size="sm" alwaysVisible />
+                  <div className="w-6 h-6 rounded bg-[#0052cc] text-white flex items-center justify-center text-[11px] font-bold shrink-0">
+                    {s.name.slice(0, 1).toUpperCase()}
                   </div>
-                  <button
-                    onClick={() => {
-                      onSelectSpace(s.id);
-                      setOpen(false);
-                    }}
-                    className="flex-1 flex items-center gap-2 px-2 py-2 text-left text-sm"
-                  >
-                    <div className="w-6 h-6 rounded bg-[#0052cc] text-white flex items-center justify-center text-[11px] font-bold shrink-0">
-                      {s.name.slice(0, 1).toUpperCase()}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="truncate font-medium">{s.name}</div>
-                      {s.description && (
-                        <div className="text-[11px] text-[#6b778c] truncate">
-                          {s.description}
-                        </div>
-                      )}
-                    </div>
-                    {active && (
-                      <span className="text-[#0052cc] text-xs">✓</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="truncate font-medium">{s.name}</div>
+                    {s.description && (
+                      <div className="text-[11px] text-[#6b778c] truncate">
+                        {s.description}
+                      </div>
                     )}
-                  </button>
-                </div>
-              );
-            })}
+                  </div>
+                </button>
+              ))
+            )}
           </div>
+
           <div className="border-t border-[#dfe1e6] mt-1" />
+          <Link
+            href="/spaces"
+            onClick={() => setOpen(false)}
+            className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-[#172b4d] hover:bg-[#ebecf0]"
+          >
+            <span className="w-4 text-center">🗂️</span>
+            공간 목록
+          </Link>
           <button
             onClick={() => {
               setOpen(false);
@@ -283,7 +273,7 @@ function SpaceCombobox({
             }}
             className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-[#0052cc] hover:bg-[#deebff] font-medium"
           >
-            <span className="text-base leading-none">＋</span>
+            <span className="w-4 text-center text-base leading-none">＋</span>
             공간 만들기
           </button>
         </div>

@@ -22,6 +22,7 @@ import ReactionBar from "@/components/ReactionBar";
 import { getIdentity } from "@/lib/userIdentity";
 import { usePageStore } from "@/lib/stores/usePageStore";
 import { useRecentPagesStore } from "@/lib/stores/useRecentPagesStore";
+import { useRecentSpacesStore } from "@/lib/stores/useRecentSpacesStore";
 import type {
   ConnectionState,
   PresenceUser,
@@ -150,6 +151,15 @@ export default function HomePage() {
       useRecentPagesStore.getState().record(currentPage.id);
     }
   }, [currentPage]);
+
+  // Cycle 29 — 최근 사용한 공간 기록. 페이지가 로드되면 그 페이지의 공간,
+  // 빈 스페이스로 진입(/?spaceId=X)했으면 그 spaceId 를 기록.
+  useEffect(() => {
+    const spaceId = currentPage?.spaceId ?? spaceIdFromUrl;
+    if (spaceId) {
+      useRecentSpacesStore.getState().record(spaceId);
+    }
+  }, [currentPage, spaceIdFromUrl]);
 
   // FR-093 (Cycle 15-1b) — Ctrl+K / Cmd+K 글로벌 단축키.
   useEffect(() => {
