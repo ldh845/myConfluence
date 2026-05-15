@@ -93,7 +93,7 @@ export default function FullScreenEditor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page.id]);
 
-  // editor가 준비되면 단어 수 추적 + 본문에 포커스(타이핑 즉시 가능).
+  // editor가 준비되면 단어 수 추적 + 컨텍스트에 맞는 영역에 포커스.
   useEffect(() => {
     if (!editor) return;
     const recompute = () => {
@@ -107,14 +107,22 @@ export default function FullScreenEditor({
     recompute();
     editor.on("update", recompute);
     editor.on("transaction", recompute);
-    // 본문 포커스. 제목이 비어있으면 제목으로 가는 게 자연스럽지만, 그 케이스는
-    // ?edit=1로 방금 만든 페이지 정도라서 우선순위가 낮다.
-    requestAnimationFrame(() => editor.commands.focus("end"));
+    // Cycle 36 followup — 포커스 정책:
+    //  - fresh draft(첫 진입, 제목이 비어 있음)는 제목 input으로 포커스 →
+    //    사용자에게 "편집기가 열렸고 제목부터 입력하세요" 시각적 단서 제공
+    //  - 그 외(기존 페이지 재편집)는 본문 끝으로 포커스 → 바로 이어서 작성
+    requestAnimationFrame(() => {
+      if (isFreshDraft) {
+        titleInputRef.current?.focus();
+      } else {
+        editor.commands.focus("end");
+      }
+    });
     return () => {
       editor.off("update", recompute);
       editor.off("transaction", recompute);
     };
-  }, [editor]);
+  }, [editor, isFreshDraft]);
 
   // Esc로 빠져나가기 — 단, 본문 contenteditable 안에서의 Esc는 무시 (선택 해제 등
   // 에디터 내부 의미가 있을 수 있고, 의도치 않은 종료를 막는다).

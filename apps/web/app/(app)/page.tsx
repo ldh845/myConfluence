@@ -138,8 +138,11 @@ export default function HomePage() {
     // searchParams를 deps에 넣지 않는 건 의도적: edit=1 정리(router.replace)
     // 시 이 effect가 다시 돌면 isBodyEditable이 즉시 false로 떨어진다.
     setIsBodyEditable(searchParams.get("edit") === "1");
+    // selectedPageId가 바뀔 땐 currentPage도 즉시 비운다. 그렇게 안 하면
+    // loadCurrentPage 가 도착하기 전 1프레임 동안 stale한 이전 페이지가
+    // FullScreenEditor에 그대로 박혀 "전혀 안 바뀐 듯한 깜빡임"으로 보인다.
+    setCurrentPage(null);
     if (!selectedPageId) {
-      setCurrentPage(null);
       return;
     }
     setSaveStatus("idle");
@@ -410,6 +413,18 @@ export default function HomePage() {
     )
       handleDeleteCurrentPage(currentPage.id);
   };
+
+  // Cycle 36 follow-up — 편집 모드로 들어왔지만 새 페이지가 아직 로딩 중인
+  // transition. 그냥 두면 view 모드 빈 상태("왼쪽에서 페이지를 선택...")가
+  // 잠깐 보여 사용자가 "안 됐다"고 인식하는 원인이 된다. 동일한 fixed
+  // 영역에 명시적인 로딩 자리를 깔아서 깜빡임 없이 곧장 편집기로 전환되게.
+  if (isBodyEditable && selectedPageId && !currentPage) {
+    return (
+      <div className="fixed left-0 right-0 bottom-0 top-14 z-40 bg-white flex items-center justify-center text-[#6b778c] text-sm">
+        편집기 준비 중...
+      </div>
+    );
+  }
 
   // Cycle 34 — 편집 모드는 TopNav/사이드바를 덮는 전체 화면 편집기로 분기.
   // 인라인 PageHeader+에디터+다이어그램+첨부+댓글은 조회 모드 전용. 두 트리를
