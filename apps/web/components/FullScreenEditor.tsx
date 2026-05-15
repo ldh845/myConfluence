@@ -19,7 +19,7 @@
 //   5) 하단 바 (sticky)          — 단어 수 / 저장 상태 / 변경 코멘트 / 업데이트·닫기
 
 import dynamic from "next/dynamic";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Editor } from "@tiptap/react";
 import EditorToolbar from "@/components/EditorToolbar";
 import type {
@@ -70,16 +70,27 @@ export default function FullScreenEditor({
   // CollaborativeEditor가 onEditor로 위로 끌어올린 ref를 받는다.
   const [editor, setEditor] = useState<Editor | null>(null);
   // 제목은 우리가 별도로 들고 있다가 commit 시점(blur/Enter)에 부모로 흘려보낸다.
-  const [title, setTitle] = useState(page.title);
+  // Cycle 36-followup — TopNav 만들기로 갓 만든 draft는 title="제목 없음"
+  // 기본값으로 들어오는데, 그대로 보여주면 사용자가 placeholder처럼 인식해
+  // 그대로 발행한다. 첫 발행 전 draft + 기본 제목이면 input은 비워두고
+  // placeholder("페이지 제목")로 안내 → 사용자가 직접 입력하도록.
+  const isFreshDraft = !page.publishedAt && page.title === "제목 없음";
+  const [title, setTitle] = useState(isFreshDraft ? "" : page.title);
   // 발행 코멘트.
   const [note, setNote] = useState("");
   // 단어/글자 수 — editor.getText() 기반. transaction마다 갱신.
   const [stats, setStats] = useState({ words: 0, chars: 0 });
+  // Cycle 36-followup — 빈 제목으로 발행 시도 시 AUI 스타일 에러 노출.
+  const [titleError, setTitleError] = useState(false);
+  // title input 포커스를 코드에서 옮기기 위한 ref.
+  const titleInputRef = useRef<HTMLInputElement>(null);
 
   // 페이지가 바뀌면 (실제로는 key로 리마운트되지만 안전하게) 제목/노트 리셋.
   useEffect(() => {
-    setTitle(page.title);
+    setTitle(isFreshDraft ? "" : page.title);
     setNote("");
+    setTitleError(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page.id]);
 
   // editor가 준비되면 단어 수 추적 + 본문에 포커스(타이핑 즉시 가능).
@@ -125,8 +136,10 @@ export default function FullScreenEditor({
     const next = title.trim();
     if (next && next !== page.title) {
       onTitleChange(next);
-    } else if (!next) {
-      // 빈 제목은 허용하지 않고 원래대로 되돌린다.
+    } else if (!next && !isFreshDraft) {
+      // 기존 페이지/한 번이라도 제목을 정한 draft에서 빈 값으로 blur하면
+      // 마지막 저장 제목으로 되돌린다. fresh draft(첫 진입)는 placeholder
+      // 상태 그대로 두어 사용자가 직접 입력하도록 안내.
       setTitle(page.title);
     }
   };
@@ -195,9 +208,37 @@ export default function FullScreenEditor({
           매우 넓은 화면에서 한 줄이 너무 길어지지 않도록 max-w-5xl만 둔다. */}
       <div className="flex-1 overflow-auto">
         <div className="px-8 lg:px-12 xl:px-16 pt-6 pb-12 max-w-5xl">
+          {/* Cycle 36-followup — 빈 제목 발행 시도 에러. AUI 클래스명은 사용자
+              요청대로 그대로 두되(향후 AUI 스타일 로딩 시 자동 매칭), 현재는
+              Tailwind로 동등한 빨간 배너를 그린다. */}
+          {titleError && (
+            <div
+              className="aui-message closeable aui-message-error relative mb-3 px-4 py-3 pr-10 bg-[#ffebe6] border border-[#de350b] rounded text-[#bf2600]"
+              role="alert"
+            >
+              <p className="title text-[14px] mb-0.5">
+                <strong>이 페이지의 이름이 필요합니다</strong>
+              </p>
+              <span className="empty-title text-[13px]">
+                발행 버튼을 누르기 전에 페이지 제목을 추가하세요.
+              </span>
+              <button
+                type="button"
+                className="aui-close-button absolute right-2 top-2 w-6 h-6 flex items-center justify-center text-[16px] leading-none text-[#bf2600] hover:bg-[#ffd5cc] rounded"
+                aria-label="닫기"
+                onClick={() => setTitleError(false)}
+              >
+                ×
+              </button>
+            </div>
+          )}
           <input
+            ref={titleInputRef}
             value={title}
-            onChange={(e) => setTitle(e.target.value)}
+            onChange={(e) => {
+              setTitle(e.target.value);
+              if (e.target.value.trim() && titleError) setTitleError(false);
+            }}
             onBlur={commitTitle}
             onKeyDown={(e) => {
               if (e.key === "Enter") {
@@ -207,7 +248,9 @@ export default function FullScreenEditor({
               }
             }}
             placeholder="페이지 제목"
-            className="w-full text-[32px] leading-tight font-bold text-[#172b4d] bg-transparent outline-none border-0 px-0 py-2 placeholder-[#a5adba]"
+            className={`w-full text-[32px] leading-tight font-bold text-[#172b4d] bg-transparent outline-none border-0 px-0 py-2 placeholder-[#a5adba] ${
+              titleError ? "underline decoration-[#de350b] decoration-2" : ""
+            }`}
           />
           <div className="mt-2">
             <CollaborativeEditor
@@ -265,10 +308,22 @@ export default function FullScreenEditor({
         <button
           type="button"
           onClick={() => {
+            // Cycle 36-followup — 빈 제목 검증 (AUI 스타일 에러 노출).
+            const trimmedTitle = title.trim();
+            if (!trimmedTitle) {
+              setTitleError(true);
+              titleInputRef.current?.focus();
+              return;
+            }
+            // pending 제목 변경이 있으면 발행 전에 PATCH로 커밋 — blur 없이 바로
+            // 발행 클릭한 케이스 보호. 발행 후엔 currentPage가 다시 로드되며
+            // 최신 제목이 반영된다.
+            if (trimmedTitle !== page.title) {
+              onTitleChange(trimmedTitle);
+            }
             // Cycle 36 — 편집기 현재 마크다운을 직접 추출해 발행에 동봉.
-            // tiptap-markdown extension의 storage가 getMarkdown을 노출.
-            // editor가 아직 안 떴으면 (지연/오류) 빈 문자열로 폴백 — 빈 페이지
-            // 발행은 백엔드가 허용한다(content="" explicit).
+            // editor가 아직 안 떴으면 빈 문자열로 폴백 — 빈 본문 발행은
+            // 백엔드가 허용(content="" explicit).
             const md =
               (
                 editor?.storage as
@@ -277,18 +332,22 @@ export default function FullScreenEditor({
               )?.markdown?.getMarkdown() ?? "";
             onPublish(md, note.trim());
           }}
-          disabled={!hasDraft || publishing}
+          // Cycle 36-followup — 첫 발행(publishedAt=null)이면 hasDraft 게이트
+          // 풀기. 이전엔 자동저장 5초 디바운스가 끝나야 hasDraft=true가 되어
+          // 사용자가 한참 기다려야 했다. 빈 본문도 발행할 수 있어야 한다는
+          // 요구를 동시에 만족.
+          // 재발행은 기존대로 hasDraft 검사 — 변경이 있어야만 활성.
+          disabled={publishing || (page.publishedAt != null && !hasDraft)}
           className="inline-flex items-center px-3 py-1.5 rounded text-[13px] font-semibold bg-[#0052cc] text-white hover:bg-[#0747a6] disabled:bg-[#a5adba] disabled:cursor-not-allowed"
           title={
-            hasDraft
-              ? page.publishedAt
+            page.publishedAt
+              ? hasDraft
                 ? "변경 사항을 업데이트합니다"
-                : "이 페이지를 처음으로 발행합니다"
-              : "발행할 변경 사항이 없습니다"
+                : "발행할 변경 사항이 없습니다"
+              : "이 페이지를 처음으로 발행합니다"
           }
         >
-          {/* Cycle 36-followup — 한 번도 발행 안 된 draft는 "발행", 이후 재발행은
-              "업데이트" (Confluence Publish/Update 동일 패턴). */}
+          {/* 한 번도 발행 안 된 draft는 "발행", 이후 재발행은 "업데이트". */}
           {publishing
             ? page.publishedAt
               ? "업데이트 중..."
