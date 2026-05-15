@@ -1,5 +1,18 @@
 "use client";
 
+// Cycle 37 — Confluence "The Editor" 패턴의 평평한 가로 툴바.
+// 좌→우 그룹 배치, 그룹 사이 세로 구분선, 그룹 안은 인접 버튼.
+//   [G1] 문단 스타일 드롭다운 ("문단 ▾")
+//   [G2] B / I / U / S
+//   [G3] 인라인 코드  | 글자색 / 형광펜
+//   [G4] 글머리 / 번호 / 체크리스트
+//   [G5] 링크 / 표 / 이미지 / 수평선 / 인라인 댓글
+//   [컨텍스트] 코드블록 언어 · 이미지 alt · 표 행/열 (선택 노드 따라 노출)
+//   ─ flex spacer ─
+//   [G6] 실행 취소 / 다시 실행
+//
+// 레이아웃: 자체 border-b만 갖고 sticky/padding은 부모(FullScreenEditor) 책임.
+
 import type { Editor } from "@tiptap/react";
 import { useEffect, useRef, useState } from "react";
 import { CODE_BLOCK_LANGUAGES } from "@/lib/tiptap/code-block-lowlight";
@@ -12,7 +25,7 @@ type Props = { editor: Editor | null };
 export default function EditorToolbar({ editor }: Props) {
   const [, force] = useState(0);
 
-  // Re-render on selection/transaction so active states update
+  // 선택/트랜잭션마다 active state가 갱신되어야 한다.
   useEffect(() => {
     if (!editor) return;
     const h = () => force((n) => n + 1);
@@ -34,38 +47,12 @@ export default function EditorToolbar({ editor }: Props) {
   };
 
   return (
-    <div className="sticky top-0 z-10 bg-white border border-[#dfe1e6] rounded mb-3 px-2 py-1.5 flex flex-wrap items-center gap-0.5">
-      <BtnGroup>
-        <TB
-          label="H1"
-          active={isActive("heading", { level: 1 })}
-          onClick={run(() =>
-            editor.chain().focus().toggleHeading({ level: 1 }).run()
-          )}
-        />
-        <TB
-          label="H2"
-          active={isActive("heading", { level: 2 })}
-          onClick={run(() =>
-            editor.chain().focus().toggleHeading({ level: 2 }).run()
-          )}
-        />
-        <TB
-          label="H3"
-          active={isActive("heading", { level: 3 })}
-          onClick={run(() =>
-            editor.chain().focus().toggleHeading({ level: 3 }).run()
-          )}
-        />
-        <TB
-          label="H4"
-          active={isActive("heading", { level: 4 })}
-          onClick={run(() =>
-            editor.chain().focus().toggleHeading({ level: 4 }).run()
-          )}
-        />
-      </BtnGroup>
+    <div className="bg-white border-b border-[#dfe1e6] px-3 py-1.5 flex flex-wrap items-center gap-1">
+      {/* G1: 문단 스타일 드롭다운 — 제목 1~4 / 인용 / 코드 블록 / 문단 */}
+      <ParagraphStyleDropdown editor={editor} />
       <Divider />
+
+      {/* G2: 굵게 / 기울임 / 밑줄 / 취소선 */}
       <BtnGroup>
         <TB
           title="굵게 (Ctrl+B)"
@@ -95,6 +82,11 @@ export default function EditorToolbar({ editor }: Props) {
         >
           <s>S</s>
         </TB>
+      </BtnGroup>
+      <Divider />
+
+      {/* G3: 인라인 코드 + 글자색 / 형광펜 */}
+      <BtnGroup>
         <TB
           title="인라인 코드"
           active={isActive("code")}
@@ -106,6 +98,9 @@ export default function EditorToolbar({ editor }: Props) {
         <EditorColorPicker editor={editor} kind="highlight" />
       </BtnGroup>
       <Divider />
+
+      {/* G4: 목록류 — 글머리 / 번호 / 체크리스트
+          (인용 / 코드블록은 G1 드롭다운으로 이관) */}
       <BtnGroup>
         <TB
           title="글머리 목록"
@@ -117,9 +112,7 @@ export default function EditorToolbar({ editor }: Props) {
         <TB
           title="번호 목록"
           active={isActive("orderedList")}
-          onClick={run(() =>
-            editor.chain().focus().toggleOrderedList().run()
-          )}
+          onClick={run(() => editor.chain().focus().toggleOrderedList().run())}
         >
           1.
         </TB>
@@ -130,22 +123,14 @@ export default function EditorToolbar({ editor }: Props) {
         >
           ☑
         </TB>
-        <TB
-          title="인용"
-          active={isActive("blockquote")}
-          onClick={run(() =>
-            editor.chain().focus().toggleBlockquote().run()
-          )}
-        >
-          ❝
-        </TB>
-        <TB
-          title="코드 블록"
-          active={isActive("codeBlock")}
-          onClick={run(() => editor.chain().focus().toggleCodeBlock().run())}
-        >
-          {"{ }"}
-        </TB>
+      </BtnGroup>
+      <Divider />
+
+      {/* G5: 삽입 — 링크 / 표 / 이미지 / 수평선 / 인라인 댓글 */}
+      <BtnGroup>
+        <LinkButton editor={editor} />
+        <TableButton editor={editor} />
+        <ImageButton editor={editor} />
         <TB
           title="수평선"
           onClick={run(() =>
@@ -154,14 +139,10 @@ export default function EditorToolbar({ editor }: Props) {
         >
           ―
         </TB>
-      </BtnGroup>
-      <Divider />
-      <BtnGroup>
-        <LinkButton editor={editor} />
-        <TableButton editor={editor} />
-        <ImageButton editor={editor} />
         <InlineCommentButton editor={editor} />
       </BtnGroup>
+
+      {/* 컨텍스트별 보조 도구 */}
       {editor.isActive("codeBlock") && (
         <>
           <Divider />
@@ -244,7 +225,10 @@ export default function EditorToolbar({ editor }: Props) {
           </BtnGroup>
         </>
       )}
+
       <div className="flex-1" />
+
+      {/* G6: 실행 취소 / 다시 실행 */}
       <BtnGroup>
         <TB
           title="실행 취소 (Ctrl+Z)"
@@ -297,6 +281,179 @@ function TB({
     >
       {children ?? label}
     </button>
+  );
+}
+
+// Cycle 37 — Confluence "Paragraph ▾" 드롭다운.
+// 현재 블록 타입에 따라 라벨이 바뀌고, 메뉴 항목엔 각 스타일의 미리보기가 적용된다.
+function ParagraphStyleDropdown({ editor }: { editor: Editor }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  // 현재 블록 타입을 라벨로 해석.
+  const currentLabel = (() => {
+    for (const lvl of [1, 2, 3, 4] as const) {
+      if (editor.isActive("heading", { level: lvl })) return `제목 ${lvl}`;
+    }
+    if (editor.isActive("blockquote")) return "인용";
+    if (editor.isActive("codeBlock")) return "코드 블록";
+    return "문단";
+  })();
+
+  // setParagraph 후 toggleHeading: 다른 블록(인용/코드블록)에서도 제목으로
+  // 깔끔하게 전환되도록. 같은 제목 레벨 누르면 toggleHeading이 다시 문단으로.
+  const setHeading = (level: 1 | 2 | 3 | 4) => () =>
+    editor
+      .chain()
+      .focus()
+      .setParagraph()
+      .toggleHeading({ level })
+      .run();
+
+  type Item = {
+    label: string;
+    preview: React.ReactNode;
+    action: () => void;
+    active: boolean;
+  };
+
+  const isHeading =
+    editor.isActive("heading", { level: 1 }) ||
+    editor.isActive("heading", { level: 2 }) ||
+    editor.isActive("heading", { level: 3 }) ||
+    editor.isActive("heading", { level: 4 });
+  const isBlockquote = editor.isActive("blockquote");
+  const isCodeBlock = editor.isActive("codeBlock");
+  const isPlainPara = !isHeading && !isBlockquote && !isCodeBlock;
+
+  const items: Item[] = [
+    {
+      label: "문단",
+      preview: (
+        <span className="text-[14px] text-[#172b4d]">문단</span>
+      ),
+      action: () => editor.chain().focus().setParagraph().run(),
+      active: isPlainPara,
+    },
+    {
+      label: "제목 1",
+      preview: (
+        <span className="text-[22px] font-bold text-[#172b4d] leading-tight">
+          제목 1
+        </span>
+      ),
+      action: setHeading(1),
+      active: editor.isActive("heading", { level: 1 }),
+    },
+    {
+      label: "제목 2",
+      preview: (
+        <span className="text-[18px] font-bold text-[#172b4d] leading-tight">
+          제목 2
+        </span>
+      ),
+      action: setHeading(2),
+      active: editor.isActive("heading", { level: 2 }),
+    },
+    {
+      label: "제목 3",
+      preview: (
+        <span className="text-[15px] font-bold text-[#172b4d] leading-tight">
+          제목 3
+        </span>
+      ),
+      action: setHeading(3),
+      active: editor.isActive("heading", { level: 3 }),
+    },
+    {
+      label: "제목 4",
+      preview: (
+        <span className="text-[13px] font-bold text-[#172b4d] leading-tight">
+          제목 4
+        </span>
+      ),
+      action: setHeading(4),
+      active: editor.isActive("heading", { level: 4 }),
+    },
+    {
+      label: "인용",
+      preview: (
+        <span className="text-[13px] text-[#42526e] italic border-l-2 border-[#0052cc] pl-2">
+          인용
+        </span>
+      ),
+      action: () =>
+        editor.chain().focus().toggleBlockquote().run(),
+      active: isBlockquote,
+    },
+    {
+      label: "코드 블록",
+      preview: (
+        <span className="text-[12px] font-mono text-[#172b4d] bg-[#f4f5f7] px-1.5 py-0.5 rounded">
+          코드 블록
+        </span>
+      ),
+      action: () => editor.chain().focus().toggleCodeBlock().run(),
+      active: isCodeBlock,
+    },
+  ];
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className={`min-w-[96px] h-7 px-2 rounded text-[13px] flex items-center justify-between gap-2 ${
+          open
+            ? "bg-[#ebecf0] text-[#172b4d]"
+            : "text-[#42526e] hover:bg-[#ebecf0]"
+        }`}
+        title="문단 스타일"
+      >
+        <span className="truncate">{currentLabel}</span>
+        <span className="text-[10px] text-[#6b778c] shrink-0">▾</span>
+      </button>
+      {open && (
+        <div className="absolute left-0 top-full mt-1 w-[200px] bg-white border border-[#dfe1e6] rounded shadow-lg z-30 py-1">
+          {items.map((item) => (
+            <button
+              key={item.label}
+              type="button"
+              onClick={() => {
+                item.action();
+                setOpen(false);
+              }}
+              className={`w-full text-left px-3 py-1.5 hover:bg-[#deebff] flex items-center justify-between gap-2 ${
+                item.active ? "bg-[#deebff]" : ""
+              }`}
+            >
+              {item.preview}
+              {item.active && (
+                <span className="text-[#0052cc] text-[12px] shrink-0">✓</span>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 

@@ -169,13 +169,14 @@ export default function FullScreenEditor({
     // Cycle 35 — TopNav(h-14)는 그대로 노출. fixed top-14로 그 아래만 덮음.
     // z-40으로 사이드바·본문 위에 얹되, TopNav(셸 안 일반 flow)는 가리지 않는다.
     <div className="fixed left-0 right-0 bottom-0 top-14 z-40 bg-white flex flex-col">
-      {/* 1) 상단 툴바 */}
-      <div className="sticky top-0 z-20 border-b border-[#dfe1e6] bg-white px-6 pt-2">
+      {/* 1) 상단 툴바 — Cycle 37: border-b/bg-white/내부 padding은 EditorToolbar가
+          자체 갖는다. 여기선 sticky 위치만 책임. */}
+      <div className="sticky top-0 z-20 bg-white">
         {editor ? (
           <EditorToolbar editor={editor} />
         ) : (
           // 에디터 초기화 전 공간을 비워두면 본문이 점프해 보이므로 자리 확보.
-          <div className="h-[42px]" />
+          <div className="h-[42px] border-b border-[#dfe1e6]" />
         )}
       </div>
 

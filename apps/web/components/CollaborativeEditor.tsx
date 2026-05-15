@@ -493,13 +493,9 @@ export default function CollaborativeEditor({
       ) : (
         <>
           {editable && !hideToolbar && <EditorToolbar editor={editor} />}
-          <div
-            className={
-              editable
-                ? "rounded border-l-2 border-[#0052cc] bg-[#f4f8ff]/40 pl-4 py-2 transition-colors"
-                : "pl-4 py-2 transition-colors"
-            }
-          >
+          {/* Cycle 37 — Confluence 편집기는 본문에 별도 박스/색을 두지 않는다.
+              조회/편집 모드 모두 같은 좌측 라인의 일반 문서 영역. */}
+          <div className="py-2">
             <EditorContentWithCursorStyles editor={editor} />
           </div>
         </>
