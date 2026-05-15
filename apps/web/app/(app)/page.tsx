@@ -131,13 +131,20 @@ export default function HomePage() {
   }, []);
 
   useEffect(() => {
-    setIsBodyEditable(false);
+    // Cycle 36 follow-up — 편집 모드 초기값을 URL ?edit=1 에 동기적으로 맞춘다.
+    // 이전엔 항상 false로 리셋한 뒤, currentPage 로드 완료 후 별도 useEffect
+    // 에서 ?edit=1이면 true로 다시 올렸다. 이 사이 비동기 race로 TopNav 만들기
+    // → 편집 창 자동 진입이 가끔 무산되어 사용자가 새 draft를 못 편집했다.
+    // searchParams를 deps에 넣지 않는 건 의도적: edit=1 정리(router.replace)
+    // 시 이 effect가 다시 돌면 isBodyEditable이 즉시 false로 떨어진다.
+    setIsBodyEditable(searchParams.get("edit") === "1");
     if (!selectedPageId) {
       setCurrentPage(null);
       return;
     }
     setSaveStatus("idle");
     loadCurrentPage(selectedPageId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedPageId, loadCurrentPage]);
 
   // Cycle 10-2b-2 — TaskItemNodeView가 조회 모드에서 즉시 발행할 때 쓰는
@@ -182,6 +189,10 @@ export default function HomePage() {
   // Cycle 32 — ?edit=1 (TopNav "만들기"로 갓 생성된 페이지)이면 편집 모드로 진입.
   // 진입 직후 URL에서 edit 파라미터를 정리 — 새로고침 시 다시 편집모드로
   // 들어가지 않도록.
+  // Cycle 36 follow-up — selectedPageId effect가 isBodyEditable=true를 동기적
+  // 으로 먼저 잡지만, 같은 pageId에서 ?edit=1만 추가되는 케이스(예: URL 직접
+  // 입력)도 살리기 위해 여기서 한 번 더 보강한다. URL 정리(replace)는 currentPage
+  // 로드 완료 후에 — 그래야 새로고침 시 자동 편집 모드로 다시 안 들어간다.
   useEffect(() => {
     if (currentPage && searchParams.get("edit") === "1") {
       setIsBodyEditable(true);
