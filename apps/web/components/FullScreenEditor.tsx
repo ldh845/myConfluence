@@ -281,11 +281,21 @@ export default function FullScreenEditor({
           className="inline-flex items-center px-3 py-1.5 rounded text-[13px] font-semibold bg-[#0052cc] text-white hover:bg-[#0747a6] disabled:bg-[#a5adba] disabled:cursor-not-allowed"
           title={
             hasDraft
-              ? "변경 사항을 발행합니다"
+              ? page.publishedAt
+                ? "변경 사항을 업데이트합니다"
+                : "이 페이지를 처음으로 발행합니다"
               : "발행할 변경 사항이 없습니다"
           }
         >
-          {publishing ? "발행 중..." : "업데이트"}
+          {/* Cycle 36-followup — 한 번도 발행 안 된 draft는 "발행", 이후 재발행은
+              "업데이트" (Confluence Publish/Update 동일 패턴). */}
+          {publishing
+            ? page.publishedAt
+              ? "업데이트 중..."
+              : "발행 중..."
+            : page.publishedAt
+              ? "업데이트"
+              : "발행"}
         </button>
       </div>
     </div>

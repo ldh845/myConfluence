@@ -39,6 +39,9 @@ export type PageFull = {
   parentId: string | null;
   createdAt: string;
   updatedAt: string;
+  // Cycle 35 — null이면 아직 한 번도 발행되지 않은 draft. 편집기 버튼 라벨
+  // (첫 발행=발행 / 재발행=업데이트) 분기에 사용.
+  publishedAt?: string | null;
   author?: PageUserSummary | null;
   lastEditor?: PageUserSummary | null;
 };
