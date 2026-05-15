@@ -116,6 +116,45 @@ const ListShortcuts = Extension.create({
   },
 });
 
+// Cycle 38 followup — 일반 문단/제목에도 들여쓰기/내어쓰기 적용 가능하도록
+// indent 속성을 추가. 한 단계당 24px margin-left, 최대 8단계.
+// 리스트 항목은 별도 sink/liftListItem 으로 처리되므로 여기 대상에서 제외.
+// 마크다운 직렬화는 indent 속성을 복원하지 않으므로 새로고침 시엔 0으로 리셋
+// 되지만, 편집 중 시각적 들여쓰기는 즉시 적용된다.
+const INDENT_STEP_PX = 24;
+const INDENT_MAX = 8;
+const INDENT_TYPES = ["paragraph", "heading"] as const;
+
+const BlockIndent = Extension.create({
+  name: "blockIndent",
+  addGlobalAttributes() {
+    return [
+      {
+        types: [...INDENT_TYPES],
+        attributes: {
+          indent: {
+            default: 0,
+            parseHTML: (el) => {
+              const ml = parseInt(
+                (el as HTMLElement).style.marginLeft || "0",
+                10,
+              );
+              if (!Number.isFinite(ml) || ml <= 0) return 0;
+              return Math.min(INDENT_MAX, Math.floor(ml / INDENT_STEP_PX));
+            },
+            renderHTML: (attrs) => {
+              const lvl = (attrs as { indent?: number }).indent ?? 0;
+              if (!lvl) return {};
+              return { style: `margin-left: ${lvl * INDENT_STEP_PX}px` };
+            },
+            keepOnSplit: false,
+          },
+        },
+      },
+    ];
+  },
+});
+
 export default function CollaborativeEditor({
   pageId,
   initialMarkdown,
@@ -298,6 +337,8 @@ export default function CollaborativeEditor({
         }),
         // Cycle 38 — Ctrl/Cmd+Shift+B (단추형) / Ctrl/Cmd+Shift+N (번호형) 단축키.
         ListShortcuts,
+        // Cycle 38 followup — 일반 문단/제목 들여쓰기 속성.
+        BlockIndent,
         // FR-030 부분 — 체크리스트 + 텍스트/배경 색상.
         // TextStyle은 Color mark를 얹기 위한 base; Highlight multicolor로
         // 형광펜 색을 노드별로 다르게 잡는다. TaskItem은 nested 허용.

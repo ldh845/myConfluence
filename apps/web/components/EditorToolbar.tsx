@@ -323,9 +323,18 @@ function MiniDivider() {
   return <div className="w-px h-4 bg-[#dfe1e6] mx-0.5" />;
 }
 
-// Cycle 38 — 들여쓰기/내어쓰기 버튼.
-// taskItem 안이면 taskItem을 sink/lift, 그 외 list 항목이면 listItem을 sink/lift.
-// 어느 명령도 실행 불가하면 비활성(회색).
+// Cycle 38 (+followup) — 들여쓰기/내어쓰기 버튼.
+// 컨텍스트별 동작:
+//   · taskItem 안 → sink/liftListItem("taskItem")
+//   · listItem 안 → sink/liftListItem("listItem")
+//   · paragraph/heading → BlockIndent 익스텐션의 indent 속성 ±1
+//
+// 어떤 컨텍스트에서도 동작 가능하도록 일반 문단도 indent 속성으로 처리한다.
+// 비활성 조건은 자연 한계뿐: 들여쓰기는 indent==MAX 일 때, 내어쓰기는
+// indent==0 일 때(또는 리스트 최상위 단계).
+const INDENT_MAX = 8;
+const INDENT_TYPES = ["paragraph", "heading"];
+
 function IndentButton({
   editor,
   direction,
@@ -334,19 +343,55 @@ function IndentButton({
   direction: "indent" | "outdent";
 }) {
   const inTask = editor.isActive("taskItem");
-  const itemType = inTask ? "taskItem" : "listItem";
-  const can =
-    direction === "indent"
-      ? editor.can().sinkListItem(itemType)
-      : editor.can().liftListItem(itemType);
+  const inList = editor.isActive("listItem");
+
+  // 가능 여부 — 활성 컨텍스트에 따라 분기.
+  const can = (() => {
+    if (inTask) {
+      return direction === "indent"
+        ? editor.can().sinkListItem("taskItem")
+        : editor.can().liftListItem("taskItem");
+    }
+    if (inList) {
+      return direction === "indent"
+        ? editor.can().sinkListItem("listItem")
+        : editor.can().liftListItem("listItem");
+    }
+    // 문단/제목: indent 속성 한계만 검사.
+    const node = editor.state.selection.$anchor.parent;
+    if (!INDENT_TYPES.includes(node.type.name)) return false;
+    const cur = (node.attrs as { indent?: number }).indent ?? 0;
+    return direction === "indent" ? cur < INDENT_MAX : cur > 0;
+  })();
+
   const onClick = () => {
     if (!can) return;
-    if (direction === "indent") {
-      editor.chain().focus().sinkListItem(itemType).run();
-    } else {
-      editor.chain().focus().liftListItem(itemType).run();
+    if (inTask) {
+      const cmd = direction === "indent" ? "sinkListItem" : "liftListItem";
+      editor.chain().focus()[cmd]("taskItem").run();
+      return;
     }
+    if (inList) {
+      const cmd = direction === "indent" ? "sinkListItem" : "liftListItem";
+      editor.chain().focus()[cmd]("listItem").run();
+      return;
+    }
+    // 문단/제목 — indent 속성 ±1.
+    const node = editor.state.selection.$anchor.parent;
+    if (!INDENT_TYPES.includes(node.type.name)) return;
+    const cur = (node.attrs as { indent?: number }).indent ?? 0;
+    const next =
+      direction === "indent"
+        ? Math.min(INDENT_MAX, cur + 1)
+        : Math.max(0, cur - 1);
+    if (next === cur) return;
+    editor
+      .chain()
+      .focus()
+      .updateAttributes(node.type.name, { indent: next })
+      .run();
   };
+
   return (
     <TB
       title={direction === "indent" ? "들여쓰기" : "내어쓰기"}
