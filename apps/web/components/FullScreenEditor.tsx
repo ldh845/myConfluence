@@ -41,7 +41,9 @@ type Props = {
   ancestors: { id: string; title: string }[];
   saveStatus: SaveStatus;
   onTitleChange: (title: string) => void;
-  onPublish: (note: string) => void;
+  // Cycle 36 — 발행 시점에 편집기 현재 마크다운을 함께 전달. 자동저장(5초
+  // debounce) 타이밍과 무관하게 클라이언트가 권위 있는 본문을 들고 있다.
+  onPublish: (content: string, note: string) => void;
   onClose: () => void;
   publishing: boolean;
   hasDraft: boolean;
@@ -262,7 +264,19 @@ export default function FullScreenEditor({
         </button>
         <button
           type="button"
-          onClick={() => onPublish(note.trim())}
+          onClick={() => {
+            // Cycle 36 — 편집기 현재 마크다운을 직접 추출해 발행에 동봉.
+            // tiptap-markdown extension의 storage가 getMarkdown을 노출.
+            // editor가 아직 안 떴으면 (지연/오류) 빈 문자열로 폴백 — 빈 페이지
+            // 발행은 백엔드가 허용한다(content="" explicit).
+            const md =
+              (
+                editor?.storage as
+                  | { markdown?: { getMarkdown: () => string } }
+                  | undefined
+              )?.markdown?.getMarkdown() ?? "";
+            onPublish(md, note.trim());
+          }}
           disabled={!hasDraft || publishing}
           className="inline-flex items-center px-3 py-1.5 rounded text-[13px] font-semibold bg-[#0052cc] text-white hover:bg-[#0747a6] disabled:bg-[#a5adba] disabled:cursor-not-allowed"
           title={

@@ -498,22 +498,32 @@ export class PagesService {
   // 이슈 2 (Cycle 10-1) — 발행.
   // draft → content 승격 + draft 비움 + PageVersion 스냅샷 + retention cap.
   // 모두 같은 트랜잭션이므로 한쪽 실패 시 함께 롤백.
+  // Cycle 36 — dto.content가 오면 그 값을 권위로 사용한다. 자동저장(5초
+  // debounce) 타이밍에 의존하지 않아 "두 번 발행해야 보이는" 버그를 차단.
+  // dto.content 미지정 시엔 기존처럼 draftContent를 승격(하위호환).
   async publish(
     id: string,
     dto: PublishPageDto,
     actor?: { id: string; name: string } | null,
   ) {
     const userId = actor?.id ?? null;
+    // 클라이언트가 명시적으로 content를 보냈는지 (빈 문자열 "" 도 명시로 인정).
+    const explicitContent = dto.content !== undefined;
     const published = await this.prisma.$transaction(async (tx) => {
       const page = await tx.page.findUnique({ where: { id } });
       if (!page) throw new NotFoundException({ error: 'page not found' });
-      if (page.draftContent === null) {
+      // 발행할 본문 결정. explicit이면 그 값, 아니면 서버 draftContent.
+      // 둘 다 없으면 발행할 변경 없음(400). 빈 문자열 explicit은 허용.
+      const nextContent = explicitContent
+        ? (dto.content as string)
+        : page.draftContent;
+      if (nextContent === null) {
         throw new BadRequestException({ error: 'no draft to publish' });
       }
       const published = await tx.page.update({
         where: { id },
         data: {
-          content: page.draftContent,
+          content: nextContent,
           draftContent: null,
           // Cycle 35 — 첫 발행이면 publishedAt 채움. 이미 발행된 페이지의
           // 재발행은 publishedAt을 그대로 둔다 (최초 공개 시각 보존).

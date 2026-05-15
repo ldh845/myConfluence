@@ -219,13 +219,22 @@ export default function HomePage() {
 
   // Cycle 10-2a — 발행 흐름.
   // Cycle 34 — note 동반(선택), 성공 시 편집 모드 탈출(버그 수정 핵심).
+  // Cycle 36 — content를 클라이언트가 직접 보낸다. 자동저장 5초 debounce에
+  // 의존하던 "두 번 발행해야 보이는" 버그를 차단. 성공 시 alert 제거.
   const publish = useMutation({
-    mutationFn: async (vars: { pageId: string; note?: string }) => {
+    mutationFn: async (vars: {
+      pageId: string;
+      content?: string;
+      note?: string;
+    }) => {
       const r = await fetch(`/api/pages/${vars.pageId}/publish`, {
         method: "POST",
         headers: { "Content-Type": "application/json; charset=utf-8" },
         body: JSON.stringify({
           authorName: getIdentity().name,
+          // content는 빈 문자열 ""도 명시 발행으로 인정해야 하므로
+          // !== undefined로 분기. note는 빈 문자열이면 보내지 않는다.
+          ...(vars.content !== undefined ? { content: vars.content } : {}),
           ...(vars.note ? { note: vars.note } : {}),
         }),
       });
@@ -236,7 +245,7 @@ export default function HomePage() {
       return (await r.json()) as PageFull;
     },
     onSuccess: async (_data, vars) => {
-      window.alert("발행되었습니다.");
+      // Cycle 36 — "발행되었습니다" alert 제거. 조용히 조회 모드로 전환.
       queryClient.invalidateQueries({
         queryKey: ["page-versions", vars.pageId],
       });
@@ -250,14 +259,15 @@ export default function HomePage() {
       setIsBodyEditable(false);
     },
     onError: (err: Error) => {
+      // 실패 시엔 사용자에게 알린다.
       window.alert(err.message);
     },
   });
 
   const handlePublish = useCallback(
-    (note?: string) => {
+    (content?: string, note?: string) => {
       if (!currentPage) return;
-      publish.mutate({ pageId: currentPage.id, note });
+      publish.mutate({ pageId: currentPage.id, content, note });
     },
     [currentPage, publish],
   );
@@ -450,9 +460,10 @@ export default function HomePage() {
               onHistoryClick={() => setHistoryOpen(true)}
               hasDraft={hasDraft}
               publishing={publish.isPending}
-              // Cycle 34 — 조회 모드의 PageHeader엔 발행 버튼이 노출되지 않지만,
-              // handlePublish 시그니처(note?: string)와 (): void 프롭 시그니처를
+              // Cycle 34/36 — 조회 모드의 PageHeader엔 발행 버튼이 노출되지 않지만,
+              // handlePublish 시그니처(content?, note?)와 (): void 프롭 시그니처를
               // 안전하게 맞추기 위해 인자 없이 호출하는 래퍼로 감싼다.
+              // 인자 없이 호출되면 백엔드는 기존처럼 서버 draftContent를 승격.
               onPublish={() => handlePublish()}
               onMoveClick={() => setMoveOpen(true)}
               onCopyClick={() => setCopyOpen(true)}
