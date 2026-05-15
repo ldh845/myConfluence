@@ -70,7 +70,9 @@ export class PagesService {
 
   findAll() {
     return this.prisma.page.findMany({
-      where: { deletedAt: null },
+      // Cycle 35-followup — 미발행 draft(publishedAt=null)는 어디에서도 노출 X.
+      // 휴지통 + draft 모두 제외.
+      where: { deletedAt: null, NOT: { publishedAt: null } },
       // FR-021 (19a) — 사이드바 트리 정렬: position 우선, 동률은 createdAt.
       orderBy: [{ position: 'asc' }, { createdAt: 'asc' }],
     });
@@ -79,6 +81,7 @@ export class PagesService {
   // FR-034 (Cycle 11-1) — 내부 페이지 링크 modal용 제목 검색.
   // 인증 도입 후엔 권한 필터를 추가한다. ILIKE로 한국어 포함 대소문자 무관.
   // FR-024 (18-1a) — 휴지통 페이지 제외.
+  // Cycle 35-followup — 미발행 draft도 제외 (작성자 본인 외엔 존재 자체가 비공개).
   search(query: string, limit = 10) {
     const trimmed = (query ?? '').trim();
     if (!trimmed) return [];
@@ -86,6 +89,7 @@ export class PagesService {
       where: {
         title: { contains: trimmed, mode: 'insensitive' },
         deletedAt: null,
+        NOT: { publishedAt: null },
       },
       take: limit,
       orderBy: { updatedAt: 'desc' },
@@ -95,10 +99,11 @@ export class PagesService {
 
   // FR-130 (Cycle 22) — 홈 화면 "최근 수정된 페이지" 카드용.
   // 인증 도입 전이라 "내가 편집한 페이지"가 아닌 "전체 최근 수정 페이지"로 대체.
+  // Cycle 35-followup — draft는 "최근 작업"에도 등장하지 않는다.
   recent(limit = 10) {
     const safeLimit = Math.min(Math.max(limit, 1), 50);
     return this.prisma.page.findMany({
-      where: { deletedAt: null },
+      where: { deletedAt: null, NOT: { publishedAt: null } },
       orderBy: { updatedAt: 'desc' },
       take: safeLimit,
       select: {
@@ -143,6 +148,8 @@ export class PagesService {
       },
       // FR-024 (18-1a) — 휴지통 제외.
       { deletedAt: null },
+      // Cycle 35-followup — 미발행 draft 제외.
+      { NOT: { publishedAt: null } },
     ];
     // Cycle 31 — 다중 스페이스 / 작성자 필터 (IN).
     if (opts.spaceIds?.length) {
