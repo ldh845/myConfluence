@@ -52,7 +52,7 @@ export default function EditorToolbar({ editor }: Props) {
       <ParagraphStyleDropdown editor={editor} />
       <Divider />
 
-      {/* G2: 굵게 / 기울임 / 밑줄 / 취소선 */}
+      {/* G2: 굵게 / 기울임 / 밑줄 + 취소선 드롭다운 (취소선/위·아래첨자/등간격/서식지우기) */}
       <BtnGroup>
         <TB
           title="굵게 (Ctrl+B)"
@@ -75,25 +75,12 @@ export default function EditorToolbar({ editor }: Props) {
         >
           <u>U</u>
         </TB>
-        <TB
-          title="취소선"
-          active={isActive("strike")}
-          onClick={run(() => editor.chain().focus().toggleStrike().run())}
-        >
-          <s>S</s>
-        </TB>
+        <MoreInlineDropdown editor={editor} />
       </BtnGroup>
       <Divider />
 
-      {/* G3: 인라인 코드 + 글자색 / 형광펜 */}
+      {/* G3: 글자색 / 형광펜 */}
       <BtnGroup>
-        <TB
-          title="인라인 코드"
-          active={isActive("code")}
-          onClick={run(() => editor.chain().focus().toggleCode().run())}
-        >
-          <code>&lt;/&gt;</code>
-        </TB>
         <EditorColorPicker editor={editor} kind="text" />
         <EditorColorPicker editor={editor} kind="highlight" />
       </BtnGroup>
@@ -309,8 +296,10 @@ function ParagraphStyleDropdown({ editor }: { editor: Editor }) {
   }, [open]);
 
   // 현재 블록 타입을 라벨로 해석.
+  // Cycle 37 followup — H1~H6 모두 표시. 코드 블록은 G5의 표/이미지처럼 "삽입" 성격이라
+  // 이 드롭다운에선 제외(원하는 사용자는 ``` 자동 변환 / 슬래시 메뉴로 진입).
   const currentLabel = (() => {
-    for (const lvl of [1, 2, 3, 4] as const) {
+    for (const lvl of [1, 2, 3, 4, 5, 6] as const) {
       if (editor.isActive("heading", { level: lvl })) return `제목 ${lvl}`;
     }
     if (editor.isActive("blockquote")) return "인용";
@@ -319,8 +308,9 @@ function ParagraphStyleDropdown({ editor }: { editor: Editor }) {
   })();
 
   // setParagraph 후 toggleHeading: 다른 블록(인용/코드블록)에서도 제목으로
-  // 깔끔하게 전환되도록. 같은 제목 레벨 누르면 toggleHeading이 다시 문단으로.
-  const setHeading = (level: 1 | 2 | 3 | 4) => () =>
+  // 깔끔하게 전환. 같은 제목 레벨 누르면 toggleHeading이 다시 문단으로
+  // 떨어뜨리므로 별도 "문단" 항목 없이도 되돌리기 가능.
+  const setHeading = (level: 1 | 2 | 3 | 4 | 5 | 6) => () =>
     editor
       .chain()
       .focus()
@@ -335,64 +325,29 @@ function ParagraphStyleDropdown({ editor }: { editor: Editor }) {
     active: boolean;
   };
 
-  const isHeading =
-    editor.isActive("heading", { level: 1 }) ||
-    editor.isActive("heading", { level: 2 }) ||
-    editor.isActive("heading", { level: 3 }) ||
-    editor.isActive("heading", { level: 4 });
-  const isBlockquote = editor.isActive("blockquote");
-  const isCodeBlock = editor.isActive("codeBlock");
-  const isPlainPara = !isHeading && !isBlockquote && !isCodeBlock;
+  // 제목 레벨별 미리보기 크기 (Confluence 톤). H1=22px → H6=11px 단계적 축소.
+  const headingPreviewSize: Record<1 | 2 | 3 | 4 | 5 | 6, string> = {
+    1: "text-[22px]",
+    2: "text-[18px]",
+    3: "text-[16px]",
+    4: "text-[14px]",
+    5: "text-[12px]",
+    6: "text-[11px]",
+  };
 
   const items: Item[] = [
-    {
-      label: "문단",
+    ...([1, 2, 3, 4, 5, 6] as const).map<Item>((lvl) => ({
+      label: `제목 ${lvl}`,
       preview: (
-        <span className="text-[14px] text-[#172b4d]">문단</span>
-      ),
-      action: () => editor.chain().focus().setParagraph().run(),
-      active: isPlainPara,
-    },
-    {
-      label: "제목 1",
-      preview: (
-        <span className="text-[22px] font-bold text-[#172b4d] leading-tight">
-          제목 1
+        <span
+          className={`${headingPreviewSize[lvl]} font-bold text-[#172b4d] leading-tight`}
+        >
+          제목 {lvl}
         </span>
       ),
-      action: setHeading(1),
-      active: editor.isActive("heading", { level: 1 }),
-    },
-    {
-      label: "제목 2",
-      preview: (
-        <span className="text-[18px] font-bold text-[#172b4d] leading-tight">
-          제목 2
-        </span>
-      ),
-      action: setHeading(2),
-      active: editor.isActive("heading", { level: 2 }),
-    },
-    {
-      label: "제목 3",
-      preview: (
-        <span className="text-[15px] font-bold text-[#172b4d] leading-tight">
-          제목 3
-        </span>
-      ),
-      action: setHeading(3),
-      active: editor.isActive("heading", { level: 3 }),
-    },
-    {
-      label: "제목 4",
-      preview: (
-        <span className="text-[13px] font-bold text-[#172b4d] leading-tight">
-          제목 4
-        </span>
-      ),
-      action: setHeading(4),
-      active: editor.isActive("heading", { level: 4 }),
-    },
+      action: setHeading(lvl),
+      active: editor.isActive("heading", { level: lvl }),
+    })),
     {
       label: "인용",
       preview: (
@@ -400,19 +355,8 @@ function ParagraphStyleDropdown({ editor }: { editor: Editor }) {
           인용
         </span>
       ),
-      action: () =>
-        editor.chain().focus().toggleBlockquote().run(),
-      active: isBlockquote,
-    },
-    {
-      label: "코드 블록",
-      preview: (
-        <span className="text-[12px] font-mono text-[#172b4d] bg-[#f4f5f7] px-1.5 py-0.5 rounded">
-          코드 블록
-        </span>
-      ),
-      action: () => editor.chain().focus().toggleCodeBlock().run(),
-      active: isCodeBlock,
+      action: () => editor.chain().focus().toggleBlockquote().run(),
+      active: editor.isActive("blockquote"),
     },
   ];
 
@@ -433,6 +377,135 @@ function ParagraphStyleDropdown({ editor }: { editor: Editor }) {
       </button>
       {open && (
         <div className="absolute left-0 top-full mt-1 w-[200px] bg-white border border-[#dfe1e6] rounded shadow-lg z-30 py-1">
+          {items.map((item) => (
+            <button
+              key={item.label}
+              type="button"
+              onClick={() => {
+                item.action();
+                setOpen(false);
+              }}
+              className={`w-full text-left px-3 py-1.5 hover:bg-[#deebff] flex items-center justify-between gap-2 ${
+                item.active ? "bg-[#deebff]" : ""
+              }`}
+            >
+              {item.preview}
+              {item.active && (
+                <span className="text-[#0052cc] text-[12px] shrink-0">✓</span>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Cycle 37 followup — 취소선 트리거를 누르면 열리는 인라인 서식 드롭다운.
+// 메뉴: 취소선 / 아래첨자 / 윗첨자 / 등간격(인라인 코드) / 서식지우기.
+// "등간격"은 Confluence 한국어판에서 inline code mark을 부르는 표기 — 같은 mark 사용.
+function MoreInlineDropdown({ editor }: { editor: Editor }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  // 트리거의 active 표시 — 메뉴 안 어떤 mark든 활성이면 강조.
+  const anyActive =
+    editor.isActive("strike") ||
+    editor.isActive("subscript") ||
+    editor.isActive("superscript") ||
+    editor.isActive("code");
+
+  type Item = {
+    label: string;
+    preview: React.ReactNode;
+    action: () => void;
+    active: boolean;
+  };
+
+  const items: Item[] = [
+    {
+      label: "취소선",
+      preview: <s className="text-[13px] text-[#172b4d]">취소선</s>,
+      action: () => editor.chain().focus().toggleStrike().run(),
+      active: editor.isActive("strike"),
+    },
+    {
+      label: "아래첨자",
+      preview: (
+        <span className="text-[13px] text-[#172b4d]">
+          X<sub>아래첨자</sub>
+        </span>
+      ),
+      action: () => editor.chain().focus().toggleSubscript().run(),
+      active: editor.isActive("subscript"),
+    },
+    {
+      label: "윗첨자",
+      preview: (
+        <span className="text-[13px] text-[#172b4d]">
+          X<sup>윗첨자</sup>
+        </span>
+      ),
+      action: () => editor.chain().focus().toggleSuperscript().run(),
+      active: editor.isActive("superscript"),
+    },
+    {
+      label: "등간격",
+      preview: (
+        <code className="text-[12px] font-mono text-[#172b4d] bg-[#f4f5f7] px-1.5 py-0.5 rounded">
+          등간격
+        </code>
+      ),
+      action: () => editor.chain().focus().toggleCode().run(),
+      active: editor.isActive("code"),
+    },
+    {
+      label: "서식 지우기",
+      preview: <span className="text-[13px] text-[#42526e]">서식 지우기</span>,
+      // marks만 정리. clearNodes()까지 호출하면 제목/리스트 등 노드 구조도 풀려
+      // 의도와 다를 수 있어 unsetAllMarks만 호출.
+      action: () => editor.chain().focus().unsetAllMarks().run(),
+      active: false,
+    },
+  ];
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        title="추가 인라인 서식"
+        className={`min-w-[28px] h-7 px-2 rounded text-[13px] flex items-center justify-center gap-0.5 ${
+          open
+            ? "bg-[#ebecf0] text-[#172b4d]"
+            : anyActive
+              ? "bg-[#deebff] text-[#0052cc]"
+              : "text-[#42526e] hover:bg-[#ebecf0]"
+        }`}
+      >
+        <s>S</s>
+        <span className="text-[10px] text-[#6b778c]">▾</span>
+      </button>
+      {open && (
+        <div className="absolute left-0 top-full mt-1 w-[180px] bg-white border border-[#dfe1e6] rounded shadow-lg z-30 py-1">
           {items.map((item) => (
             <button
               key={item.label}

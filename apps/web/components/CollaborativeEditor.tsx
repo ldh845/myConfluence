@@ -21,6 +21,8 @@ import TextStyle from "@tiptap/extension-text-style";
 import Color from "@tiptap/extension-color";
 import Highlight from "@tiptap/extension-highlight";
 import Underline from "@tiptap/extension-underline";
+import Subscript from "@tiptap/extension-subscript";
+import Superscript from "@tiptap/extension-superscript";
 import Image from "@tiptap/extension-image";
 import { CodeBlockExtension } from "@/lib/tiptap/code-block-lowlight";
 import { InlineCommentMark } from "@/lib/tiptap/inline-comment-mark";
@@ -261,13 +263,16 @@ export default function CollaborativeEditor({
         StarterKit.configure({
           history: false,
           codeBlock: false,
-          // FR-030 (Cycle 9-2) — H4까지 노출. StarterKit 기본 levels는
-          // 1~6이지만 toolbar/슬래시가 H4까지만 보여주는 게 우리 정책.
-          heading: { levels: [1, 2, 3, 4] },
+          // Cycle 37 followup — 문단 스타일 드롭다운에 H1~H6 모두 노출하도록
+          // 확장 (이전 H4까지 정책에서 변경). 마크다운 #~###### 자동변환도 자연히 동작.
+          heading: { levels: [1, 2, 3, 4, 5, 6] },
         }),
         CodeBlockExtension,
         // FR-030 (Cycle 9-2) — 밑줄 mark.
         Underline,
+        // Cycle 37 followup — 아래첨자 / 윗첨자 mark (취소선 드롭다운에서 선택).
+        Subscript,
+        Superscript,
         // FR-030 부분 — 체크리스트 + 텍스트/배경 색상.
         // TextStyle은 Color mark를 얹기 위한 base; Highlight multicolor로
         // 형광펜 색을 노드별로 다르게 잡는다. TaskItem은 nested 허용.
