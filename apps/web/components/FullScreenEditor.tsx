@@ -3,11 +3,15 @@
 // Cycle 34 — Confluence "The Editor" 패턴.
 // https://confluence.atlassian.com/doc/the-editor-251006017.html
 //
-// 인라인 PageHeader+에디터 대신, 편집 모드 진입 시 TopNav/사이드바를 덮는
+// 인라인 PageHeader+에디터 대신, 편집 모드 진입 시 사이드바·본문 영역을 덮는
 // 전체 화면 편집기를 띄운다. 조회 모드 ↔ 편집 모드 전환은 (app)/page.tsx의
 // isBodyEditable 분기에서 일어난다.
 //
-// 레이아웃 (위→아래, 모두 fixed inset-0 안):
+// Cycle 35 — TopNav(h-14)는 가리지 않는다. fixed top-14로 그 아래부터 시작.
+// 본문은 가운데 정렬 대신 좌측 기준 넓은 폭(콘텐츠는 오른쪽으로 넉넉히 흐름).
+//
+// 레이아웃 (위→아래):
+//   [TopNav: layout이 그대로 렌더, h-14 고정]
 //   1) 상단 툴바 (sticky)        — EditorToolbar (서식/삽입/실행취소·재실행)
 //   2) breadcrumb + 페이지 도구  — 라벨/제한은 placeholder
 //   3) 제목 input (큰 글씨)
@@ -139,7 +143,9 @@ export default function FullScreenEditor({
   })();
 
   return (
-    <div className="fixed inset-0 z-50 bg-white flex flex-col">
+    // Cycle 35 — TopNav(h-14)는 그대로 노출. fixed top-14로 그 아래만 덮음.
+    // z-40으로 사이드바·본문 위에 얹되, TopNav(셸 안 일반 flow)는 가리지 않는다.
+    <div className="fixed left-0 right-0 bottom-0 top-14 z-40 bg-white flex flex-col">
       {/* 1) 상단 툴바 */}
       <div className="sticky top-0 z-20 border-b border-[#dfe1e6] bg-white px-6 pt-2">
         {editor ? (
@@ -150,9 +156,9 @@ export default function FullScreenEditor({
         )}
       </div>
 
-      {/* 2) breadcrumb + 페이지 도구 */}
+      {/* 2) breadcrumb + 페이지 도구 — Cycle 35: 좌측 정렬 + 넉넉한 가로 패딩. */}
       <div className="border-b border-[#dfe1e6] bg-white">
-        <div className="max-w-[860px] mx-auto px-8 py-2 flex items-center justify-between text-[12px] text-[#6b778c]">
+        <div className="px-8 lg:px-12 xl:px-16 py-2 flex items-center justify-between text-[12px] text-[#6b778c]">
           <nav className="flex flex-wrap items-center gap-1">
             {space && <span>{space.name}</span>}
             {ancestors.map((c) => (
@@ -183,9 +189,10 @@ export default function FullScreenEditor({
         </div>
       </div>
 
-      {/* 3) 제목 + 4) 본문 — 가운데 정렬, 함께 스크롤 */}
+      {/* 3) 제목 + 4) 본문 — Cycle 35: 좌측 기준, 가운데 정렬(mx-auto) 제거.
+          매우 넓은 화면에서 한 줄이 너무 길어지지 않도록 max-w-5xl만 둔다. */}
       <div className="flex-1 overflow-auto">
-        <div className="max-w-[860px] mx-auto px-8 pt-6 pb-12">
+        <div className="px-8 lg:px-12 xl:px-16 pt-6 pb-12 max-w-5xl">
           <input
             value={title}
             onChange={(e) => setTitle(e.target.value)}

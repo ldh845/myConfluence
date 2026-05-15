@@ -377,6 +377,9 @@ function CreateSplitButton({
           content: "",
           spaceId,
           parentId,
+          // Cycle 35 — TopNav "만들기"는 draft로 시작. 사이드바 트리엔 안 보이고
+          // 편집 창에서 [업데이트] 발행 시점에 등장한다(Confluence draft 모델).
+          draft: true,
         }),
       });
       if (res.status === 401) {
@@ -388,6 +391,9 @@ function CreateSplitButton({
         return;
       }
       const page = (await res.json()) as { id: string };
+      // Cycle 35 — draft는 트리에 안 보이므로 spaces 캐시 invalidate는 사실상
+      // no-op이지만, currentPage 라우팅이 spaces.pages 안에서 페이지를 찾을 수
+      // 있어야 (?pageId=draftId 진입 시 activeSpace 결정) 캐시를 갱신해 둔다.
       queryClient.invalidateQueries({ queryKey: ["spaces"] });
       router.push(`/?pageId=${page.id}&edit=1`);
     } finally {

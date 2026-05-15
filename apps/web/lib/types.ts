@@ -6,6 +6,9 @@ export type PageNode = {
   updatedAt: string;
   // Cycle 30 — /spaces "내 공간" 탭 필터용. 레거시 페이지는 null 가능.
   authorId?: string | null;
+  // Cycle 35 — 발행 시각. null이면 미발행 draft → Sidebar 페이지 트리에서 숨김.
+  // 첫 publish 시 백엔드가 채운다. 백엔드 응답에서 빠져있을 수도 있어 optional.
+  publishedAt?: string | null;
 };
 
 export type SpaceWithPages = {

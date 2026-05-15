@@ -23,6 +23,8 @@ const PAGES_INCLUDE = {
       updatedAt: true,
       // Cycle 30 — /spaces "내 공간" 탭 필터용.
       authorId: true,
+      // Cycle 35 — Sidebar가 미발행 draft 페이지를 트리에서 숨길 때 사용.
+      publishedAt: true,
     },
   },
 } satisfies Prisma.SpaceInclude;
@@ -69,6 +71,8 @@ export class SpacesService {
           position: 0,
           authorId: actor?.id ?? null,
           lastEditorId: actor?.id ?? null,
+          // Cycle 35 — 자동 생성된 홈은 즉시 발행(트리/홈 진입 가능).
+          publishedAt: new Date(),
         },
       });
       const updated = await tx.space.update({
@@ -146,6 +150,8 @@ export class SpacesService {
           position: 0,
           authorId: user.id,
           lastEditorId: user.id,
+          // Cycle 35 — 자동 생성된 개인 공간 홈도 즉시 발행 상태.
+          publishedAt: new Date(),
         },
       });
       return tx.space.update({

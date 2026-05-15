@@ -263,6 +263,8 @@ export class PagesService {
   }
 
   // FR-001 (Cycle 27c) — author/lastEditor 자동 세팅.
+  // Cycle 35 — dto.draft=true면 publishedAt=null (미발행 draft, 트리 미노출).
+  // 그 외(기본)는 publishedAt=now() — 즉시 발행 상태로 트리에 노출.
   async create(
     dto: CreatePageDto,
     actor?: { id: string; name: string } | null,
@@ -275,6 +277,7 @@ export class PagesService {
         parentId: dto.parentId ?? null,
         authorId: actor?.id ?? null,
         lastEditorId: actor?.id ?? null,
+        publishedAt: dto.draft ? null : new Date(),
       },
     });
     await this.activities.log({
@@ -512,6 +515,9 @@ export class PagesService {
         data: {
           content: page.draftContent,
           draftContent: null,
+          // Cycle 35 — 첫 발행이면 publishedAt 채움. 이미 발행된 페이지의
+          // 재발행은 publishedAt을 그대로 둔다 (최초 공개 시각 보존).
+          ...(page.publishedAt ? {} : { publishedAt: new Date() }),
           ...(userId ? { lastEditorId: userId } : {}),
         },
       });
@@ -840,6 +846,8 @@ export class PagesService {
               draftContent: null,
               authorId: userId ?? null,
               lastEditorId: userId ?? null,
+              // Cycle 35 — 복사는 즉시 발행 상태(트리에 바로 노출).
+              publishedAt: new Date(),
             },
           });
           idMap.set(sid, created.id);

@@ -240,6 +240,10 @@ export default function HomePage() {
       queryClient.invalidateQueries({
         queryKey: ["page-versions", vars.pageId],
       });
+      // Cycle 35 — 첫 발행이면 publishedAt이 채워져 사이드바 트리에 등장해야
+      // 하므로 spaces 캐시를 함께 갱신. 재발행 시에도 page.updatedAt 등이
+      // 바뀌어 트리 정렬이 최신화된다.
+      queryClient.invalidateQueries({ queryKey: ["spaces"] });
       await loadCurrentPage(vars.pageId);
       // Cycle 34 — 발행 후 편집 모드 탈출. 이전엔 editable이 그대로라 편집
       // 화면에 머무르며 자동저장이 또 발화돼 hasDraft가 즉시 살아났다.

@@ -98,6 +98,10 @@ model Page {
   lastEditor   User?         @relation("PageEditor", fields: [lastEditorId], references: [id], onDelete: SetNull)
   // Cycle 33 — 이 페이지가 어느 공간의 홈 페이지인지 (back-relation).
   homeOfSpace  Space?        @relation("SpaceHomePage")
+  // Cycle 35 — 발행 시각. null이면 아직 한 번도 발행되지 않은 draft 페이지로,
+  // 사이드바 페이지 트리에서 숨긴다. 첫 publish 시 now()로 채우고 이후엔 그대로.
+  // 기존 페이지는 마이그레이션에서 createdAt으로 백필.
+  publishedAt  DateTime?
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
 

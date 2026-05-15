@@ -287,13 +287,16 @@ export default function Sidebar({
   }, [pages, space?.homePageId]);
 
   // 페이지 트리에는 메인 페이지를 제외. 메인 페이지의 직계 자식은 루트로 승격.
+  // Cycle 35 — 미발행 draft(publishedAt=null)도 숨긴다. 발행해야 트리 등장.
+  // publishedAt 필드가 응답에 빠진 레거시 페이지는 보수적으로 노출(undefined → 통과).
   const treePages = useMemo(() => {
-    if (!mainPageId) return pages;
-    return pages
-      .filter((p) => p.id !== mainPageId)
-      .map((p) =>
-        p.parentId === mainPageId ? { ...p, parentId: null } : p,
-      );
+    const filtered = pages.filter(
+      (p) => p.id !== mainPageId && p.publishedAt !== null,
+    );
+    if (!mainPageId) return filtered;
+    return filtered.map((p) =>
+      p.parentId === mainPageId ? { ...p, parentId: null } : p,
+    );
   }, [pages, mainPageId]);
 
   const visible = useMemo(
