@@ -196,8 +196,17 @@ export default function HomePage() {
   // 으로 먼저 잡지만, 같은 pageId에서 ?edit=1만 추가되는 케이스(예: URL 직접
   // 입력)도 살리기 위해 여기서 한 번 더 보강한다. URL 정리(replace)는 currentPage
   // 로드 완료 후에 — 그래야 새로고침 시 자동 편집 모드로 다시 안 들어간다.
+  // 결정적 보강: currentPage.id === URL pageId 체크 추가. 안 그러면 만들기 직후
+  // 같은 라우트 navigation에서 currentPage가 STALE한 이전 페이지인 채로 effect가
+  // 발화해 router.replace(이전pageId)로 URL이 즉시 회귀, "아무것도 안 떠" 증상의
+  // 근본 원인이 된다.
   useEffect(() => {
-    if (currentPage && searchParams.get("edit") === "1") {
+    const urlPageId = searchParams.get("pageId");
+    if (
+      currentPage &&
+      currentPage.id === urlPageId &&
+      searchParams.get("edit") === "1"
+    ) {
       setIsBodyEditable(true);
       router.replace(`/?pageId=${currentPage.id}`);
     }
