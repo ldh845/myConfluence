@@ -214,9 +214,11 @@ export default function FullScreenEditor({
       </div>
 
       {/* 3) 제목 + 4) 본문 — Cycle 35: 좌측 기준, 가운데 정렬(mx-auto) 제거.
-          매우 넓은 화면에서 한 줄이 너무 길어지지 않도록 max-w-5xl만 둔다. */}
+          Cycle 38 followup: max-w-5xl 폭 제한 제거 — 사용자가 한 줄 글자 수가
+          좁다(58자)고 요청. 좌우 패딩만 남겨 사이드바·TopNav 사이의 가용 폭을
+          전부 사용. (별도 max-width 없음) */}
       <div className="flex-1 overflow-auto">
-        <div className="px-8 lg:px-12 xl:px-16 pt-6 pb-12 max-w-5xl">
+        <div className="px-8 lg:px-12 xl:px-16 pt-6 pb-12">
           {/* Cycle 36-followup — 빈 제목 발행 시도 에러. AUI 클래스명은 사용자
               요청대로 그대로 두되(향후 AUI 스타일 로딩 시 자동 매칭), 현재는
               Tailwind로 동등한 빨간 배너를 그린다. */}
