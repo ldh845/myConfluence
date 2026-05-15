@@ -23,7 +23,9 @@ import Highlight from "@tiptap/extension-highlight";
 import Underline from "@tiptap/extension-underline";
 import Subscript from "@tiptap/extension-subscript";
 import Superscript from "@tiptap/extension-superscript";
+import TextAlign from "@tiptap/extension-text-align";
 import Image from "@tiptap/extension-image";
+import { Extension } from "@tiptap/core";
 import { CodeBlockExtension } from "@/lib/tiptap/code-block-lowlight";
 import { InlineCommentMark } from "@/lib/tiptap/inline-comment-mark";
 import { MarkdownInputRules } from "@/lib/tiptap/markdown-input-rules";
@@ -99,6 +101,20 @@ function resolveWsUrl(): string {
 }
 
 const WS_URL = resolveWsUrl();
+
+// Cycle 38 — Confluence식 목록 단축키. StarterKit 기본은 Mod-Shift-7/8 인데,
+// Confluence는 Mod-Shift-N(번호) / Mod-Shift-B(단추) 라서 이쪽으로 추가 매핑.
+// 둘 다 Tiptap 명령이 true를 반환해 브라우저 기본(즐겨찾기 바, 새 시크릿 창)을
+// preventDefault 한다.
+const ListShortcuts = Extension.create({
+  name: "listShortcuts",
+  addKeyboardShortcuts() {
+    return {
+      "Mod-Shift-b": () => this.editor.commands.toggleBulletList(),
+      "Mod-Shift-n": () => this.editor.commands.toggleOrderedList(),
+    };
+  },
+});
 
 export default function CollaborativeEditor({
   pageId,
@@ -273,6 +289,15 @@ export default function CollaborativeEditor({
         // Cycle 37 followup — 아래첨자 / 윗첨자 mark (취소선 드롭다운에서 선택).
         Subscript,
         Superscript,
+        // Cycle 38 — 텍스트 정렬 (좌/중/우). 적용 대상은 paragraph + heading.
+        // (인용/리스트 항목 정렬은 정책상 제외 — Confluence와 동일한 범위.)
+        TextAlign.configure({
+          types: ["heading", "paragraph"],
+          alignments: ["left", "center", "right"],
+          defaultAlignment: "left",
+        }),
+        // Cycle 38 — Ctrl/Cmd+Shift+B (단추형) / Ctrl/Cmd+Shift+N (번호형) 단축키.
+        ListShortcuts,
         // FR-030 부분 — 체크리스트 + 텍스트/배경 색상.
         // TextStyle은 Color mark를 얹기 위한 base; Highlight multicolor로
         // 형광펜 색을 노드별로 다르게 잡는다. TaskItem은 nested 허용.

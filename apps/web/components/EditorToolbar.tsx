@@ -86,29 +86,70 @@ export default function EditorToolbar({ editor }: Props) {
       </BtnGroup>
       <Divider />
 
-      {/* G4: 목록류 — 글머리 / 번호 / 체크리스트
-          (인용 / 코드블록은 G1 드롭다운으로 이관) */}
+      {/* G4: 목록 + 들여쓰기 + 텍스트 정렬 (Cycle 38) */}
       <BtnGroup>
         <TB
-          title="글머리 목록"
+          title="단추형 목록 (Ctrl+Shift+B)"
           active={isActive("bulletList")}
           onClick={run(() => editor.chain().focus().toggleBulletList().run())}
         >
           •
         </TB>
         <TB
-          title="번호 목록"
+          title="번호형 목록 (Ctrl+Shift+N)"
           active={isActive("orderedList")}
           onClick={run(() => editor.chain().focus().toggleOrderedList().run())}
         >
           1.
         </TB>
         <TB
-          title="체크리스트"
+          title="작업 목록"
           active={isActive("taskList")}
           onClick={run(() => editor.chain().focus().toggleTaskList().run())}
         >
           ☑
+        </TB>
+      </BtnGroup>
+      <MiniDivider />
+      {/* 들여쓰기 / 내어쓰기 — 리스트 항목에만 의미 있음. 그 외엔 비활성. */}
+      <BtnGroup>
+        <IndentButton editor={editor} direction="outdent" />
+        <IndentButton editor={editor} direction="indent" />
+      </BtnGroup>
+      <MiniDivider />
+      {/* 텍스트 정렬 — paragraph + heading 대상. */}
+      <BtnGroup>
+        <TB
+          title="좌측 정렬"
+          active={
+            editor.isActive({ textAlign: "left" }) ||
+            // 기본값(left)은 isActive가 false로 나와 "좌측 정렬"이 아무 강조 없이
+            // 보이는데, 사용자에겐 left가 디폴트 활성처럼 보이는 게 자연스럽다.
+            // 명시적으로 다른 정렬이 활성이 아니면 left 활성으로 표시.
+            (!editor.isActive({ textAlign: "center" }) &&
+              !editor.isActive({ textAlign: "right" }))
+          }
+          onClick={run(() => editor.chain().focus().setTextAlign("left").run())}
+        >
+          <AlignIcon dir="left" />
+        </TB>
+        <TB
+          title="가운데 정렬"
+          active={editor.isActive({ textAlign: "center" })}
+          onClick={run(() =>
+            editor.chain().focus().setTextAlign("center").run()
+          )}
+        >
+          <AlignIcon dir="center" />
+        </TB>
+        <TB
+          title="우측 정렬"
+          active={editor.isActive({ textAlign: "right" })}
+          onClick={run(() =>
+            editor.chain().focus().setTextAlign("right").run()
+          )}
+        >
+          <AlignIcon dir="right" />
         </TB>
       </BtnGroup>
       <Divider />
@@ -247,12 +288,14 @@ function TB({
   children,
   title,
   active,
+  disabled,
   onClick,
 }: {
   label?: string;
   children?: React.ReactNode;
   title?: string;
   active?: boolean;
+  disabled?: boolean;
   onClick: () => void;
 }) {
   return (
@@ -260,14 +303,126 @@ function TB({
       type="button"
       title={title ?? label}
       onClick={onClick}
+      disabled={disabled}
       className={`min-w-[28px] h-7 px-2 rounded text-[13px] flex items-center justify-center ${
-        active
-          ? "bg-[#deebff] text-[#0052cc]"
-          : "text-[#42526e] hover:bg-[#ebecf0]"
+        disabled
+          ? "text-[#a5adba] cursor-not-allowed"
+          : active
+            ? "bg-[#deebff] text-[#0052cc]"
+            : "text-[#42526e] hover:bg-[#ebecf0]"
       }`}
     >
       {children ?? label}
     </button>
+  );
+}
+
+// Cycle 38 — 그룹 안에서 sub-그룹을 살짝 갈라 보일 정도의 약한 구분선.
+// 일반 Divider보다 마진/높이를 줄여 시각적 노이즈를 줄인다.
+function MiniDivider() {
+  return <div className="w-px h-4 bg-[#dfe1e6] mx-0.5" />;
+}
+
+// Cycle 38 — 들여쓰기/내어쓰기 버튼.
+// taskItem 안이면 taskItem을 sink/lift, 그 외 list 항목이면 listItem을 sink/lift.
+// 어느 명령도 실행 불가하면 비활성(회색).
+function IndentButton({
+  editor,
+  direction,
+}: {
+  editor: Editor;
+  direction: "indent" | "outdent";
+}) {
+  const inTask = editor.isActive("taskItem");
+  const itemType = inTask ? "taskItem" : "listItem";
+  const can =
+    direction === "indent"
+      ? editor.can().sinkListItem(itemType)
+      : editor.can().liftListItem(itemType);
+  const onClick = () => {
+    if (!can) return;
+    if (direction === "indent") {
+      editor.chain().focus().sinkListItem(itemType).run();
+    } else {
+      editor.chain().focus().liftListItem(itemType).run();
+    }
+  };
+  return (
+    <TB
+      title={direction === "indent" ? "들여쓰기" : "내어쓰기"}
+      disabled={!can}
+      onClick={onClick}
+    >
+      <IndentIcon direction={direction} />
+    </TB>
+  );
+}
+
+// Cycle 38 — Feather/Lucide 스타일 아이콘 베이스 (16px stroke=currentColor).
+function Icon({ children }: { children: React.ReactNode }) {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      {children}
+    </svg>
+  );
+}
+
+function IndentIcon({ direction }: { direction: "indent" | "outdent" }) {
+  // outdent(내어쓰기) = chevron이 왼쪽을 가리킴 (텍스트가 왼쪽으로 빠져나감)
+  // indent(들여쓰기) = chevron이 오른쪽을 가리킴 (텍스트가 오른쪽으로 들어감)
+  return (
+    <Icon>
+      {direction === "outdent" ? (
+        <polyline points="7 8 3 12 7 16" />
+      ) : (
+        <polyline points="3 8 7 12 3 16" />
+      )}
+      <line x1="21" y1="6" x2="11" y2="6" />
+      <line x1="21" y1="12" x2="11" y2="12" />
+      <line x1="21" y1="18" x2="11" y2="18" />
+    </Icon>
+  );
+}
+
+function AlignIcon({ dir }: { dir: "left" | "center" | "right" }) {
+  // 4줄 — 위/아래 줄은 항상 페이지 폭(3~21), 가운데 두 줄은 정렬 방향에 따라 짧음.
+  if (dir === "left") {
+    return (
+      <Icon>
+        <line x1="21" y1="6" x2="3" y2="6" />
+        <line x1="17" y1="10" x2="3" y2="10" />
+        <line x1="21" y1="14" x2="3" y2="14" />
+        <line x1="17" y1="18" x2="3" y2="18" />
+      </Icon>
+    );
+  }
+  if (dir === "center") {
+    return (
+      <Icon>
+        <line x1="21" y1="6" x2="3" y2="6" />
+        <line x1="18" y1="10" x2="6" y2="10" />
+        <line x1="21" y1="14" x2="3" y2="14" />
+        <line x1="18" y1="18" x2="6" y2="18" />
+      </Icon>
+    );
+  }
+  return (
+    <Icon>
+      <line x1="21" y1="6" x2="3" y2="6" />
+      <line x1="21" y1="10" x2="7" y2="10" />
+      <line x1="21" y1="14" x2="3" y2="14" />
+      <line x1="21" y1="18" x2="7" y2="18" />
+    </Icon>
   );
 }
 
