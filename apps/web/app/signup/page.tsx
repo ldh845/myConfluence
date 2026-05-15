@@ -65,8 +65,8 @@ export default function SignupPage() {
       setClientError("아이디는 영문/숫자/언더스코어만 가능합니다.");
       return;
     }
-    if (password.length < 8) {
-      setClientError("비밀번호는 8자 이상이어야 합니다.");
+    if (password.length < 3) {
+      setClientError("비밀번호는 3자 이상이어야 합니다.");
       return;
     }
     if (password !== confirm) {
@@ -115,7 +115,7 @@ export default function SignupPage() {
               type={showPassword ? "text" : "password"}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="8자 이상"
+              placeholder="3자 이상"
               autoComplete="new-password"
               className="w-full px-3 py-2 pr-10 text-[13px] border border-[#dfe1e6] rounded focus:outline-none focus:border-[#0052cc]"
             />

@@ -30,6 +30,8 @@ type PageVersion = {
   title: string;
   content: string;
   authorName: string | null;
+  // Cycle 34 — 발행 시 사용자가 남긴 "무엇을 변경했나요?" 메모.
+  note: string | null;
   version: number;
   createdAt: string;
 };
@@ -144,6 +146,12 @@ export default function PageVersionHistory({
                   <div className="mt-1.5 text-[11px] text-[#6b778c]">
                     작성자: {v.authorName ?? "익명"}
                   </div>
+                  {/* Cycle 34 — 발행 코멘트(있을 때만). 인용 스타일로 강조. */}
+                  {v.note && (
+                    <blockquote className="mt-1.5 px-2 py-1 border-l-2 border-[#0052cc] bg-[#deebff]/40 text-[12px] text-[#172b4d] italic">
+                      “{v.note}”
+                    </blockquote>
+                  )}
                   {v.content && (
                     <p className="mt-2 text-[12px] text-[#42526e] whitespace-pre-wrap line-clamp-3">
                       {v.content.slice(0, 100)}

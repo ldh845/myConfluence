@@ -7,6 +7,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 // SRS 5.9 검색·AI 사이클에서 재구현 예정 (Cycle 2-5 일시 비활성)
 // import ChatPanel from "@/components/ChatPanel";
 import PageHeader from "@/components/PageHeader";
+import FullScreenEditor from "@/components/FullScreenEditor";
 import WelcomeBanner from "@/components/WelcomeBanner";
 import DiagramList from "@/components/DiagramList";
 import AttachmentList from "@/components/AttachmentList";
@@ -83,6 +84,11 @@ export default function HomePage() {
   const [copyOpen, setCopyOpen] = useState(false);
   // FR-120 (Cycle 23) — 공유 다이얼로그 토글.
   const [shareOpen, setShareOpen] = useState(false);
+  // Cycle 10-2a 보강 — currentPage.draftContent 는 페이지 로드 시점 스냅샷이라
+  // 자동저장 후엔 stale. 자동저장이 성공하면(saveStatus="saved") draft가
+  // 존재한다고 보고 발행 버튼을 활성화한다. currentPage가 다시 로드되면
+  // (페이지 전환 / 발행 직후) 서버 값 기준으로 재설정.
+  const [hasDraft, setHasDraft] = useState(false);
 
   // URL에 pageId가 없을 때의 fallback.
   // spaceId가 지정됐고 그 스페이스에 페이지가 있으면 첫 페이지로.
@@ -151,6 +157,19 @@ export default function HomePage() {
     }
   }, [currentPage]);
 
+  // currentPage가 다시 로드될 때(페이지 전환 / 발행 직후) 서버의 draftContent
+  // 기준으로 hasDraft 재설정. loadCurrentPage가 매번 새 객체를 만들므로
+  // currentPage 참조 변경으로 감지된다.
+  useEffect(() => {
+    setHasDraft(currentPage?.draftContent != null);
+  }, [currentPage]);
+
+  // 자동저장 성공 → draft 존재. (currentPage는 자동저장으로 갱신되지 않으므로
+  // saveStatus 전이로 보강한다.)
+  useEffect(() => {
+    if (saveStatus === "saved") setHasDraft(true);
+  }, [saveStatus]);
+
   // Cycle 29 — 최근 사용한 공간 기록. 페이지가 로드되면 그 페이지의 공간,
   // 빈 스페이스로 진입(/?spaceId=X)했으면 그 spaceId 를 기록.
   useEffect(() => {
@@ -199,12 +218,16 @@ export default function HomePage() {
   }, [router, pathname]);
 
   // Cycle 10-2a — 발행 흐름.
+  // Cycle 34 — note 동반(선택), 성공 시 편집 모드 탈출(버그 수정 핵심).
   const publish = useMutation({
-    mutationFn: async (pageId: string) => {
-      const r = await fetch(`/api/pages/${pageId}/publish`, {
+    mutationFn: async (vars: { pageId: string; note?: string }) => {
+      const r = await fetch(`/api/pages/${vars.pageId}/publish`, {
         method: "POST",
         headers: { "Content-Type": "application/json; charset=utf-8" },
-        body: JSON.stringify({ authorName: getIdentity().name }),
+        body: JSON.stringify({
+          authorName: getIdentity().name,
+          ...(vars.note ? { note: vars.note } : {}),
+        }),
       });
       if (!r.ok) {
         if (r.status === 400) throw new Error("발행할 변경 사항이 없습니다.");
@@ -212,20 +235,28 @@ export default function HomePage() {
       }
       return (await r.json()) as PageFull;
     },
-    onSuccess: async (_data, pageId) => {
+    onSuccess: async (_data, vars) => {
       window.alert("발행되었습니다.");
-      queryClient.invalidateQueries({ queryKey: ["page-versions", pageId] });
-      await loadCurrentPage(pageId);
+      queryClient.invalidateQueries({
+        queryKey: ["page-versions", vars.pageId],
+      });
+      await loadCurrentPage(vars.pageId);
+      // Cycle 34 — 발행 후 편집 모드 탈출. 이전엔 editable이 그대로라 편집
+      // 화면에 머무르며 자동저장이 또 발화돼 hasDraft가 즉시 살아났다.
+      setIsBodyEditable(false);
     },
     onError: (err: Error) => {
       window.alert(err.message);
     },
   });
 
-  const handlePublish = useCallback(() => {
-    if (!currentPage) return;
-    publish.mutate(currentPage.id);
-  }, [currentPage, publish]);
+  const handlePublish = useCallback(
+    (note?: string) => {
+      if (!currentPage) return;
+      publish.mutate({ pageId: currentPage.id, note });
+    },
+    [currentPage, publish],
+  );
 
   const enterEditMode = useCallback(() => {
     setIsBodyEditable(true);
@@ -288,6 +319,22 @@ export default function HomePage() {
     [spaces, currentPage, spaceIdFromUrl],
   );
 
+  // Cycle 34 — FullScreenEditor breadcrumb. 현재 페이지를 제외한 조상 체인.
+  // PageHeader.buildBreadcrumb과 같은 BFS-up 로직(페이지 트리에서 parentId를 따라 올라감).
+  const ancestors = useMemo<{ id: string; title: string }[]>(() => {
+    if (!currentPage || !activeSpace) return [];
+    const byId = new Map(activeSpace.pages.map((p) => [p.id, p]));
+    const chain: { id: string; title: string }[] = [];
+    let cursor = byId.get(currentPage.id);
+    // 자기 자신은 제외하고 부모부터 위로 올라가며 누적.
+    cursor = cursor?.parentId ? byId.get(cursor.parentId) : undefined;
+    while (cursor) {
+      chain.unshift({ id: cursor.id, title: cursor.title });
+      cursor = cursor.parentId ? byId.get(cursor.parentId) : undefined;
+    }
+    return chain;
+  }, [currentPage, activeSpace]);
+
   const isFirstPageOfSpace = useMemo(() => {
     if (!currentPage || !activeSpace) return false;
     const firstRoot = activeSpace.pages
@@ -339,6 +386,28 @@ export default function HomePage() {
       handleDeleteCurrentPage(currentPage.id);
   };
 
+  // Cycle 34 — 편집 모드는 TopNav/사이드바를 덮는 전체 화면 편집기로 분기.
+  // 인라인 PageHeader+에디터+다이어그램+첨부+댓글은 조회 모드 전용. 두 트리를
+  // 동시에 마운트하지 않아 Yjs 세션이 한 번만 열린다.
+  if (currentPage && isBodyEditable) {
+    return (
+      <FullScreenEditor
+        page={currentPage}
+        space={activeSpace}
+        ancestors={ancestors}
+        saveStatus={saveStatus}
+        onTitleChange={handleTitleChange}
+        onPublish={handlePublish}
+        onClose={exitEditMode}
+        publishing={publish.isPending}
+        hasDraft={hasDraft}
+        onSaveStatusChange={setSaveStatus}
+        onConnectionStateChange={setConnectionState}
+        onPresenceChange={setPresence}
+      />
+    );
+  }
+
   return (
     <>
       <div className="max-w-[960px] mx-auto px-10 pt-2 pb-16">
@@ -375,9 +444,12 @@ export default function HomePage() {
               onDelete={confirmDeleteCurrent}
               onSelectAncestor={selectPage}
               onHistoryClick={() => setHistoryOpen(true)}
-              hasDraft={currentPage.draftContent !== null}
+              hasDraft={hasDraft}
               publishing={publish.isPending}
-              onPublish={handlePublish}
+              // Cycle 34 — 조회 모드의 PageHeader엔 발행 버튼이 노출되지 않지만,
+              // handlePublish 시그니처(note?: string)와 (): void 프롭 시그니처를
+              // 안전하게 맞추기 위해 인자 없이 호출하는 래퍼로 감싼다.
+              onPublish={() => handlePublish()}
               onMoveClick={() => setMoveOpen(true)}
               onCopyClick={() => setCopyOpen(true)}
               onShareClick={() => setShareOpen(true)}

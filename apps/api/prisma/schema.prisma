@@ -225,6 +225,9 @@ model PageVersion {
   title      String
   content    String
   authorName String?
+  // Cycle 34 — 발행 시 사용자가 남기는 "무엇을 변경했나요?" 메모.
+  // update / restore에는 수집 UI가 없어 항상 null. publish 경로에서만 채워진다.
+  note       String?
   version    Int
   createdAt  DateTime @default(now())
 

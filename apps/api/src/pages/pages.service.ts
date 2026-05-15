@@ -526,6 +526,8 @@ export class PagesService {
           title: published.title,
           content: published.content,
           authorName: dto.authorName ?? null,
+          // Cycle 34 — 발행 코멘트. 빈 문자열은 의미 없는 노이즈라 null로 정규화.
+          note: dto.note?.trim() ? dto.note.trim() : null,
           version: (last?.version ?? 0) + 1,
         },
       });

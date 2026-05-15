@@ -71,6 +71,10 @@ type Props = {
   onEditor?: (editor: Editor | null) => void;
   // FR-054 (Cycle 26) — 연결 상태 변경을 부모에 통지(헤더 뱃지/배너용).
   onConnectionStateChange?: (state: ConnectionState) => void;
+  // Cycle 34 — 전체 화면 편집기에서는 툴바를 상단 sticky 영역에 따로 배치한다.
+  // true면 내부 EditorToolbar 렌더 생략 — 부모는 onEditor로 받은 인스턴스로
+  // 직접 <EditorToolbar editor={editor}/>를 띄운다.
+  hideToolbar?: boolean;
 };
 
 function resolveWsUrl(): string {
@@ -102,6 +106,7 @@ export default function CollaborativeEditor({
   onPresenceChange,
   onEditor,
   onConnectionStateChange,
+  hideToolbar,
 }: Props) {
   const identity = useMemo<Identity>(() => getIdentity(), []);
   const queryClient = useQueryClient();
@@ -109,6 +114,12 @@ export default function CollaborativeEditor({
     ydoc: Y.Doc;
     provider: HocuspocusProvider;
   } | null>(null);
+
+  // FR-054 — onConnectionStateChange를 ref로 보관. WS effect가 콜백 정체성에
+  // 의존하면 부모 리렌더마다 provider가 재생성돼 "WebSocket closed before
+  // established"가 반복된다. ref로 빼면 effect deps는 [editable, pageId]만.
+  const connStateRef = useRef(onConnectionStateChange);
+  connStateRef.current = onConnectionStateChange;
 
   // FR-033 (Cycle 12-1) — 본문 안에 드롭/붙여넣기된 이미지 파일을 첨부 API로
   // 업로드하고 ProseMirror image 노드로 인라인 삽입한다. 첨부 영역(useQuery)
@@ -173,40 +184,62 @@ export default function CollaborativeEditor({
       ydoc,
     );
 
-    // 연결 상태 추적 — HocuspocusProvider status + navigator.onLine.
-    const updateState = () => {
+    // 연결 상태 추적 — provider.status 속성을 직접 읽지 않고 이벤트 페이로드로
+    // 추적한다(속성이 버전에 따라 비어있을 수 있음). status 이벤트는
+    // { status: 'connecting' | 'connected' | 'disconnected' } 를 준다.
+    let wsStatus: "connecting" | "connected" | "disconnected" = "connecting";
+    let synced = false;
+
+    const pushState = () => {
+      const cb = connStateRef.current;
+      if (!cb) return;
       const navOnline =
         typeof navigator === "undefined" ? true : navigator.onLine;
       if (!navOnline) {
-        onConnectionStateChange?.("offline");
+        cb("offline");
         return;
       }
-      // provider.status: 'connecting' | 'connected' | 'disconnected'
-      const status = provider.status as string;
-      if (status === "connected") {
-        onConnectionStateChange?.(
-          provider.synced ? "online-synced" : "online-syncing",
-        );
-      } else if (status === "connecting") {
-        onConnectionStateChange?.("reconnecting");
+      if (wsStatus === "connected") {
+        cb(synced ? "online-synced" : "online-syncing");
+      } else if (wsStatus === "connecting") {
+        cb("reconnecting");
       } else {
-        onConnectionStateChange?.("offline");
+        cb("offline");
       }
     };
-    provider.on("status", updateState);
-    provider.on("synced", updateState);
-    provider.on("disconnect", updateState);
-    const onOnline = () => updateState();
-    const onOffline = () => onConnectionStateChange?.("offline");
+
+    const onStatus = (event: { status?: string }) => {
+      const s = event?.status;
+      if (s === "connecting" || s === "connected" || s === "disconnected") {
+        wsStatus = s;
+      }
+      pushState();
+    };
+    const onSynced = () => {
+      synced = true;
+      wsStatus = "connected";
+      pushState();
+    };
+    const onDisconnect = () => {
+      wsStatus = "disconnected";
+      synced = false;
+      pushState();
+    };
+    const onOnline = () => pushState();
+    const onOffline = () => connStateRef.current?.("offline");
+
+    provider.on("status", onStatus);
+    provider.on("synced", onSynced);
+    provider.on("disconnect", onDisconnect);
     window.addEventListener("online", onOnline);
     window.addEventListener("offline", onOffline);
-    updateState();
+    pushState();
 
     setInstance({ ydoc, provider });
     return () => {
-      provider.off("status", updateState);
-      provider.off("synced", updateState);
-      provider.off("disconnect", updateState);
+      provider.off("status", onStatus);
+      provider.off("synced", onSynced);
+      provider.off("disconnect", onDisconnect);
       window.removeEventListener("online", onOnline);
       window.removeEventListener("offline", onOffline);
       void persistence.destroy();
@@ -214,7 +247,7 @@ export default function CollaborativeEditor({
       ydoc.destroy();
       setInstance(null);
     };
-  }, [editable, pageId, onConnectionStateChange]);
+  }, [editable, pageId]);
 
   const editor = useEditor(
     {
@@ -459,7 +492,7 @@ export default function CollaborativeEditor({
         <div className="text-sm text-[#6b778c]">에디터 불러오는 중...</div>
       ) : (
         <>
-          {editable && <EditorToolbar editor={editor} />}
+          {editable && !hideToolbar && <EditorToolbar editor={editor} />}
           <div
             className={
               editable
