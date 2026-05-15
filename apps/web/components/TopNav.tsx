@@ -328,6 +328,13 @@ function CreateSplitButton({
 
   // 현재 컨텍스트로 타깃 스페이스/부모를 결정해 페이지를 즉시 생성하고
   // 편집 모드(?edit=1)로 진입한다.
+  // Cycle 36-followup — 컨텍스트 분기 정리:
+  //   /home                    → 개인 공간의 루트 (parentId=null)
+  //   /?spaceId=X              → 공간 X의 루트 (parentId=null)
+  //   /?pageId=공간X의 홈      → 공간 X의 루트 (parentId=null)
+  //                              "공간에 진입한" 상태라 그 공간에 새 페이지를 추가.
+  //   /?pageId=일반페이지P     → P의 자식 (parentId=P)
+  //   그 외                     → 개인 공간 fallback
   const handleQuickCreate = async () => {
     if (creating) return;
     setCreating(true);
@@ -338,15 +345,22 @@ function CreateSplitButton({
       if (pathname === "/") {
         const pageId = searchParams.get("pageId");
         const spaceIdParam = searchParams.get("spaceId");
+
         if (pageId) {
-          // 현재 페이지의 자식으로 생성.
           const owner = spaces.find((s) =>
             s.pages.some((p) => p.id === pageId),
           );
-          spaceId = owner?.id ?? null;
-          parentId = pageId;
+          if (owner) {
+            spaceId = owner.id;
+            // 현재 페이지가 이 공간의 "홈 페이지"면 사용자는 공간 자체를
+            // 보고 있는 것으로 간주 → 새 페이지는 공간 루트(홈의 형제)로.
+            // 그 외 일반 페이지에서 누르면 자식으로 들어간다.
+            parentId =
+              owner.homePageId && owner.homePageId === pageId ? null : pageId;
+          }
         } else if (spaceIdParam) {
           spaceId = spaceIdParam;
+          parentId = null;
         }
       }
 
