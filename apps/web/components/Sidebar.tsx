@@ -489,6 +489,9 @@ export default function Sidebar({
             else if (space) router.push(`/?spaceId=${space.id}`);
           }}
         />
+        {/* "페이지" — 이 공간의 페이지 트리 첫 항목으로. 트리가 비어 있으면(홈만
+            있는 새 공간) 홈 페이지로. router.push("/") 는 공간 컨텍스트를 잃어
+            spaces[0]로 fallback되므로 쓰지 않는다. */}
         <NavItem
           icon="📄"
           label="페이지"
@@ -497,7 +500,12 @@ export default function Sidebar({
             pathname !== "/activity" &&
             (!mainPageId || selectedPageId !== mainPageId)
           }
-          onClick={() => router.push("/")}
+          onClick={() => {
+            const firstTreePage = visible[0]?.id;
+            if (firstTreePage) onSelect(firstTreePage);
+            else if (mainPageId) onSelect(mainPageId);
+            else if (space) router.push(`/?spaceId=${space.id}`);
+          }}
         />
         <NavItem icon="📅" label="캘린더" disabled />
       </div>
