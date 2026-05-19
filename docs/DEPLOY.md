@@ -1,4 +1,4 @@
-# 배포 가이드 (myConfluence)
+# 배포 가이드 (DocSpace)
 
 ## 1. 단일 인스턴스 배포 (사내 PC / 단일 서버 / 권장)
 
@@ -13,16 +13,52 @@
 
 ### Bring-up
 ```bash
-git clone <repo-url> myConfluence
-cd myConfluence
+# 저장소 이름은 myConfluence(GitHub 식별자) 그대로 두고 로컬 폴더만 docspace로
+git clone https://github.com/ldh845/myConfluence.git docspace
+cd docspace
 npm install
+```
 
-# DB는 미리 만들어 두기. 예:
-#   CREATE DATABASE docspace;
-#   \c docspace
-#   CREATE EXTENSION pg_trgm;
+#### DB 준비 — 정상 환경 (psql 사용)
+```bash
+# postgres 슈퍼유저로 한 번만 실행
+psql -U postgres -c "CREATE USER docspace WITH PASSWORD 'docspace';"
+psql -U postgres -c "CREATE DATABASE docspace OWNER docspace;"
+psql -U postgres -d docspace -c "CREATE EXTENSION IF NOT EXISTS pg_trgm;"
+```
 
-# 환경 설정
+#### DB 준비 — 사내 PC (psql.exe / pgAdmin4 차단 환경)
+AhnLab EPS 등 사내 보안정책이 `psql.exe` 와 `pgAdmin4` 의 실행을 차단해도
+**PostgreSQL 윈도우 서비스 자체가 살아 있고 5432 포트가 LISTENING이면**
+앱은 정상 동작한다. 사용자 도구만 못 쓰는 것뿐이라 DB 생성과 확장 활성은
+Node `pg` 드라이버로 우회할 수 있다.
+
+```bash
+# 임시 폴더 — 메인 프로젝트 트리 밖, 한 번만 쓰고 버린다
+mkdir %TEMP%\pg-bootstrap && cd %TEMP%\pg-bootstrap
+npm init -y
+npm install pg
+
+# Node 스크립트 한 줄 — postgres 슈퍼유저 비밀번호는 본인 환경 값으로
+node -e "const {Client}=require('pg'); (async()=>{ \
+  const a=new Client({host:'localhost',user:'postgres',password:'<PW>',database:'postgres'}); \
+  await a.connect(); \
+  await a.query(\"CREATE USER docspace WITH PASSWORD 'docspace'\").catch(()=>{}); \
+  await a.query('CREATE DATABASE docspace OWNER docspace').catch(()=>{}); \
+  await a.end(); \
+  const b=new Client({host:'localhost',user:'postgres',password:'<PW>',database:'docspace'}); \
+  await b.connect(); \
+  await b.query('CREATE EXTENSION IF NOT EXISTS pg_trgm'); \
+  await b.end(); \
+  console.log('OK'); \
+})();"
+```
+
+`CREATE USER` / `CREATE DATABASE` 가 이미 존재해도 `.catch(()=>{})` 로 흘려
+넘기므로 멱등(재실행 안전). 끝나면 임시 폴더는 삭제해도 무방.
+
+#### 환경 설정 + 마이그레이션 + 실행
+```bash
 cp apps/api/.env.example apps/api/.env
 # .env 안에서 최소한 DATABASE_URL 만 본인 환경에 맞게 수정.
 # USE_REDIS=false (기본) 유지 — Redis 불필요.
@@ -113,3 +149,5 @@ REDIS_PORT=6379
 | `pg_trgm extension does not exist` | DB에 `CREATE EXTENSION pg_trgm;` 1회 실행 |
 | WebSocket 연결 실패(편집기에서 "오프라인" 배너) | 1234 포트 차단 여부 확인. `NEXT_PUBLIC_WS_URL=ws://<host>:1234` 로 명시 설정 가능 |
 | Prisma engine 잠금 (Windows에서 nest watch 다중 기동) | 멈춘 `node` 프로세스 정리 후 `npx prisma generate` 재시도 |
+| `psql.exe` / pgAdmin4 가 사내 보안 정책에 차단됨 | PostgreSQL 서비스가 살아 있고 5432가 LISTENING이면 앱 자체는 정상 동작. DB·확장 생성만 위 "사내 PC" 섹션의 Node `pg` 우회 스크립트로 처리 |
+| `prisma migrate deploy` 중 `P3018` — `Page_content_trgm_idx` 인덱스가 존재하지 않음 | fresh DB에서 발생 (그 인덱스를 만든 적이 없어 DROP이 실패). 해당 migration.sql의 `DROP INDEX "Page_content_trgm_idx"` 를 `DROP INDEX IF EXISTS "Page_content_trgm_idx"` 로 수정 → `npx prisma migrate resolve --rolled-back <마이그레이션명>` → `npx prisma migrate deploy` 재시도 |
