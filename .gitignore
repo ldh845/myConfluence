@@ -20,6 +20,11 @@ apps/web/node_modules
 apps/web/.next
 apps/web/.env
 
-# Local-only: Claude Code metadata and internal SRS document
-.claude/
+# Local-only: Claude Code metadata and internal SRS document.
+# .claude/ 안의 모든 항목은 기본 ignore — 다만 .claude/skills/ 는 팀 공유
+# 대상이라 negation으로 트래킹. (디렉터리 자체를 .claude/로 통째 ignore
+# 하면 하위 negation이 안 먹어서 .claude/* 패턴을 써야 함.)
+.claude/*
+!.claude/skills/
+!.claude/skills/**
 SRS.md
