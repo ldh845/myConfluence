@@ -1,156 +1,94 @@
-# myConfluence (POC)
+# DocSpace
 
-사내 Confluence를 대체하기 위한 위키 시스템 POC입니다.
-라이선스 비용 절감이 목적이며, 핵심 3가지 기능(페이지 CRUD / 계층형 트리 /
-AI 기반 검색·Q&A)의 feasibility를 검증합니다.
+사내 위키 시스템 — Confluence 대체 POC.
+라이선스 비용 절감 목적, 오픈소스 스택 기반.
+
+## 주요 기능
+
+- **페이지 계층 트리** — 이동/복사/휴지통/즐겨찾기/드래그앤드롭 (FR-021~025)
+- **WYSIWYG 에디터** — Confluence 스타일 전체 화면, 마크다운 자동 변환,
+  슬래시 명령어, 표 셀 병합, KaTeX 수식, 다이어그램(Excalidraw)
+- **실시간 협업** — Yjs CRDT + Hocuspocus, 동시 편집, 커서 공유,
+  오프라인 편집 + 재연결 자동 동기화
+- **버전 관리** — 발행 시 자동 스냅샷, diff 비교, 원복, 50개 보관
+- **댓글** — 페이지/인라인, 답글 스레드, 해결 처리, 이모지 반응
+- **첨부파일** — 드래그앤드롭 업로드, 100MB 제한
+- **검색** — pg_trgm 한국어 전문 검색, Ctrl+K 빠른 검색,
+  스페이스/날짜/작성자 필터
+- **인증** — 회원가입/로그인, JWT httpOnly 쿠키
+- **공유** — 토큰 기반 read-only 외부 링크
+- **내보내기** — Markdown / PDF
+- **홈 대시보드** — 발견 / 내 작업 / 내 공간 (Confluence 스타일)
+- **활동 피드** — 페이지/댓글 8종 이벤트 타임라인
+- **공간 디렉토리** — 모든 공간 / 내 공간 등 탭 구조
 
 ## 기술 스택
 
-- Next.js 14 (App Router, TypeScript)
-- Tailwind CSS
-- Prisma ORM + SQLite
-- **TipTap v2** (WYSIWYG 에디터) + **Yjs** CRDT + **y-websocket** 동기화 서버
-- `tiptap-markdown` (DB 저장 포맷은 Markdown 유지)
-- Anthropic Claude API (`claude-sonnet-4-6`)
+- **Frontend**: Next.js 14 (App Router, TypeScript), Tailwind CSS,
+  TipTap 2 + Yjs, Zustand, TanStack Query
+- **Backend**: NestJS, Prisma 6, PostgreSQL 16 (pg_trgm GIN 인덱스)
+- **협업**: Hocuspocus (NestJS 호스팅, Redis adapter 옵션 —
+  `USE_REDIS` 환경변수로 토글)
+- **인프라**: Docker Compose (개발) / 사내 PC 직접 설치(운영) 둘 다 지원
 
-## 프로젝트 구조
-
-```
-app/               # Next.js App Router 페이지/레이아웃
-app/api/           # API 라우트 (pages, spaces, ai/search)
-components/        # Sidebar, Editor, ChatPanel
-lib/               # Prisma 클라이언트, Claude SDK 클라이언트, 공용 타입
-prisma/            # schema.prisma, seed.ts
-```
-
-## 시작하기
-
-### 1. 의존성 설치
-
-```bash
-npm install
-```
-
-### 2. 환경변수 설정
-
-`.env.example`을 복사해 `.env` 파일을 만들고 값을 채웁니다.
-
-```bash
-cp .env.example .env
-```
+## 프로젝트 구조 (npm workspaces 모노레포)
 
 ```
-DATABASE_URL="file:./dev.db"
-ANTHROPIC_API_KEY="sk-ant-..."
-ANTHROPIC_MODEL="claude-sonnet-4-6"
+apps/
+  web/    # Next.js 14 사용자 화면 (에디터, /home, /spaces, /activity 등)
+  api/    # NestJS + Prisma (REST API + Hocuspocus 협업 서버)
+docs/     # 운영 문서 (DEPLOY.md 등)
 ```
 
-### 3. DB 초기화
+## 시작하기 — 개발 환경 (Docker)
 
-```bash
-npx prisma migrate dev --name init
-```
-
-### 4. (선택) 시드 데이터 생성
-
-```bash
-npm run seed
-```
-
-### 5. 개발 서버 실행
-
-실시간 공동 편집을 위해 **Next.js 서버 + y-websocket 동기화 서버** 두 개가
-필요합니다.
-
-**옵션 A — 한 번에 실행 (권장)**
-
-```bash
-npm run dev:all
-```
-
-내부적으로 `concurrently`가 `npm run dev`(Next.js)와 `npm run ws-server`
-(y-websocket)을 동시에 띄웁니다.
-
-**옵션 B — 터미널 두 개로 각각 실행**
-
-```bash
-# 터미널 A
-npm run ws-server    # ws://localhost:1234
-
-# 터미널 B
-npm run dev          # http://localhost:3000
-```
-
-접속: [http://localhost:3000](http://localhost:3000)
-
-### 실시간 공동 편집 시연
-
-1. Chrome 창 2개(또는 시크릿 모드 포함)에서 동일 URL을 연다.
-2. 동일 페이지를 선택한 뒤 한쪽에서 타이핑하면 반대쪽에 즉시 반영되고
-   서로의 커서 위치/이름 라벨이 표시된다.
-3. 편집을 멈추면 2초 뒤 하단 우측 상태가 "저장 중..." → "저장됨"으로 바뀌며
-   `PATCH /api/pages/:id`로 Markdown이 DB에 영속된다.
-4. 사용자 이름/색상은 첫 접속 시 자동 생성되어 `localStorage`에 저장되며,
-   재접속 시 동일한 이름으로 복원된다.
-
-### 사내망에서 다른 PC로 접속하기
-
-한 대의 PC(이하 "서버 PC")에서 Next.js + y-websocket을 띄워두고,
-같은 네트워크의 팀원이 브라우저로 붙어 공동 편집하는 구성입니다.
-
-1. **서버 PC에서 실행**
+1. PostgreSQL + Redis 기동
+   ```bash
+   docker compose up -d
+   ```
+2. 의존성 설치 (workspaces가 `apps/web` + `apps/api` 자동 처리)
+   ```bash
+   npm install
+   ```
+3. `apps/api/.env` 작성 (`.env.example` 복사 후 `DATABASE_URL` / `JWT_SECRET` 채움)
+4. DB 스키마 적용
+   ```bash
+   cd apps/api && npx prisma migrate deploy && npx prisma generate
+   ```
+5. 개발 서버 동시 기동 (web + api + hocuspocus)
    ```bash
    npm run dev:all
    ```
-   `next dev`는 `-H 0.0.0.0 -p 3000`으로, `ws-server`는 `0.0.0.0:1234`로
-   모든 인터페이스에서 리스닝합니다.
+6. 브라우저 <http://localhost:3000>
 
-2. **Windows 방화벽에서 포트 허용**
-   "Windows Defender 방화벽 → 고급 설정 → 인바운드 규칙 → 새 규칙"에서
-   TCP 포트 **3000** (Next.js) 와 **1234** (y-websocket) 를 각각 허용합니다.
-   사내망 프로파일(도메인/개인)에만 적용하면 충분합니다.
+## 시작하기 — 사내 PC 운영 (Docker 없이)
 
-3. **서버 PC의 IP 확인**
-   ```cmd
-   ipconfig
-   ```
-   사내망에 연결된 어댑터의 `IPv4 주소` (예: `10.0.0.5`) 를 확인합니다.
+- PostgreSQL 16 네이티브 설치, `docspace` DB + `pg_trgm` 확장 활성
+- `.env`에 `USE_REDIS=false` 설정 → Hocuspocus 단일 인스턴스(메모리) 모드
+- 자세한 절차는 [docs/DEPLOY.md](docs/DEPLOY.md) 참조
 
-4. **팀원 접속**
-   팀원은 브라우저에서 `http://서버PC_IP:3000` (예: `http://10.0.0.5:3000`)
-   로 접속합니다. WebSocket 주소는 브라우저가 접속한 호스트명에서 자동으로
-   유도되므로 (`ws://서버PC_IP:1234`) 별도 설정이 필요 없습니다.
+## 사내망 다른 PC에서 접속
 
-   고정 도메인이나 다른 포트를 쓰고 싶다면 `.env`에
-   `NEXT_PUBLIC_WS_URL="ws://my-host:1234"` 를 설정하면 우선 적용됩니다.
+- 서버 PC에서 `npm run dev:all` (Next.js 3000, Hocuspocus 1234 모두
+  `0.0.0.0`로 listen)
+- Windows 방화벽에서 TCP 3000, 1234 인바운드 허용
+- 팀원: `http://<서버PC_IP>:3000` 접속 (WebSocket 주소는 자동 유도)
 
-## UI 레이아웃
+## UI 레이아웃 (Confluence 스타일)
 
-Confluence와 유사한 3분할 구조:
+- **상단 TopNav**: 공간 드롭다운 / 달력 / 만들기 / 검색 / 사용자 메뉴
+- **좌측 사이드바**:
+  - 시스템 홈(`/home`) — "발견 / 내 작업 / 내 공간" 시스템 사이드바
+  - 스페이스 진입 후 — 페이지 트리 사이드바
+- **본문**: 조회 모드 + 전체 화면 편집기
+  (편집 시 사이드바 가려짐, TopNav만 유지)
+- **검색**: Ctrl+K 또는 상단 검색바 → 풀스크린 오버레이
+  (필터링 기준 + 페이지/스페이스 결과)
 
-- **좌** : Space / Page 계층형 트리
-- **중** : 마크다운 뷰어 + 에디터 (Edit / View 전환)
-- **우** : AI 챗 패널 — 질문하면 저장된 모든 페이지를 참조해 Claude가 답변,
-  근거 페이지를 클릭하면 해당 페이지로 이동
+## 알려진 한계
 
-## 다이어그램 (Excalidraw)
-
-페이지 본문 아래 **📐 다이어그램** 영역에서 Excalidraw로 다이어그램을
-추가/편집/삭제할 수 있습니다.
-
-- **외부 호출 없음** — `@excalidraw/excalidraw`는 순수 React 컴포넌트로,
-  번들이 로컬에서 실행되며 사내망에서도 별도 프록시/화이트리스트 없이
-  그대로 동작합니다.
-- 다이어그램 데이터는 Excalidraw 고유 JSON(`{elements, appState, files}`)
-  포맷으로 DB의 `Diagram.data` 컬럼에 저장됩니다. 저장 시점에 SVG 미리보기가
-  함께 생성되어 `Diagram.preview` 컬럼(데이터 URI)에 저장되며, 카드 리스트의
-  썸네일로 사용됩니다.
-- 이 POC에서는 다이어그램의 공동 편집을 **지원하지 않습니다.** 두 명이 동시에
-  같은 다이어그램을 편집하면 나중에 저장한 사람의 변경이 이깁니다
-  (last-write-wins). 향후 개선 예정입니다.
-
-## 범위 외 (추후 확장)
-
-- 인증 / 권한 관리
-- 댓글, 버전 관리, 첨부파일
-- 전문 검색(Embedding 기반) — 현재는 모든 페이지를 Claude context에 주입
+- 색상 / 하이라이트 / 언더라인 / 인라인 댓글 마크는 새로고침 시 시각적으로
+  소실 (Markdown 표준 한계, DB엔 보존). 저장 포맷 전환 사이클로 해결 예정.
+- 다이어그램은 동시 편집 미지원 (last-write-wins).
+- AI 챗 패널은 SRS 5.9 검색·AI 사이클 대기 중 (현재 비활성).
+- 멘션(`@user`)은 인증 의존 — 후속 사이클.
