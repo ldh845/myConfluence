@@ -73,11 +73,22 @@ npm run dev:all
 
 기본 포트:
 - **3000** — Next.js (사용자 접속용)
-- **4000** — NestJS API (Next.js가 프록시)
+- **3001** — NestJS API (Next.js가 프록시)
 - **1234** — Hocuspocus WebSocket (브라우저가 직접 접속)
 
-방화벽에 3000번과 1234번을 열어두면 LAN 사용자가 접속 가능. 4000번은
+방화벽에 3000번과 1234번을 열어두면 LAN 사용자가 접속 가능. 3001번은
 Next.js만 호출하므로 외부에 열 필요 없음.
+
+#### API 포트 컨벤션 (Cycle 40)
+
+API 포트는 두 곳에서 같은 값으로 설정해야 한다:
+
+- `apps/api/.env` 의 **`PORT`** — NestJS가 실제로 listen
+- `apps/web/.env` 의 **`API_PORT`** — Next.js가 프록시할 대상
+
+두 값이 다르면 회원가입/로그인 시 503 또는 `ECONNREFUSED` 가 난다.
+권장 기본값은 **3001** (`apps/api/src/main.ts` 와 `apps/web/next.config.mjs`
+양쪽의 기본값과 일치). 특별한 이유 없으면 그대로 두는 게 안전.
 
 ### Production 빌드
 ```bash
@@ -151,3 +162,4 @@ REDIS_PORT=6379
 | Prisma engine 잠금 (Windows에서 nest watch 다중 기동) | 멈춘 `node` 프로세스 정리 후 `npx prisma generate` 재시도 |
 | `psql.exe` / pgAdmin4 가 사내 보안 정책에 차단됨 | PostgreSQL 서비스가 살아 있고 5432가 LISTENING이면 앱 자체는 정상 동작. DB·확장 생성만 위 "사내 PC" 섹션의 Node `pg` 우회 스크립트로 처리 |
 | `prisma migrate deploy` 중 `P3018` — `Page_content_trgm_idx` 인덱스가 존재하지 않음 | fresh DB에서 발생 (그 인덱스를 만든 적이 없어 DROP이 실패). 해당 migration.sql의 `DROP INDEX "Page_content_trgm_idx"` 를 `DROP INDEX IF EXISTS "Page_content_trgm_idx"` 로 수정 → `npx prisma migrate resolve --rolled-back <마이그레이션명>` → `npx prisma migrate deploy` 재시도 |
+| 회원가입/로그인 시 503 또는 `ECONNREFUSED ::1:<port>` | `apps/api/.env` 의 `PORT` 와 `apps/web/.env` 의 `API_PORT` 불일치 (Cycle 40). 둘을 같은 값(권장 3001)으로 맞추기. |
