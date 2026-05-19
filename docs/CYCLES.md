@@ -776,3 +776,18 @@
 - **변경 파일**: `apps/api/src/collaboration/collaboration.service.ts`, `apps/api/.env.example`, `docs/DEPLOY.md` (신규)
 - **검증**: USE_REDIS 미설정/false → in-memory 모드("(in-memory, single instance)" 로그). USE_REDIS=true → 기존 Redis pub/sub adapter("with Redis adapter <host>:<port>"). 단일 인스턴스 운영(사내 PC)에서 Redis 없이도 정상 동작.
 - **비고**: Cycle 3에서 도입한 Redis 의존을 옵션으로 격하. DEPLOY.md에 단일/멀티 인스턴스/Docker 3 시나리오 정리.
+
+---
+
+## Cycle 40 — 2026-05-19 — ✅ Done
+- **제목**: API 프록시 타깃 포트를 API_PORT env로 통제 (PORT 불일치 버그 영구 fix)
+- **카테고리**: 운영 / 기술부채 / 사내 PC 셋업
+- **커밋**: `61f2930`
+- **변경 파일**:
+  - `apps/web/next.config.mjs` — destination 하드코딩 `localhost:3001` → `${process.env.API_PORT || '3001'}` 로 환경변수화
+  - `apps/api/.env.example` — `PORT=3001` 명시 + "API_PORT와 같은 값이어야 함" 주석
+  - `apps/web/.env.example` — `API_PORT=3001` 신규 추가, 같은 주석
+  - `docs/DEPLOY.md` — "API 포트 컨벤션" 섹션 + 트러블슈팅 한 줄 추가, 기존 잘못 안내된 4000 → 3001 교정
+- **검증**: PORT/API_PORT 미설정으로 둬도 양쪽 코드 기본값(3001) 일치 → 회원가입/로그인 정상. 둘 다 같은 비기본 값(예: 4000/4000)으로 설정해도 동작 — 환경변수 토글이 실제로 적용됨.
+- **남은 일**: 없음 — 두 .env.example이 같은 기본값을 가리키도록 동기화 완료.
+- **비고**: 사내 PC 셋업 중 사용자가 `.env`에 `PORT=4000`을 잘못 채워 503/ECONNREFUSED 가 났던 사례에서 출발. 새 사내 서버 셋업 전에 코드/문서 양쪽에서 컨벤션을 강제. DEPLOY.md의 기본 포트 안내가 4000으로 남아 있던 회귀도 함께 정리.
