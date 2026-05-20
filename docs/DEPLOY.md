@@ -7,7 +7,7 @@
 연결되므로 동기화는 정상.
 
 ### Prereq
-- Node.js 18 이상
+- **Node.js 20 이상 (Hocuspocus 4 가 ESM 의존 — Node 18 + CJS 환경에선 `ERR_REQUIRE_ESM` 으로 죽음)**
 - PostgreSQL 16 + `pg_trgm` extension (검색용)
 - 디스크 쓰기 권한 (첨부 파일 저장 경로)
 
@@ -18,6 +18,33 @@ git clone https://github.com/ldh845/myConfluence.git docspace
 cd docspace
 npm install
 ```
+
+#### 사내 VM (외부망 제한 + 프록시 환경)
+사내 VM(예: Ubuntu 24.04)은 인터넷 직접 접속이 막혀 있고 사내 프록시와
+사내 root CA 를 거쳐야 한다. `npm install` / `git clone` / Prisma 엔진
+다운로드가 모두 이 경로를 타므로 셋업 *전에* 아래를 먼저 잡는다.
+
+```bash
+# 1) 사내 프록시 — 셸 환경변수 + npm + git 세 곳 모두 지정
+export HTTP_PROXY=http://16.7.241.20:8080
+export HTTPS_PROXY=http://16.7.241.20:8080
+npm config set proxy http://16.7.241.20:8080
+npm config set https-proxy http://16.7.241.20:8080
+git config --global http.proxy http://16.7.241.20:8080
+
+# 2) 사내 root CA 등록 — 프록시가 TLS 를 가로채므로 CA 신뢰 필수
+sudo cp 사내rootCA.crt /usr/local/share/ca-certificates/
+sudo update-ca-certificates
+# Node(및 Prisma 엔진 다운로드)가 OS 신뢰 저장소를 보게 함
+export NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-certificates.crt
+
+# 3) Node 20.x — NodeSource 저장소 (프록시 환경변수가 sudo 로 전달되도록 -E)
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt-get install -y nodejs
+```
+
+위 환경변수(`HTTP_PROXY` / `HTTPS_PROXY` / `NODE_EXTRA_CA_CERTS`)는 빌드·실행
+세션에서도 유효해야 하므로 `~/.bashrc` 또는 서비스 환경파일에 박아둔다.
 
 #### DB 준비 — 정상 환경 (psql 사용)
 ```bash
@@ -90,6 +117,49 @@ API 포트는 두 곳에서 같은 값으로 설정해야 한다:
 권장 기본값은 **3001** (`apps/api/src/main.ts` 와 `apps/web/next.config.mjs`
 양쪽의 기본값과 일치). 특별한 이유 없으면 그대로 두는 게 안전.
 
+#### nginx 리버스 프록시 (옵션 A — `/collab` path 로 WebSocket 분기)
+
+단일 진입 포트(예: VM:80) 하나로 Next.js(3000)와 Hocuspocus(1234)를 함께
+노출하는 패턴. HTTP 트래픽은 Next.js 로, `/collab` 로 시작하는 WebSocket
+업그레이드 요청만 Hocuspocus 로 분기한다. (사내 VM 실배포에서 채택한 구성.
+호스트 HAProxy 가 외부 `:8082` → `VM:80` 을 매핑.)
+
+```nginx
+server {
+    listen 80;
+    server_name _;
+
+    # 협업 WebSocket — /collab → Hocuspocus :1234
+    location /collab {
+        proxy_pass http://127.0.0.1:1234/;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_read_timeout 86400s;   # idle WS 끊김 방지
+    }
+
+    # 그 외 전부 → Next.js :3000
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+}
+```
+
+브라우저가 `/collab` 경로로 WS 에 붙도록 `apps/web/.env` 에 외부 노출 주소를
+명시한다 (스킴은 외부 진입이 HTTPS 면 `wss://`):
+
+```
+# 외부 진입이 http://166.79.31.248:8082 인 경우
+NEXT_PUBLIC_WS_URL="ws://166.79.31.248:8082/collab"
+```
+
+미설정 시엔 브라우저가 접속 호스트의 `:1234` 로 직접 붙으므로(기본 동작),
+1234 포트를 외부에 따로 열어야 한다. 리버스 프록시 뒤에서는 위처럼 명시하는
+편이 방화벽 표면이 작다.
+
 ### Production 빌드
 ```bash
 # 한 번 빌드
@@ -161,5 +231,5 @@ REDIS_PORT=6379
 | WebSocket 연결 실패(편집기에서 "오프라인" 배너) | 1234 포트 차단 여부 확인. `NEXT_PUBLIC_WS_URL=ws://<host>:1234` 로 명시 설정 가능 |
 | Prisma engine 잠금 (Windows에서 nest watch 다중 기동) | 멈춘 `node` 프로세스 정리 후 `npx prisma generate` 재시도 |
 | `psql.exe` / pgAdmin4 가 사내 보안 정책에 차단됨 | PostgreSQL 서비스가 살아 있고 5432가 LISTENING이면 앱 자체는 정상 동작. DB·확장 생성만 위 "사내 PC" 섹션의 Node `pg` 우회 스크립트로 처리 |
-| `prisma migrate deploy` 중 `P3018` — `Page_content_trgm_idx` 인덱스가 존재하지 않음 | fresh DB에서 발생 (그 인덱스를 만든 적이 없어 DROP이 실패). 해당 migration.sql의 `DROP INDEX "Page_content_trgm_idx"` 를 `DROP INDEX IF EXISTS "Page_content_trgm_idx"` 로 수정 → `npx prisma migrate resolve --rolled-back <마이그레이션명>` → `npx prisma migrate deploy` 재시도 |
+| `prisma migrate deploy` 중 `P3018` — `Page_content_trgm_idx` 인덱스가 존재하지 않음 | fresh DB 에서 발생*했었음* (그 인덱스를 만든 적이 없어 DROP 이 실패). **Cycle 41 에서 `20260511231747_add_comments/migration.sql` 의 두 DROP INDEX 를 `IF EXISTS` 로 바꿔 영구 fix** — fresh DB / 기존 DB 양쪽에서 멱등. 최신 코드를 받았다면 더는 발생하지 않으며 별도 회피 절차 불필요 |
 | 회원가입/로그인 시 503 또는 `ECONNREFUSED ::1:<port>` | `apps/api/.env` 의 `PORT` 와 `apps/web/.env` 의 `API_PORT` 불일치 (Cycle 40). 둘을 같은 값(권장 3001)으로 맞추기. |
