@@ -1,8 +1,8 @@
 -- DropIndex
-DROP INDEX "Page_content_trgm_idx";
+DROP INDEX IF EXISTS "Page_content_trgm_idx";
 
 -- DropIndex
-DROP INDEX "Page_title_trgm_idx";
+DROP INDEX IF EXISTS "Page_title_trgm_idx";
 
 -- CreateTable
 CREATE TABLE "Comment" (
