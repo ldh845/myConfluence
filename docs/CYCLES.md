@@ -791,3 +791,23 @@
 - **검증**: PORT/API_PORT 미설정으로 둬도 양쪽 코드 기본값(3001) 일치 → 회원가입/로그인 정상. 둘 다 같은 비기본 값(예: 4000/4000)으로 설정해도 동작 — 환경변수 토글이 실제로 적용됨.
 - **남은 일**: 없음 — 두 .env.example이 같은 기본값을 가리키도록 동기화 완료.
 - **비고**: 사내 PC 셋업 중 사용자가 `.env`에 `PORT=4000`을 잘못 채워 503/ECONNREFUSED 가 났던 사례에서 출발. 새 사내 서버 셋업 전에 코드/문서 양쪽에서 컨벤션을 강제. DEPLOY.md의 기본 포트 안내가 4000으로 남아 있던 회귀도 함께 정리.
+
+---
+
+## Cycle 41 — 2026-05-20 — ✅ Done
+- **제목**: 사내 VM (Ubuntu 24.04) 실제 운영 배포 + 운영 인프라 셋업
+- **카테고리**: 운영 / 배포 / 인프라
+- **커밋**: `95b07e1` (P3018 영구 fix), `9beb58b` (CLAUDE.md), `5e1a40f` (DEPLOY.md 사내 VM 노트), 본 CYCLES.md
+- **변경 파일**:
+  - `apps/api/prisma/migrations/20260511231747_add_comments/migration.sql` — 두 `DROP INDEX` 를 `IF EXISTS` 로 → fresh DB 멱등 (P3018 영구 fix)
+  - `CLAUDE.md` — Claude Code 세션 메모리 (직전 작업으로 추가, 본 사이클에 함께 묶음)
+  - `docs/DEPLOY.md` — Prereq Node 20+ 권장, "사내 VM (외부망 제한 + 프록시 환경)" 서브섹션, nginx 리버스 프록시(옵션 A `/collab`) 예시, P3018 트러블슈팅 행 영구 fix 반영
+  - `docs/CYCLES.md` — 본 항목
+- **검증**: 외부 PC 브라우저 `http://166.79.31.248:8082` 접속 → 로그인/회원가입 ✅, 페이지 작성/저장 ✅, 실시간 협업(WS `/collab`) ✅. VM(166.79.31.248, amadeus-conf)에서 NestJS(:3001+:1234) + Next.js(:3000) nohup 기동, nginx(:80) 리버스 프록시, 호스트 HAProxy `:8082`→`VM:80`.
+- **남은 일 (Cycle 42 후보)**:
+  - 편집기 첫 진입 시 "업데이트" 버튼 비활성화 race condition
+  - `typescript.ignoreBuildErrors` 영구 fix (`CollaborativeEditor.tsx` useEffect cleanup 타입 에러)
+  - 서비스 자동 재시작 (systemd 또는 PM2)
+  - DB 비밀번호 강화 (현재 `docspace/docspace` 임시)
+  - 옵션 B (HAProxy 포트 매핑)로 WebSocket 전환 가능성 검토
+- **비고**: VM 한정 임시 패치(`next.config.mjs` 의 `typescript.ignoreBuildErrors=true`)는 commit 대상 아님 — Cycle 42 영구 fix 후 제거. Node 18 + Hocuspocus 4 조합이 `ERR_REQUIRE_ESM` 으로 죽어 Node 20 으로 업그레이드한 것이 이번 배포의 핵심 함정.
