@@ -873,7 +873,24 @@
   - `apps/api/src/auth/dto/{login,signup}.dto.ts`(삭제), `apps/api/package.json` — `bcrypt`·`@types/bcrypt` 의존성 제거
 - **검증**: 개발용 Keycloak(26.3)+postgres 컨테이너 + 호스트 api/web 기동 후 **프록시 경유(localhost:3000) 전체 SSO 흐름 통과** — `/api/auth/oidc/login`→KC(testuser/testpass)→callback→`docspace_session`→`/api/auth/me` 반환, `/api/auth/logout` 204. **제거 확인**: `POST /api/auth/login`·`/api/auth/signup` 404, `/signup` 페이지 없음(빌드 라우트에서 사라짐; 미인증 접근은 미들웨어가 `/login`으로). api/web 빌드 통과. **jwt.strategy/가드 2개/JwtModule/auth.module/보호 컨트롤러 무변경**(git diff 확인).
 - **남은 일**:
-  - **Keycloak SSO 단일 로그아웃**(`end_session_endpoint`): id_token 보관이 필요한 설계 추가라 미룸. 현재는 로컬 `docspace_session` 쿠키만 클리어(Keycloak 세션은 유지 → 재로그인 시 KC가 자동 로그인될 수 있음)
+  - ~~Keycloak SSO 단일 로그아웃(`end_session_endpoint`)~~ → **followup `ab01c19` 에서 해소** (아래 followup 항목)
   - 운영 DB 기존 자체 사용자 마이그레이션(AFS 입주/실배포 시점) — 자체 사용자는 첫 OIDC 로그인 시 `username` 매칭으로 자동 링크됨
   - 컨테이너로 api 운영 시 issuer 호스트 정합(`KC_HOSTNAME`/리버스 프록시)
 - **비고**: 로그인 경로가 OIDC 단일로 통일. 세션 틀(`docspace_session`)·`useAuth`·미들웨어 쿠키 체크는 그대로라 인증 상태 코드는 무변경. Cycle 43 (1/2 백엔드 + 2/2 프론트) **완료**.
+
+---
+
+## Cycle 43 followup — 2026-05-21 — ✅ Done (Keycloak 단일 로그아웃 SLO)
+- **제목**: Keycloak 단일 로그아웃(SLO) 연동 — 로그아웃 시 SSO 세션까지 종료
+- **카테고리**: 인증 / SSO (Keycloak OIDC) — Cycle 43 잔여 해소
+- **커밋**: `ab01c19`(핵심), 본 CYCLES.md(Docs)
+- **변경 파일**:
+  - `apps/api/src/auth/oidc.service.ts` — `handleCallback` 가 `id_token`(raw)도 반환, `buildEndSessionUrl`(`client.endSessionUrl`: id_token_hint + post_logout_redirect_uri) 추가
+  - `apps/api/src/auth/oidc.controller.ts` — callback 에서 `id_token` 을 httpOnly 쿠키 `oidc_id_token` 으로 보관. `GET /auth/oidc/logout` 추가(로컬 쿠키 클리어 → Keycloak end_session 으로 redirect → `/login` 복귀; id_token 없으면 로컬만)
+  - `apps/api/src/auth/auth.controller.ts` — `POST /auth/logout` 제거(SLO 의존으로 OidcController 로 이동). `GET /auth/me` 유지
+  - `apps/web/components/TopNav.tsx` — 로그아웃 버튼을 fetch → **top-level 네비게이션**(`window.location → /api/auth/oidc/logout`)
+  - `apps/api/.env.example` — `OIDC_POST_LOGOUT_REDIRECT`
+- **id_token 보관 방식**: 로그인 callback 시 `oidc_id_token` httpOnly 쿠키(JS 접근 불가, maxAge 7d). 로그아웃에서만 읽어 end_session 의 `id_token_hint` 로 사용 → Keycloak 확인 페이지 없이 즉시 SSO 종료.
+- **검증**: 프록시 경유 full 흐름 — (로그아웃 전) authz 가 302+code 로 **자동로그인 됨**(SSO 활성) → (로그아웃) `GET /auth/oidc/logout` 이 `openid-connect/logout`(id_token_hint 포함)으로 302 + 두 쿠키 클리어 → end_session 이 `localhost:3000/login` 으로 복귀(확인 페이지 없음) → (로그아웃 후) authz 가 **로그인폼 표시**(자동로그인 안 됨 = 재인증 요구). api build / web tsc 통과. **jwt.strategy/가드 2개/JwtModule/auth.module/보호 컨트롤러 무변경**.
+- **남은 일**: 운영 DB 자체 사용자 마이그레이션 / 컨테이너 issuer 호스트 정합 (배포 시점). post_logout_redirect 는 realm `post.logout.redirect.uris`(localhost:3000/*)가 커버 — realm 변경 불필요.
+- **비고**: 사내 SSO 표준 — 한 번 로그아웃하면 같은 Keycloak 을 쓰는 서비스 전체에서 로그아웃. **Cycle 43 (1/2 + 2/2 + SLO followup) 최종 완료.**
