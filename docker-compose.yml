@@ -14,6 +14,68 @@ services:
     networks:
       - docspace_net
 
+  # Cycle 42 — API(NestJS REST :3001 + Hocuspocus :1234) 컨테이너.
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: docspace_api
+    restart: unless-stopped
+    environment:
+      # 컨테이너 네트워크 안에서는 postgres 서비스명으로 접속
+      DATABASE_URL: postgresql://docspace:docspace@postgres:5432/docspace?schema=public
+      PORT: "3001"
+      USE_REDIS: "false"
+      # Keycloak 연동 값 — Cycle 43부터 실사용. 지금은 placeholder.
+      KC_ISSUER_URI: http://keycloak:8080/realms/docspace
+      KC_CLIENT_ID: docspace-web
+      KC_CLIENT_SECRET: dev-docspace-secret
+    depends_on:
+      - postgres
+    ports:
+      - "3001:3001"   # Next.js 프록시 대상 (web 컨테이너가 서비스명 api 로 접속)
+      - "1234:1234"   # Hocuspocus WebSocket — 브라우저가 직접 접속
+    networks:
+      - docspace_net
+
+  # Cycle 42 — Next.js 14 standalone 컨테이너.
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        # 빌드타임 주입 — rewrites/NEXT_PUBLIC_* 는 빌드 시점에 굳는다.
+        API_HOST: api
+        API_PORT: "3001"
+        # 브라우저가 직접 붙는 Hocuspocus 주소. VM 외부 접속 IP 기준.
+        NEXT_PUBLIC_WS_URL: ws://166.79.31.248:1234
+    container_name: docspace_web
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "3000:3000"
+    networks:
+      - docspace_net
+
+  # Cycle 42 — 개발용 Keycloak. start-dev = 인메모리 H2(재시작 시 소실)지만
+  # --import-realm 으로 매 기동마다 realm-docspace 를 복구하므로 개발엔 충분.
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    container_name: docspace_keycloak
+    restart: unless-stopped
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      KC_HTTP_PORT: "8080"
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./infra/keycloak/realm-docspace.json:/opt/keycloak/data/import/realm-docspace.json:ro
+    networks:
+      - docspace_net
+
   redis:
     image: redis:7-alpine
     container_name: docspace_redis

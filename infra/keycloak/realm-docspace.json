@@ -1,0 +1,51 @@
+{
+  "realm": "docspace",
+  "enabled": true,
+  "displayName": "DocSpace (dev)",
+  "loginWithEmailAllowed": true,
+  "registrationAllowed": false,
+  "sslRequired": "none",
+  "clients": [
+    {
+      "clientId": "docspace-web",
+      "name": "DocSpace Web (authorization code flow)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "dev-docspace-secret",
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": false,
+      "redirectUris": [
+        "http://localhost:3000/*",
+        "http://166.79.31.248:3000/*",
+        "http://166.79.31.248:8082/*"
+      ],
+      "webOrigins": [
+        "http://localhost:3000",
+        "http://166.79.31.248:3000",
+        "http://166.79.31.248:8082"
+      ],
+      "attributes": {
+        "post.logout.redirect.uris": "http://localhost:3000/*##http://166.79.31.248:3000/*##http://166.79.31.248:8082/*"
+      }
+    }
+  ],
+  "users": [
+    {
+      "username": "testuser",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "testuser@docspace.local",
+      "firstName": "Test",
+      "lastName": "User",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "testpass",
+          "temporary": false
+        }
+      ]
+    }
+  ]
+}

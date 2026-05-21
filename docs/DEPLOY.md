@@ -222,6 +222,72 @@ REDIS_PORT=6379
 
 ---
 
+## 3.5 컨테이너 개발 환경 (Cycle 42 — web + api + postgres + keycloak 풀스택)
+
+`docker compose up` 한 번으로 **web(3000) / api(3001+1234) / postgres(5432) /
+keycloak(8080)** 네 서비스를 모두 띄우는 개발용 풀스택. 위 3번이 postgres 등
+인프라만 띄우는 것과 달리, 여기선 앱 이미지(api/web)까지 빌드해 컨테이너로
+돌린다. AFS(K8s) 입주 + Keycloak SSO 전환(Cycle 43)을 위한 사전 포장 단계다.
+
+> 이 단계(Cycle 42)는 "포장"만 한다 — 인증은 아직 기존 자체 JWT 그대로다.
+> Keycloak 은 띄워두기만 하고 실제 로그인 연동은 Cycle 43.
+
+### 구성 파일
+- `apps/api/Dockerfile` — Node 20 멀티스테이지(build=bookworm, runtime=slim).
+  기동 시 `prisma migrate deploy` 후 `node dist/src/main`.
+- `apps/web/Dockerfile` — Next.js standalone. `next.config.mjs` 의
+  `output:'standalone'` + `experimental.outputFileTracingRoot`(저장소 루트) 의존.
+- 루트 `.dockerignore` — **두 이미지 모두 build context 가 저장소 루트**라 실제
+  적용되는 건 이 루트 파일. (`apps/*/.dockerignore` 는 의도 문서용)
+- `infra/keycloak/realm-docspace.json` — realm `docspace` + confidential client
+  `docspace-web`(authorization code flow) + 테스트 사용자 `testuser`/`testpass`.
+
+### 기동
+```bash
+# 저장소 루트에서
+docker compose up -d --build
+
+docker compose ps          # 4개 서비스 Up 확인
+docker compose logs -f api # 마이그레이션/기동 로그
+```
+
+| 서비스 | 포트 | 용도 |
+|---|---|---|
+| web | 3000 | 사용자 접속 (Next.js standalone) |
+| api | 3001 / 1234 | NestJS REST / Hocuspocus WS(브라우저 직접 접속) |
+| postgres | 5432 | DB (볼륨 `docspace_pgdata` 영속) |
+| keycloak | 8080 | 개발용 IdP. admin 콘솔 `/admin` (admin/admin) |
+
+검증:
+- 브라우저 `http://<host>:3000` → DocSpace 정상 동작(로그인은 **기존 자체 인증**
+  그대로 — 동작이 바뀌면 안 됨).
+- `http://<host>:8080/admin` (admin/admin) → realm `docspace` + client
+  `docspace-web` 존재 확인.
+
+### 빌드타임 주입 (중요한 함정)
+Next.js 는 `rewrites()` 와 `NEXT_PUBLIC_*` 를 **빌드 시점에** 굳힌다. 런타임
+ENV 로는 안 바뀐다. 그래서 web 이미지는 다음을 **빌드 ARG** 로 받는다
+(`docker-compose.yml` 의 `web.build.args`):
+- `API_HOST=api` — web 컨테이너가 api 컨테이너에 서비스명으로 닿게 함
+  (`localhost` 면 자기 자신을 가리켜 실패). 포트는 `API_PORT` 컨벤션(3001) 유지.
+- `NEXT_PUBLIC_WS_URL=ws://166.79.31.248:1234` — 브라우저가 직접 붙는
+  Hocuspocus 주소. **VM 외부 접속 IP 기준**이라 환경이 바뀌면 이 값으로 재빌드.
+
+> 비컨테이너(`npm run dev:all`)는 `API_HOST` 미설정 → 기본 `localhost` 라
+> 기존 동작 그대로다. 포트 컨벤션(Cycle 40)은 컨테이너에서도 불변.
+
+### Keycloak 메모 (Cycle 43 준비)
+- `start-dev` 는 인메모리 H2 라 재시작 시 데이터 소실. `--import-realm` 이 매
+  기동마다 `realm-docspace.json` 을 복구하므로 개발엔 충분(영속 필요 시 외부 DB).
+- realm import 값: issuer `http://<host>:8080/realms/docspace`, client
+  `docspace-web`, secret `dev-docspace-secret`. redirect URI 에 `localhost:3000`,
+  `166.79.31.248:3000`, `166.79.31.248:8082`(HAProxy 경유) 등록.
+- **issuer 호스트 주의**: 토큰 검증 주체(api)와 발급 요청 주체(브라우저)가 보는
+  Keycloak 호스트가 달라 issuer 불일치가 날 수 있다(컨테이너 안 `keycloak:8080`
+  vs 외부 `166.79.31.248:8080`). Cycle 43 에서 `KC_HOSTNAME` 등으로 정리.
+
+---
+
 ## 4. 트러블슈팅
 
 | 증상 | 원인/해결 |
@@ -233,3 +299,6 @@ REDIS_PORT=6379
 | `psql.exe` / pgAdmin4 가 사내 보안 정책에 차단됨 | PostgreSQL 서비스가 살아 있고 5432가 LISTENING이면 앱 자체는 정상 동작. DB·확장 생성만 위 "사내 PC" 섹션의 Node `pg` 우회 스크립트로 처리 |
 | `prisma migrate deploy` 중 `P3018` — `Page_content_trgm_idx` 인덱스가 존재하지 않음 | fresh DB 에서 발생*했었음* (그 인덱스를 만든 적이 없어 DROP 이 실패). **Cycle 41 에서 `20260511231747_add_comments/migration.sql` 의 두 DROP INDEX 를 `IF EXISTS` 로 바꿔 영구 fix** — fresh DB / 기존 DB 양쪽에서 멱등. 최신 코드를 받았다면 더는 발생하지 않으며 별도 회피 절차 불필요 |
 | 회원가입/로그인 시 503 또는 `ECONNREFUSED ::1:<port>` | `apps/api/.env` 의 `PORT` 와 `apps/web/.env` 의 `API_PORT` 불일치 (Cycle 40). 둘을 같은 값(권장 3001)으로 맞추기. |
+| 컨테이너 web 에서 `/api/*` 가 502/ECONNREFUSED | web 이미지가 `API_HOST=localhost` 로 빌드돼 자기 자신을 가리킴 (Cycle 42). compose 의 `web.build.args.API_HOST=api` 로 재빌드 (`docker compose build web`). rewrites 는 빌드타임에 굳으므로 ENV 변경만으론 안 됨 |
+| keycloak 컨테이너 기동 실패 / 8080 포트 충돌 | 호스트 8080 사용 중인지 확인 (`ss -ltnp \| grep 8080`). 다른 서비스가 쓰면 compose 의 keycloak `ports` 를 `18080:8080` 등으로 변경 |
+| `docker compose up` 중 keycloak realm 미반영 | `--import-realm` 은 **신규 realm 만** import. 같은 이름 realm 이 이미 있으면 건너뜀. start-dev 인메모리라 보통 매 기동 새로 import 되지만, 영속 볼륨을 붙였다면 realm 삭제 후 재기동 |
