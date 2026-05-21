@@ -834,3 +834,26 @@
   - ~~Cycle 41의 `typescript.ignoreBuildErrors` 영구 fix~~ → **followup `abf5950` 에서 해소** (타입 3곳: CollaborativeEditor synced/awareness cleanup, ExcalidrawEditor 0.18 타입 경로. `tsc --noEmit` 0 + `next build` 통과)
   - keycloak start-dev 인메모리 H2 → 영속 필요 시 외부 DB 연결
 - **비고**: 핵심 설계 원칙 = "값만 교체, 코드 불변". 함정 둘 — (1) Next.js 가 `rewrites()`/`NEXT_PUBLIC_*` 를 **빌드타임에** 굳혀 프록시 호스트(`API_HOST`)·WS 주소를 빌드 ARG 로 주입해야 함; (2) **컨테이너 빌드 npm 의 `EAI_AGAIN`** = 사내 프록시 미상속 (긴 진단 끝에 디버그 로그의 `EAI_AGAIN` 으로 확정 — node 버전/메모리/npm ci·install 무관). node20→**node22** 상향(@hocuspocus/server·chevrotain 의 `engines node>=22`). Cycle 40 포트 컨벤션(api PORT == web API_PORT == 3001) 컨테이너에서도 유지.
+
+---
+
+## Cycle 43 (1/2) — 2026-05-21 — ✅ Done (백엔드 OIDC 통합 — 프론트 전환은 2/2)
+- **제목**: NestJS Keycloak OIDC 백엔드 통합 (자체 인증에 "입구"만 추가, 공존)
+- **카테고리**: 인증 / SSO (Keycloak OIDC) — Cycle 42 컨테이너화 후속
+- **커밋**: `313e237`(핵심), 본 CYCLES.md(Docs)
+- **변경 파일**:
+  - `apps/api/src/auth/oidc.service.ts`(신규) — openid-client v5(CJS) 지연 discovery, authorizationUrl(PKCE/state/nonce), callback(code→token + ID 토큰 검증) → 클레임
+  - `apps/api/src/auth/oidc.controller.ts`(신규) — `GET /auth/oidc/login`·`/callback`. tx(state/nonce/verifier)는 단명 httpOnly 쿠키(oidc_tx)로 stateless 전달. 끝에서 기존 `docspace_session` 발급 → `/home`
+  - `apps/api/src/auth/oidc.module.ts`(신규) — AuthModule import 해 AuthService 재사용. app.module 에 등록
+  - `apps/api/src/auth/auth.service.ts` — `findOrCreateOidcUser`(매핑) + `issueToken` 추가, `login()`에 passwordHash null 가드(추가만, signup/login 로직 유지)
+  - `apps/api/prisma/schema.prisma` + 마이그레이션 `20260521090000_oidc_user_fields` — `User.passwordHash` nullable + `keycloakId String? @unique`
+  - `apps/api/.env.example` — `KC_ISSUER_URI`(localhost:8080 통일)·`OIDC_REDIRECT_URI`·`OIDC_POST_LOGIN_REDIRECT`
+  - `package.json`/`package-lock.json` — openid-client@5.7.1
+- **계정 매핑**: `keycloakId(sub)` 우선 → 없으면 `username(preferred_username)`으로 기존 자체계정 링크 → 그래도 없으면 신규 생성(첫 사용자만 ADMIN, SSO 전용이라 passwordHash=null)
+- **검증**: 개발용 Keycloak(컨테이너 26.3, realm import) + postgres(컨테이너) + api(호스트) 기동 후 **full OIDC 흐름 프로그램 검증 통과** — testuser/testpass 로 `/auth/oidc/login`→KC 로그인→callback→`docspace_session` 발급→`/auth/me` 가 사용자 반환(신규 생성). 자체 `signup`/`login` 공존 정상(OIDC 전용 사용자 자체 로그인은 401). **jwt.strategy/가드/auth.controller/auth.module 무변경**(git diff로 확인).
+- **남은 일 (Cycle 43 2/2)**:
+  - Next.js 로그인 화면을 OIDC(`/api/auth/oidc/login`)로 전환 + 회원가입 페이지 처리 + middleware
+  - 자체 인증(bcrypt signup/login) 제거 — 현재는 남겨둠(점진적)
+  - 컨테이너로 api 운영 시 issuer 호스트(`keycloak:8080` vs 외부) 정합 — `KC_HOSTNAME`/리버스 프록시로 통일
+  - AFS 입주: `KC_ISSUER_URI`/`KC_CLIENT_SECRET`만 교체(코드 불변)
+- **비고**: 입구만 추가하는 점진·안전 설계 — 자체 JWT 틀(`signToken`/httpOnly 쿠키/passport-jwt/가드) 그대로 재사용, OIDC 는 callback 에서 그 발급 경로에 합류. **issuer 함정**: Keycloak discovery 요청 host 가 곧 토큰 `iss` → 브라우저·api·토큰을 모두 `localhost:8080`로 통일(127.0.0.1 섞으면 iss 불일치). **openid-client v6 은 ESM-only → v5(CJS) 고정**(NestJS CommonJS). 콜백은 realm redirect URI(`localhost:3000/*`)에 맞춰 Next 프록시 경유 → realm 변경 불필요.
