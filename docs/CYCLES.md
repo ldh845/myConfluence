@@ -857,3 +857,23 @@
   - 컨테이너로 api 운영 시 issuer 호스트(`keycloak:8080` vs 외부) 정합 — `KC_HOSTNAME`/리버스 프록시로 통일
   - AFS 입주: `KC_ISSUER_URI`/`KC_CLIENT_SECRET`만 교체(코드 불변)
 - **비고**: 입구만 추가하는 점진·안전 설계 — 자체 JWT 틀(`signToken`/httpOnly 쿠키/passport-jwt/가드) 그대로 재사용, OIDC 는 callback 에서 그 발급 경로에 합류. **issuer 함정**: Keycloak discovery 요청 host 가 곧 토큰 `iss` → 브라우저·api·토큰을 모두 `localhost:8080`로 통일(127.0.0.1 섞으면 iss 불일치). **openid-client v6 은 ESM-only → v5(CJS) 고정**(NestJS CommonJS). 콜백은 realm redirect URI(`localhost:3000/*`)에 맞춰 Next 프록시 경유 → realm 변경 불필요.
+
+---
+
+## Cycle 43 (2/2) — 2026-05-21 — ✅ Done (Cycle 43 완료 — 프론트 OIDC 전환 + 자체 인증 제거)
+- **제목**: Next.js 로그인 OIDC 전환 + 자체 인증(bcrypt) 제거
+- **카테고리**: 인증 / SSO (Keycloak OIDC) — Cycle 43 (1/2) 마무리
+- **커밋**: `29c9093`(핵심), 본 CYCLES.md(Docs)
+- **변경 파일**:
+  - `apps/web/app/login/page.tsx` — 아이디/비번 폼 → "SSO 로그인" 버튼(`window.location → /api/auth/oidc/login`, top-level 네비게이션). 회원가입 링크 제거
+  - `apps/web/app/signup/page.tsx`(삭제) — 자체 회원가입 페이지 제거
+  - `apps/web/middleware.ts` — PUBLIC_PATHS 에서 `/signup` 제거(`/login` 만 공개). 쿠키 체크 로직 불변
+  - `apps/api/src/auth/auth.controller.ts` — `POST /auth/signup`·`/auth/login` 제거(`/auth/logout`·`GET /auth/me` 유지)
+  - `apps/api/src/auth/auth.service.ts` — `signup`/`login`(bcrypt) + bcrypt import 제거(`findById`/`findOrCreateOidcUser`/`issueToken` 유지)
+  - `apps/api/src/auth/dto/{login,signup}.dto.ts`(삭제), `apps/api/package.json` — `bcrypt`·`@types/bcrypt` 의존성 제거
+- **검증**: 개발용 Keycloak(26.3)+postgres 컨테이너 + 호스트 api/web 기동 후 **프록시 경유(localhost:3000) 전체 SSO 흐름 통과** — `/api/auth/oidc/login`→KC(testuser/testpass)→callback→`docspace_session`→`/api/auth/me` 반환, `/api/auth/logout` 204. **제거 확인**: `POST /api/auth/login`·`/api/auth/signup` 404, `/signup` 페이지 없음(빌드 라우트에서 사라짐; 미인증 접근은 미들웨어가 `/login`으로). api/web 빌드 통과. **jwt.strategy/가드 2개/JwtModule/auth.module/보호 컨트롤러 무변경**(git diff 확인).
+- **남은 일**:
+  - **Keycloak SSO 단일 로그아웃**(`end_session_endpoint`): id_token 보관이 필요한 설계 추가라 미룸. 현재는 로컬 `docspace_session` 쿠키만 클리어(Keycloak 세션은 유지 → 재로그인 시 KC가 자동 로그인될 수 있음)
+  - 운영 DB 기존 자체 사용자 마이그레이션(AFS 입주/실배포 시점) — 자체 사용자는 첫 OIDC 로그인 시 `username` 매칭으로 자동 링크됨
+  - 컨테이너로 api 운영 시 issuer 호스트 정합(`KC_HOSTNAME`/리버스 프록시)
+- **비고**: 로그인 경로가 OIDC 단일로 통일. 세션 틀(`docspace_session`)·`useAuth`·미들웨어 쿠키 체크는 그대로라 인증 상태 코드는 무변경. Cycle 43 (1/2 백엔드 + 2/2 프론트) **완료**.
