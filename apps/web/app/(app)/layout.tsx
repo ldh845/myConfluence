@@ -13,7 +13,7 @@ import type { PageFull, SpaceWithPages } from "@/lib/types";
 
 // Cycle 28 — TopNav + Sidebar 영속 셸.
 // route group "(app)"으로 묶인 모든 페이지가 이 layout 안에서 렌더된다.
-// /login, /signup, /share/[token]은 (app) 밖이라 셸이 없다.
+// /login, /share/[token]은 (app) 밖이라 셸이 없다. (Cycle 43: /signup 제거)
 // spaces/space-selection/trash 상태는 셸이 보유 — 라우트 전환에도 그대로 유지된다.
 
 function AppShell({ children }: { children: React.ReactNode }) {
