@@ -14,6 +14,7 @@ import { PageSharesModule } from './page-shares/page-shares.module';
 import { ActivitiesModule } from './activities/activities.module';
 import { ReactionsModule } from './reactions/reactions.module';
 import { AuthModule } from './auth/auth.module';
+import { OidcModule } from './auth/oidc.module';
 import { UsersModule } from './users/users.module';
 
 @Module({
@@ -31,6 +32,7 @@ import { UsersModule } from './users/users.module';
     ActivitiesModule,
     ReactionsModule,
     AuthModule,
+    OidcModule,
     UsersModule,
   ],
   controllers: [AppController, HealthController],

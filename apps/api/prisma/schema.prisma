@@ -26,7 +26,12 @@ enum SpaceType {
 model User {
   id               String        @id @default(cuid())
   username         String        @unique
-  passwordHash     String
+  // Cycle 43 — OIDC(SSO) 전용 사용자는 비밀번호가 없으므로 nullable.
+  // 자체 가입(/auth/signup) 사용자만 bcrypt 해시를 채운다.
+  passwordHash     String?
+  // Cycle 43 — Keycloak subject(sub). OIDC 로그인 계정 매핑 키(unique).
+  // 자체 가입만 한 사용자는 null. 첫 OIDC 로그인 시 username 매칭으로 링크되거나 신규 생성.
+  keycloakId       String?       @unique
   name             String
   department       String
   role             Role          @default(DEVELOPER)
