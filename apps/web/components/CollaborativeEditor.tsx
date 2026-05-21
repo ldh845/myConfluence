@@ -481,7 +481,9 @@ export default function CollaborativeEditor({
       provider.off("synced", onSynced);
     };
     provider.on("synced", onSynced);
-    return () => provider.off("synced", onSynced);
+    return () => {
+      provider.off("synced", onSynced);
+    };
   }, [editor, instance, pageId, initialMarkdown, editable]);
 
   // Debounced save: client-side, last-writer-wins.
@@ -538,21 +540,25 @@ export default function CollaborativeEditor({
   useEffect(() => {
     if (!instance) return;
     const { provider } = instance;
+    const awareness = provider.awareness;
+    if (!awareness) return;
     const emit = () => {
       const entries = Array.from(
-        provider.awareness.getStates().entries()
+        awareness.getStates().entries()
       ) as [number, { user?: { name: string; color: string } }][];
       const users: PresenceUser[] = entries.map(([clientId, state]) => ({
         clientId,
         name: state?.user?.name ?? "익명",
         color: state?.user?.color ?? "#6b778c",
-        self: clientId === provider.awareness.clientID,
+        self: clientId === awareness.clientID,
       }));
       onPresenceChange?.(users);
     };
-    provider.awareness.on("change", emit);
+    awareness.on("change", emit);
     emit();
-    return () => provider.awareness.off("change", emit);
+    return () => {
+      awareness.off("change", emit);
+    };
   }, [instance, onPresenceChange]);
 
   // Cycle 10-2b-1 — 조회 모드는 Yjs instance 없이도 렌더. 편집 모드는
