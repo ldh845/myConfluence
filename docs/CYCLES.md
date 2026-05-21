@@ -909,3 +909,18 @@
 - **검증**: 외부 PC 브라우저 `http://166.79.31.248:8082` → SSO 로그인(testuser) → `/home` ✅, 로그아웃 → 재접속 시 재인증 요구(SLO) ✅.
 - **남은 일**: Docker 빌드 시 사내 프록시/CA 주입(배포 환경별), AFS 입주 시 issuer/secret 교체(코드 불변).
 - **비고**: 실제 겪은 함정 — (1) Docker 29 는 containerd 가 pull → **containerd 서비스에도 프록시** 필요(dockerd 만으론 TLS handshake timeout); (2) quay.io referrers TLS timeout 은 재시도로 통과; (3) Keycloak issuer 에 `/auth` 누락 방지 위해 `KC_HOSTNAME` 에 경로 포함; (4) `git pull` 프록시 불안정 시 **git bundle 우회**(create→scp→remote set-url→pull→redeploy→URL 복원).
+
+---
+
+## Cycle 42 followup — 2026-05-21 — 🔄 In Progress (Docker 빌드 프록시/CA 통로 — VM 실빌드 검증 대기)
+- **제목**: Docker 이미지 빌드에 사내 프록시/CA 주입 통로 추가 (api·web 이미지 첫 실빌드 준비)
+- **카테고리**: 운영 / 인프라 / 빌드 — Cycle 42 컨테이너화의 미검증 부분(이미지 실빌드) 해소
+- **커밋**: `d5645f8`(핵심), 본 CYCLES.md(Docs)
+- **변경 파일**:
+  - `apps/api/Dockerfile`·`apps/web/Dockerfile` — build 스테이지에 `ARG HTTP_PROXY/HTTPS_PROXY/NO_PROXY`(predefined build arg → `npm ci` RUN 에 자동 적용) + 사내 root CA 주입(`COPY ca-certs/` → `update-ca-certificates` → `NODE_EXTRA_CA_CERTS`). ca-certs 비어도 `|| true` 로 안 깨짐
+  - `docker-compose.yml` — api·web `build.args` 에 `HTTP_PROXY: ${HTTP_PROXY:-}` 등(빌드 호스트 env 에서 전달, 하드코딩 금지)
+  - `.gitignore` — `ca-certs/*` 무시 + `!ca-certs/.gitkeep`(사내 CA 비공개). `ca-certs/.gitkeep` 신규
+  - `docs/DEPLOY.md` — "사내 프록시 환경에서 빌드" 절차 갱신(ca-certs 배치 → `HTTP_PROXY` export → `docker compose build`)
+- **검증**: `docker compose config` 유효(두 서비스 build.args 에 프록시 주입 확인). `.gitignore` 동작(.crt 무시 / .gitkeep 트래킹) 확인. **실이미지 빌드는 VM 에서 사용자 검증 예정**(로컬 Windows 는 사내 프록시/CA 미주입이라 npm ci 가 EAI_AGAIN — Cycle 42 의 그 벽). VM 통과 시 ✅ 로 갱신.
+- **남은 일**: VM 에서 `docker compose build api web` 성공 확인 → 본 항목 ✅ 전환. AFS 입주 시 같은 통로로 그 환경 프록시/CA 주입(코드 불변).
+- **비고**: Cycle 42 의 핵심 미검증 항목(컨테이너 이미지 실빌드)을 사내망에서 가능케 하는 통로. 값(프록시 IP·CA)은 환경 특정이라 repo 미포함 — VM·AFS 동일 메커니즘.
