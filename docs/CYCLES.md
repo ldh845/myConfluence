@@ -894,3 +894,18 @@
 - **검증**: 프록시 경유 full 흐름 — (로그아웃 전) authz 가 302+code 로 **자동로그인 됨**(SSO 활성) → (로그아웃) `GET /auth/oidc/logout` 이 `openid-connect/logout`(id_token_hint 포함)으로 302 + 두 쿠키 클리어 → end_session 이 `localhost:3000/login` 으로 복귀(확인 페이지 없음) → (로그아웃 후) authz 가 **로그인폼 표시**(자동로그인 안 됨 = 재인증 요구). api build / web tsc 통과. **jwt.strategy/가드 2개/JwtModule/auth.module/보호 컨트롤러 무변경**.
 - **남은 일**: 운영 DB 자체 사용자 마이그레이션 / 컨테이너 issuer 호스트 정합 (배포 시점). post_logout_redirect 는 realm `post.logout.redirect.uris`(localhost:3000/*)가 커버 — realm 변경 불필요.
 - **비고**: 사내 SSO 표준 — 한 번 로그아웃하면 같은 Keycloak 을 쓰는 서비스 전체에서 로그아웃. **Cycle 43 (1/2 + 2/2 + SLO followup) 최종 완료.**
+
+---
+
+## Cycle 43 followup — 2026-05-21 — ✅ Done (VM 실서버 Keycloak SSO 적용)
+- **제목**: VM 실서버(166.79.31.248)에 Cycle 43 Keycloak SSO 적용 + 외부 브라우저 검증
+- **카테고리**: 운영 / 배포 / 인증(SSO) — VM 한정 운영 지식 문서화
+- **커밋**: 본 Docs 커밋 (코드 변경 없음 — VM 적용은 별도 도구로 사용자와 직접 진행, 그 운영 지식을 docs 에 기록)
+- **변경 파일**:
+  - `docs/DEPLOY.md` — "3.6 VM Keycloak SSO 적용" 섹션 신규(Docker/containerd 프록시, Keycloak 컨테이너 `KC_HOSTNAME=…/auth`, nginx `/auth` 분기, VM 기준 `.env` OIDC 값, 재배포·검증), 트러블슈팅 행 4개 추가
+  - `docs/CYCLES.md` — 본 항목
+  - 루트 `docspace-cycle43.bundle` 삭제(git pull 정상화로 불필요)
+- **핵심 구성**: 외부 단일 오리진 `http://166.79.31.248:8082`(HAProxy→nginx) 뒤에서 nginx 가 경로 분기 — `/`→Next, `/api`→NestJS, `/auth`→Keycloak. issuer 를 `…:8082/auth/realms/docspace` 로 통일(브라우저·api·토큰 동일 주소) → Cycle 43 issuer 일관성 원칙을 실서버에 적용.
+- **검증**: 외부 PC 브라우저 `http://166.79.31.248:8082` → SSO 로그인(testuser) → `/home` ✅, 로그아웃 → 재접속 시 재인증 요구(SLO) ✅.
+- **남은 일**: Docker 빌드 시 사내 프록시/CA 주입(배포 환경별), AFS 입주 시 issuer/secret 교체(코드 불변).
+- **비고**: 실제 겪은 함정 — (1) Docker 29 는 containerd 가 pull → **containerd 서비스에도 프록시** 필요(dockerd 만으론 TLS handshake timeout); (2) quay.io referrers TLS timeout 은 재시도로 통과; (3) Keycloak issuer 에 `/auth` 누락 방지 위해 `KC_HOSTNAME` 에 경로 포함; (4) `git pull` 프록시 불안정 시 **git bundle 우회**(create→scp→remote set-url→pull→redeploy→URL 복원).
