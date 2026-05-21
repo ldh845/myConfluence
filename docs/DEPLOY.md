@@ -306,6 +306,100 @@ docker compose build \
 
 ---
 
+## 3.6 VM Keycloak SSO 적용 (Cycle 43 — 실서버 166.79.31.248)
+
+Cycle 43 의 Keycloak OIDC 로그인을 사내 VM 실서버에 적용한 절차. 외부 진입은
+호스트 HAProxy 가 `:8082` → `VM:80(nginx)` 으로 매핑한다. 외부에서 보는 주소는
+모두 `http://166.79.31.248:8082` 단일 오리진이고, nginx 가 경로로 분기한다
+(`/` → Next.js, `/api` → NestJS, `/auth` → Keycloak).
+
+> 핵심: 외부 단일 오리진(`:8082`) 뒤에 Keycloak 을 `/auth` 경로로 둔다.
+> 그래서 issuer 도 `…:8082/auth/realms/docspace` 로, 브라우저·api·토큰이 모두
+> 같은 주소를 본다(Cycle 43 의 issuer 일관성 원칙을 실서버에 적용).
+
+### 1) Docker 설치
+```bash
+sudo apt install -y docker.io          # docker 29.1.3
+```
+
+### 2) Docker 데몬 프록시 (사내망)
+```bash
+sudo mkdir -p /etc/systemd/system/docker.service.d
+sudo tee /etc/systemd/system/docker.service.d/http-proxy.conf >/dev/null <<'EOF'
+[Service]
+Environment="HTTP_PROXY=http://16.7.241.20:8080"
+Environment="HTTPS_PROXY=http://16.7.241.20:8080"
+Environment="NO_PROXY=localhost,127.0.0.1"
+EOF
+```
+
+### 3) containerd 서비스에도 동일 프록시 (중요)
+Docker 29 는 **containerd 가 이미지를 pull** 한다. 데몬(dockerd) 프록시만으론
+부족하고 containerd 에도 프록시를 줘야 image pull 이 된다(아래 트러블슈팅 참조).
+```bash
+sudo mkdir -p /etc/systemd/system/containerd.service.d
+sudo tee /etc/systemd/system/containerd.service.d/http-proxy.conf >/dev/null <<'EOF'
+[Service]
+Environment="HTTP_PROXY=http://16.7.241.20:8080"
+Environment="HTTPS_PROXY=http://16.7.241.20:8080"
+Environment="NO_PROXY=localhost,127.0.0.1"
+EOF
+sudo systemctl daemon-reload
+sudo systemctl restart containerd docker
+```
+
+### 4) Keycloak 컨테이너 기동
+issuer 가 외부 단일 오리진의 `/auth` 경로를 보도록 `KC_HOSTNAME` 에 **경로까지**
+포함한다. 리버스 프록시(nginx) 뒤이므로 `KC_PROXY_HEADERS=xforwarded`.
+```bash
+docker run -d --name docspace-keycloak -p 8080:8080 \
+  -e KC_BOOTSTRAP_ADMIN_USERNAME=admin \
+  -e KC_BOOTSTRAP_ADMIN_PASSWORD=admin \
+  -e KC_HOSTNAME=http://166.79.31.248:8082/auth \
+  -e KC_HTTP_RELATIVE_PATH=/auth \
+  -e KC_PROXY_HEADERS=xforwarded \
+  -v ~/realm-docspace.json:/opt/keycloak/data/import/realm-docspace.json:ro \
+  quay.io/keycloak/keycloak:26.3 start-dev --import-realm
+```
+
+### 5) nginx — `/auth` 분기 추가
+`/etc/nginx/sites-available/docspace` 의 server 블록에 추가:
+```nginx
+location /auth/ {
+    proxy_pass http://localhost:8080;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Forwarded-Host $host;
+}
+```
+`sudo nginx -t && sudo systemctl reload nginx` 로 반영.
+
+### 6) `apps/api/.env` — VM 기준 OIDC 값
+모든 OIDC URL 이 외부 단일 오리진(`:8082`) + `/auth` 경로를 가리킨다.
+```
+KC_ISSUER_URI=http://166.79.31.248:8082/auth/realms/docspace
+KC_CLIENT_ID=docspace-web
+KC_CLIENT_SECRET=dev-docspace-secret
+OIDC_REDIRECT_URI=http://166.79.31.248:8082/api/auth/oidc/callback
+OIDC_POST_LOGIN_REDIRECT=/home
+OIDC_POST_LOGOUT_REDIRECT=http://166.79.31.248:8082/login
+```
+> realm-docspace.json 의 client redirect URI / web origins / post-logout
+> redirect 에 `http://166.79.31.248:8082/*` 가 포함돼 있어야 한다(이미 등록됨).
+
+### 7) 재배포
+```bash
+./redeploy.sh        # DocSpace 를 Cycle 43 코드로 빌드·재기동
+```
+
+### 8) 검증 (완료)
+외부 PC 브라우저 `http://166.79.31.248:8082` → "SSO 로그인" → Keycloak →
+testuser/testpass → `/home` 진입 ✅. 로그아웃 → 재접속 시 재인증 요구(SLO) ✅.
+
+---
+
 ## 4. 트러블슈팅
 
 | 증상 | 원인/해결 |
@@ -320,3 +414,7 @@ docker compose build \
 | 컨테이너 web 에서 `/api/*` 가 502/ECONNREFUSED | web 이미지가 `API_HOST=localhost` 로 빌드돼 자기 자신을 가리킴 (Cycle 42). compose 의 `web.build.args.API_HOST=api` 로 재빌드 (`docker compose build web`). rewrites 는 빌드타임에 굳으므로 ENV 변경만으론 안 됨 |
 | keycloak 컨테이너 기동 실패 / 8080 포트 충돌 | 호스트 8080 사용 중인지 확인 (`ss -ltnp \| grep 8080`). 다른 서비스가 쓰면 compose 의 keycloak `ports` 를 `18080:8080` 등으로 변경 |
 | `docker compose up` 중 keycloak realm 미반영 | `--import-realm` 은 **신규 realm 만** import. 같은 이름 realm 이 이미 있으면 건너뜀. start-dev 인메모리라 보통 매 기동 새로 import 되지만, 영속 볼륨을 붙였다면 realm 삭제 후 재기동 |
+| (VM) Docker 이미지 pull `TLS handshake timeout` | Docker 29 는 **containerd 가 pull** 하므로 dockerd 프록시만으론 부족. `containerd.service.d/http-proxy.conf` 추가 후 `systemctl daemon-reload && systemctl restart containerd docker` (위 3.6-3 참조) |
+| (VM) `quay.io` referrers `TLS handshake timeout` | 사내 프록시 경유 시 일시적. **재시도하면 통과**. (containerd 프록시는 정상 설정된 상태에서 발생하는 간헐 현상) |
+| (VM) Keycloak issuer 에 `/auth` 누락 → OIDC discovery/iss 불일치 | `KC_HOSTNAME` 에 **경로(`/auth`)까지** 포함: `KC_HOSTNAME=http://166.79.31.248:8082/auth` + `KC_HTTP_RELATIVE_PATH=/auth`. 그래야 issuer 가 `…:8082/auth/realms/docspace` 로 떨어진다 |
+| (VM) `git pull` 이 `Proxy CONNECT aborted` / `unexpected TLS packet` | 사내 프록시 일시 불안정. 회복 전까지 **git bundle 우회**: (로컬) `git bundle create docspace.bundle <branch>` → `scp` 로 VM 전송 → (VM) `git remote set-url origin <bundle경로>` → `git pull` → `./redeploy.sh` → 완료 후 `git remote set-url origin <원래 URL>` 복원 |
