@@ -7,7 +7,7 @@
 연결되므로 동기화는 정상.
 
 ### Prereq
-- **Node.js 20 이상 (Hocuspocus 4 가 ESM 의존 — Node 18 + CJS 환경에선 `ERR_REQUIRE_ESM` 으로 죽음)**
+- **Node.js 22 이상 (Hocuspocus 4 는 ESM 의존이라 Node 18 + CJS 에선 `ERR_REQUIRE_ESM`; 또한 `@hocuspocus/server`·`chevrotain` 이 engines `node>=22` 를 요구 — Cycle 42에서 컨테이너 베이스를 node:22 로 상향)**
 - PostgreSQL 16 + `pg_trgm` extension (검색용)
 - 디스크 쓰기 권한 (첨부 파일 저장 경로)
 
@@ -38,8 +38,8 @@ sudo update-ca-certificates
 # Node(및 Prisma 엔진 다운로드)가 OS 신뢰 저장소를 보게 함
 export NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-certificates.crt
 
-# 3) Node 20.x — NodeSource 저장소 (프록시 환경변수가 sudo 로 전달되도록 -E)
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+# 3) Node 22.x — NodeSource 저장소 (프록시 환경변수가 sudo 로 전달되도록 -E)
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
 sudo apt-get install -y nodejs
 ```
 
@@ -233,7 +233,7 @@ keycloak(8080)** 네 서비스를 모두 띄우는 개발용 풀스택. 위 3번
 > Keycloak 은 띄워두기만 하고 실제 로그인 연동은 Cycle 43.
 
 ### 구성 파일
-- `apps/api/Dockerfile` — Node 20 멀티스테이지(build=bookworm, runtime=slim).
+- `apps/api/Dockerfile` — Node 22 멀티스테이지(build=bookworm, runtime=slim).
   기동 시 `prisma migrate deploy` 후 `node dist/src/main`.
 - `apps/web/Dockerfile` — Next.js standalone. `next.config.mjs` 의
   `output:'standalone'` + `experimental.outputFileTracingRoot`(저장소 루트) 의존.
@@ -275,6 +275,24 @@ ENV 로는 안 바뀐다. 그래서 web 이미지는 다음을 **빌드 ARG** �
 
 > 비컨테이너(`npm run dev:all`)는 `API_HOST` 미설정 → 기본 `localhost` 라
 > 기존 동작 그대로다. 포트 컨벤션(Cycle 40)은 컨테이너에서도 불변.
+
+### 사내 프록시 환경에서 빌드 (중요 — EAI_AGAIN)
+컨테이너 **빌드 단계의 `npm ci`** 는 npm 레지스트리에 직접 접속한다. Docker
+이미지 pull 은 데몬이 프록시를 경유해 되더라도, **빌드/컨테이너 내부 npm 은
+호스트 프록시를 자동으로 물려받지 않는다.** 사내망에서 그냥 빌드하면
+`registry.npmjs.org` DNS 실패(`EAI_AGAIN`)가 나고, npm 10.x 가 이를
+`Exit handler never called!` 라는 오해 소지 메시지로 표시한다.
+
+→ 빌드 시 프록시와 사내 root CA 를 주입해야 한다 (위 "사내 VM" 섹션과 동일 패턴):
+```bash
+docker compose build \
+  --build-arg HTTP_PROXY=http://<사내프록시>:8080 \
+  --build-arg HTTPS_PROXY=http://<사내프록시>:8080
+# TLS 가로채기 환경이면 Dockerfile 에 사내 CA COPY + NODE_EXTRA_CA_CERTS 도 필요.
+```
+사내 IP/CA 는 환경 특정 값이라 저장소 Dockerfile 에 하드코딩하지 않는다(AFS
+입주 시엔 그 환경의 프록시/CA 로 교체). 이 값들이 갖춰진 환경(예: Cycle 41의
+사내 VM)에서 빌드하면 정상 통과한다.
 
 ### Keycloak 메모 (Cycle 43 준비)
 - `start-dev` 는 인메모리 H2 라 재시작 시 데이터 소실. `--import-realm` 이 매

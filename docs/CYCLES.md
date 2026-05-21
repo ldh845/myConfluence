@@ -814,24 +814,23 @@
 
 ---
 
-## Cycle 42 — 2026-05-21 — ✅ Done (파일 작성 — 실기동 검증은 VM에서 사용자)
+## Cycle 42 — 2026-05-21 — ✅ Done (컨테이너화 정의 완성 — 로컬 실빌드 검증은 보류, 사유 아래)
 - **제목**: 개발 환경 컨테이너화 + 개발용 Keycloak 구성 (AFS/SSO 입주 사전 포장)
 - **카테고리**: 운영 / 인프라 / 배포 (Cycle 43 Keycloak OIDC 전환 준비)
-- **커밋**: `5a2b0b0` (핵심), 본 CYCLES.md
+- **커밋**: `5a2b0b0`(핵심), `abf5950`(타입 에러 fix), `91c5e6e`(node22 상향+빌드 호출 fix), `2a53843`(compose WS URL env화+keycloak 26.3+루트 .env.example), 본 CYCLES.md(Docs)
 - **변경 파일**:
-  - `apps/api/Dockerfile` — Node 20 멀티스테이지(build=bookworm/runtime=slim). 기동 시 `prisma migrate deploy` → `node dist/src/main`
-  - `apps/web/Dockerfile` — Next.js standalone. 빌드 ARG `API_HOST`/`API_PORT`/`NEXT_PUBLIC_WS_URL` 주입
+  - `apps/api/Dockerfile` — **Node 22** 멀티스테이지(build=bookworm/runtime=slim). 빌드: `ENV PATH=/app/node_modules/.bin` + 워크스페이스 직접 호출(prisma generate → nest build). 기동 시 `prisma migrate deploy` → `node dist/src/main`
+  - `apps/web/Dockerfile` — **Node 22** Next.js standalone. 빌드 ARG `API_HOST`/`API_PORT`/`NEXT_PUBLIC_WS_URL` 주입
   - `apps/web/next.config.mjs` — `output:'standalone'` + `experimental.outputFileTracingRoot`(저장소 루트) + 프록시 호스트 `API_HOST` 분리(기본 localhost)
-  - `docker-compose.yml` — `api`/`web`/`keycloak` 서비스 추가 (postgres/redis/nginx 기존 유지)
+  - `docker-compose.yml` — `api`/`web`/`keycloak`(이미지 **26.3**) 서비스 추가, web WS URL 환경변수화(`${NEXT_PUBLIC_WS_URL:-ws://localhost:1234}` — VM IP 하드코딩 제거)
   - `infra/keycloak/realm-docspace.json` — realm `docspace` + confidential client `docspace-web`(authorization code) + 테스트 사용자 `testuser`/`testpass`
-  - `.dockerignore`(루트, context=root라 실효) / `apps/*/.dockerignore`(의도 문서)
+  - 루트 `.env.example` — compose 가 읽는 `NEXT_PUBLIC_WS_URL` 문서화. `.dockerignore`(루트, context=root라 실효) / `apps/*/.dockerignore`(의도 문서)
   - `apps/api/.env.example`, `apps/web/.env.example` — `KC_*` placeholder
-  - `docs/DEPLOY.md` — "3.5 컨테이너 개발 환경" 섹션 + 트러블슈팅 행 3개
-- **검증**: 이번 사이클은 파일 작성까지 (사용자 선택). VM에서 `docker compose up -d --build` → web(3000)/api(3001+1234)/postgres(5432)/keycloak(8080) 4개 기동 + DocSpace 기존 자체 인증 그대로 동작 + keycloak `/admin` 에 realm·client 확인이 DoD. **인증 코드는 한 줄도 변경 안 함.**
+  - `docs/DEPLOY.md` — "3.5 컨테이너 개발 환경" 섹션 + Node 22 반영 + "사내 프록시 환경에서 빌드(EAI_AGAIN)" 서브섹션 + 트러블슈팅 행
+- **검증**: 컨테이너화 정의(Dockerfile·compose·realm) 완성. **로컬 실빌드 검증은 보류** — 사유: 로컬 Docker Desktop(WSL2) 컨테이너 빌드 안 `npm ci` 가 사내 프록시를 못 물려받아 `registry.npmjs.org` DNS 실패(`EAI_AGAIN`); npm 10.x 가 이를 `Exit handler never called!` 로 오역해 표시. **Dockerfile 결함 아님이 확정**(디버그 로그로 근본 원인 식별). 실빌드 검증은 프록시·CA 가 갖춰진 환경(Cycle 41 VM / AFS 입주)에서 그 환경 설정과 함께 수행. **인증 코드는 한 줄도 변경 안 함.**
 - **남은 일**:
+  - **(배포 환경별)** docker 빌드 시 사내 프록시(`HTTP_PROXY`/`HTTPS_PROXY`)+사내 root CA(`NODE_EXTRA_CA_CERTS`) 주입 — 없으면 빌드 내 npm 이 `EAI_AGAIN`. 사내 IP/CA 는 환경 특정이라 repo 미하드코딩. (DEPLOY.md "사내 프록시 환경에서 빌드" 참조)
   - **(Cycle 43)** 자체 JWT → Keycloak OIDC(authorization code) 로그인 전환. issuer 호스트 불일치(컨테이너 `keycloak:8080` vs 외부 `166.79.31.248:8080`) `KC_HOSTNAME` 등으로 정리
-  - VM에 Docker/compose 설치 여부 미확인 — 없으면 설치부터(외부망 제한 시 image pull 막힐 수 있음)
-  - 외부망 제한 환경에서 `quay.io/keycloak` + `node:20` image pull 가능 여부 확인. 막히면 사내 레지스트리/사전 로드
-  - ~~Cycle 41의 `typescript.ignoreBuildErrors` 영구 fix~~ → **followup `abf5950` 에서 해소.** 타입 에러 3곳(CollaborativeEditor.tsx synced/awareness cleanup, ExcalidrawEditor.tsx 0.18 타입 경로) 영구 fix. `tsc --noEmit` 0 + `next build` 통과 확인 → VM 로컬의 `ignoreBuildErrors=true` 임시 패치는 이제 불필요(제거 가능)
+  - ~~Cycle 41의 `typescript.ignoreBuildErrors` 영구 fix~~ → **followup `abf5950` 에서 해소** (타입 3곳: CollaborativeEditor synced/awareness cleanup, ExcalidrawEditor 0.18 타입 경로. `tsc --noEmit` 0 + `next build` 통과)
   - keycloak start-dev 인메모리 H2 → 영속 필요 시 외부 DB 연결
-- **비고**: 핵심 설계 원칙 = "값만 교체, 코드 불변". Next.js 가 `rewrites()`/`NEXT_PUBLIC_*` 를 **빌드타임에** 굳히는 점이 핵심 함정 — 프록시 호스트(`API_HOST`)와 WS 주소를 런타임 ENV 가 아닌 빌드 ARG 로 주입. Cycle 40 포트 컨벤션(api PORT == web API_PORT == 3001) 컨테이너에서도 유지.
+- **비고**: 핵심 설계 원칙 = "값만 교체, 코드 불변". 함정 둘 — (1) Next.js 가 `rewrites()`/`NEXT_PUBLIC_*` 를 **빌드타임에** 굳혀 프록시 호스트(`API_HOST`)·WS 주소를 빌드 ARG 로 주입해야 함; (2) **컨테이너 빌드 npm 의 `EAI_AGAIN`** = 사내 프록시 미상속 (긴 진단 끝에 디버그 로그의 `EAI_AGAIN` 으로 확정 — node 버전/메모리/npm ci·install 무관). node20→**node22** 상향(@hocuspocus/server·chevrotain 의 `engines node>=22`). Cycle 40 포트 컨벤션(api PORT == web API_PORT == 3001) 컨테이너에서도 유지.
