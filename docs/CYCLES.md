@@ -832,6 +832,6 @@
   - **(Cycle 43)** 자체 JWT → Keycloak OIDC(authorization code) 로그인 전환. issuer 호스트 불일치(컨테이너 `keycloak:8080` vs 외부 `166.79.31.248:8080`) `KC_HOSTNAME` 등으로 정리
   - VM에 Docker/compose 설치 여부 미확인 — 없으면 설치부터(외부망 제한 시 image pull 막힐 수 있음)
   - 외부망 제한 환경에서 `quay.io/keycloak` + `node:20` image pull 가능 여부 확인. 막히면 사내 레지스트리/사전 로드
-  - Cycle 41의 `typescript.ignoreBuildErrors` 영구 fix는 여전히 미해결 (web 이미지 빌드가 이 타입 에러로 깨질 수 있음 — 빌드 시 발견되면 Cycle 42-followup 또는 Cycle 43에서 처리)
+  - ~~Cycle 41의 `typescript.ignoreBuildErrors` 영구 fix~~ → **followup `abf5950` 에서 해소.** 타입 에러 3곳(CollaborativeEditor.tsx synced/awareness cleanup, ExcalidrawEditor.tsx 0.18 타입 경로) 영구 fix. `tsc --noEmit` 0 + `next build` 통과 확인 → VM 로컬의 `ignoreBuildErrors=true` 임시 패치는 이제 불필요(제거 가능)
   - keycloak start-dev 인메모리 H2 → 영속 필요 시 외부 DB 연결
 - **비고**: 핵심 설계 원칙 = "값만 교체, 코드 불변". Next.js 가 `rewrites()`/`NEXT_PUBLIC_*` 를 **빌드타임에** 굳히는 점이 핵심 함정 — 프록시 호스트(`API_HOST`)와 WS 주소를 런타임 ENV 가 아닌 빌드 ARG 로 주입. Cycle 40 포트 컨벤션(api PORT == web API_PORT == 3001) 컨테이너에서도 유지.
