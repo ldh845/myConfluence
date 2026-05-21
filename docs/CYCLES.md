@@ -811,3 +811,27 @@
   - DB 비밀번호 강화 (현재 `docspace/docspace` 임시)
   - 옵션 B (HAProxy 포트 매핑)로 WebSocket 전환 가능성 검토
 - **비고**: VM 한정 임시 패치(`next.config.mjs` 의 `typescript.ignoreBuildErrors=true`)는 commit 대상 아님 — Cycle 42 영구 fix 후 제거. Node 18 + Hocuspocus 4 조합이 `ERR_REQUIRE_ESM` 으로 죽어 Node 20 으로 업그레이드한 것이 이번 배포의 핵심 함정.
+
+---
+
+## Cycle 42 — 2026-05-21 — ✅ Done (파일 작성 — 실기동 검증은 VM에서 사용자)
+- **제목**: 개발 환경 컨테이너화 + 개발용 Keycloak 구성 (AFS/SSO 입주 사전 포장)
+- **카테고리**: 운영 / 인프라 / 배포 (Cycle 43 Keycloak OIDC 전환 준비)
+- **커밋**: `5a2b0b0` (핵심), 본 CYCLES.md
+- **변경 파일**:
+  - `apps/api/Dockerfile` — Node 20 멀티스테이지(build=bookworm/runtime=slim). 기동 시 `prisma migrate deploy` → `node dist/src/main`
+  - `apps/web/Dockerfile` — Next.js standalone. 빌드 ARG `API_HOST`/`API_PORT`/`NEXT_PUBLIC_WS_URL` 주입
+  - `apps/web/next.config.mjs` — `output:'standalone'` + `experimental.outputFileTracingRoot`(저장소 루트) + 프록시 호스트 `API_HOST` 분리(기본 localhost)
+  - `docker-compose.yml` — `api`/`web`/`keycloak` 서비스 추가 (postgres/redis/nginx 기존 유지)
+  - `infra/keycloak/realm-docspace.json` — realm `docspace` + confidential client `docspace-web`(authorization code) + 테스트 사용자 `testuser`/`testpass`
+  - `.dockerignore`(루트, context=root라 실효) / `apps/*/.dockerignore`(의도 문서)
+  - `apps/api/.env.example`, `apps/web/.env.example` — `KC_*` placeholder
+  - `docs/DEPLOY.md` — "3.5 컨테이너 개발 환경" 섹션 + 트러블슈팅 행 3개
+- **검증**: 이번 사이클은 파일 작성까지 (사용자 선택). VM에서 `docker compose up -d --build` → web(3000)/api(3001+1234)/postgres(5432)/keycloak(8080) 4개 기동 + DocSpace 기존 자체 인증 그대로 동작 + keycloak `/admin` 에 realm·client 확인이 DoD. **인증 코드는 한 줄도 변경 안 함.**
+- **남은 일**:
+  - **(Cycle 43)** 자체 JWT → Keycloak OIDC(authorization code) 로그인 전환. issuer 호스트 불일치(컨테이너 `keycloak:8080` vs 외부 `166.79.31.248:8080`) `KC_HOSTNAME` 등으로 정리
+  - VM에 Docker/compose 설치 여부 미확인 — 없으면 설치부터(외부망 제한 시 image pull 막힐 수 있음)
+  - 외부망 제한 환경에서 `quay.io/keycloak` + `node:20` image pull 가능 여부 확인. 막히면 사내 레지스트리/사전 로드
+  - Cycle 41의 `typescript.ignoreBuildErrors` 영구 fix는 여전히 미해결 (web 이미지 빌드가 이 타입 에러로 깨질 수 있음 — 빌드 시 발견되면 Cycle 42-followup 또는 Cycle 43에서 처리)
+  - keycloak start-dev 인메모리 H2 → 영속 필요 시 외부 DB 연결
+- **비고**: 핵심 설계 원칙 = "값만 교체, 코드 불변". Next.js 가 `rewrites()`/`NEXT_PUBLIC_*` 를 **빌드타임에** 굳히는 점이 핵심 함정 — 프록시 호스트(`API_HOST`)와 WS 주소를 런타임 ENV 가 아닌 빌드 ARG 로 주입. Cycle 40 포트 컨벤션(api PORT == web API_PORT == 3001) 컨테이너에서도 유지.
