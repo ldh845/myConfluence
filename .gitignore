@@ -20,6 +20,11 @@ apps/web/node_modules
 apps/web/.next
 apps/web/.env
 
+# Cycle 42 followup — 사내 root CA 는 공개 repo 에 안 올린다.
+# ca-certs/.gitkeep 만 트래킹(디렉토리 존재용), 실제 *.crt 는 빌드 환경에만 둔다.
+ca-certs/*
+!ca-certs/.gitkeep
+
 # Local-only: Claude Code metadata and internal SRS document.
 # .claude/ 안의 모든 항목은 기본 ignore — 다만 .claude/skills/ 는 팀 공유
 # 대상이라 negation으로 트래킹. (디렉터리 자체를 .claude/로 통째 ignore

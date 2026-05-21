@@ -283,16 +283,33 @@ ENV 로는 안 바뀐다. 그래서 web 이미지는 다음을 **빌드 ARG** �
 `registry.npmjs.org` DNS 실패(`EAI_AGAIN`)가 나고, npm 10.x 가 이를
 `Exit handler never called!` 라는 오해 소지 메시지로 표시한다.
 
-→ 빌드 시 프록시와 사내 root CA 를 주입해야 한다 (위 "사내 VM" 섹션과 동일 패턴):
+→ 빌드 시 **프록시 + 사내 root CA** 를 주입해야 한다. Cycle 42 followup 에서
+Dockerfile·compose 에 그 통로를 만들어 뒀다(값은 하드코딩하지 않고 빌드 환경에서 주입):
+
+- **프록시**: `apps/{api,web}/Dockerfile` build 스테이지가 `ARG HTTP_PROXY/HTTPS_PROXY/NO_PROXY`
+  를 선언(Docker predefined build arg → `npm ci` 등 RUN 에 자동 적용). `docker-compose.yml`
+  의 두 서비스 `build.args` 가 빌드 호스트 환경변수(`${HTTP_PROXY}` 등)에서 받아 전달한다.
+- **사내 root CA**: 저장소엔 `ca-certs/.gitkeep` 만 있고(실제 CA 는 `.gitignore` 로 비트래킹),
+  build 스테이지가 `COPY ca-certs/` → `update-ca-certificates` → `NODE_EXTRA_CA_CERTS` 설정.
+  `ca-certs/` 가 비어 있으면 빌드는 안 깨지고, **사내 CA(.crt)를 `ca-certs/` 에 넣으면 자동
+  신뢰**된다. (node 는 시스템 CA 번들을 자동으로 안 보므로 `NODE_EXTRA_CA_CERTS` 필수.)
+
+절차:
 ```bash
-docker compose build \
-  --build-arg HTTP_PROXY=http://<사내프록시>:8080 \
-  --build-arg HTTPS_PROXY=http://<사내프록시>:8080
-# TLS 가로채기 환경이면 Dockerfile 에 사내 CA COPY + NODE_EXTRA_CA_CERTS 도 필요.
+# 1) 사내 root CA 를 빌드 컨텍스트에 배치 (repo 엔 안 올라간다)
+mkdir -p ca-certs && cp /path/to/사내Proxy.crt ca-certs/
+
+# 2) 프록시 환경변수 설정 (compose build.args 가 여기서 읽는다)
+export HTTP_PROXY=http://16.7.241.20:8080
+export HTTPS_PROXY=http://16.7.241.20:8080
+export NO_PROXY=localhost,127.0.0.1
+
+# 3) 빌드
+docker compose build api web
+docker images | grep -i docspace   # api·web 이미지 확인
 ```
-사내 IP/CA 는 환경 특정 값이라 저장소 Dockerfile 에 하드코딩하지 않는다(AFS
-입주 시엔 그 환경의 프록시/CA 로 교체). 이 값들이 갖춰진 환경(예: Cycle 41의
-사내 VM)에서 빌드하면 정상 통과한다.
+사내 IP/CA 는 환경 특정 값이라 저장소에 하드코딩하지 않는다. AFS 입주 시에도
+같은 통로로 그 환경의 프록시/CA 만 주입하면 된다(코드 불변).
 
 ### Keycloak 메모 (Cycle 43 준비)
 - `start-dev` 는 인메모리 H2 라 재시작 시 데이터 소실. `--import-realm` 이 매

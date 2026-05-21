@@ -11,11 +11,25 @@
 FROM node:22-bookworm AS build
 WORKDIR /app
 
+# 사내 프록시 환경 빌드(Cycle 42 followup).
+# (1) 프록시: HTTP_PROXY/HTTPS_PROXY/NO_PROXY 는 Docker predefined build arg 라
+#     --build-arg 로 주면 빌드 RUN(npm ci 등)에 자동 적용된다. 명시 선언해 의도를
+#     분명히 한다. compose 가 빌드 호스트 env 에서 전달(값 하드코딩 금지).
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ARG NO_PROXY
+# (2) 사내 root CA: 프록시 SSL inspection 을 신뢰하려면 빌드 컨테이너가 사내 CA 를
+#     믿어야 한다. ca-certs/ 의 *.crt 를 시스템 신뢰 저장소에 등록.
+#     ca-certs/ 가 비어도(.gitkeep 만) 빌드는 안 깨진다(|| true). node 는 시스템 CA
+#     번들을 자동으로 안 보므로 NODE_EXTRA_CA_CERTS 지정이 필수.
+COPY ca-certs/ /tmp/ca-certs/
+RUN cp /tmp/ca-certs/*.crt /usr/local/share/ca-certificates/ 2>/dev/null || true; \
+    update-ca-certificates || true
+ENV NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-certificates.crt
+
 # workspaces 의존성 설치 — 루트 lockfile + 각 워크스페이스 manifest 필요.
-# 주의: 컨테이너 빌드 안 npm 이 레지스트리에 닿아야 한다. 사내 프록시 환경에선
-# 빌드 시 HTTP_PROXY/HTTPS_PROXY + 사내 root CA 주입 필요(없으면 EAI_AGAIN 로
-# 실패하며 npm 이 "Exit handler never called!" 로 오역해 표시한다).
-# 자세히는 docs/DEPLOY.md "컨테이너 개발 환경" 참조.
+# 위 프록시/CA 가 없으면 EAI_AGAIN(또는 npm 이 "Exit handler never called!" 로
+# 오역) 으로 실패한다. 자세히는 docs/DEPLOY.md "사내 프록시 환경에서 빌드" 참조.
 COPY package.json package-lock.json ./
 COPY apps/api/package.json apps/api/package.json
 COPY apps/web/package.json apps/web/package.json

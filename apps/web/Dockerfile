@@ -12,9 +12,19 @@
 FROM node:22-bookworm AS build
 WORKDIR /app
 
-# workspaces 의존성 설치. 주의: 컨테이너 빌드 안 npm 이 레지스트리에 닿아야 한다.
-# 사내 프록시 환경에선 빌드 시 HTTP_PROXY/HTTPS_PROXY + 사내 root CA 주입 필요
-# (없으면 EAI_AGAIN). 자세히는 docs/DEPLOY.md "컨테이너 개발 환경" 참조.
+# 사내 프록시 환경 빌드(Cycle 42 followup) — api Dockerfile 과 동일.
+# (1) 프록시 predefined build arg 명시 선언(compose 가 빌드 호스트 env 에서 전달).
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ARG NO_PROXY
+# (2) 사내 root CA 주입(ca-certs/*.crt). 비어도 안 깨짐. node 용 NODE_EXTRA_CA_CERTS 필수.
+COPY ca-certs/ /tmp/ca-certs/
+RUN cp /tmp/ca-certs/*.crt /usr/local/share/ca-certificates/ 2>/dev/null || true; \
+    update-ca-certificates || true
+ENV NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-certificates.crt
+
+# workspaces 의존성 설치. 위 프록시/CA 없으면 EAI_AGAIN 으로 실패.
+# 자세히는 docs/DEPLOY.md "사내 프록시 환경에서 빌드" 참조.
 COPY package.json package-lock.json ./
 COPY apps/web/package.json apps/web/package.json
 COPY apps/api/package.json apps/api/package.json

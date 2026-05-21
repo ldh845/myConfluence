@@ -19,6 +19,11 @@ services:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
+      args:
+        # 사내 프록시 — 빌드 호스트 환경변수에서 전달(값 하드코딩 금지). 미설정 시 빈 값.
+        HTTP_PROXY: ${HTTP_PROXY:-}
+        HTTPS_PROXY: ${HTTPS_PROXY:-}
+        NO_PROXY: ${NO_PROXY:-}
     container_name: docspace_api
     restart: unless-stopped
     environment:
@@ -51,6 +56,10 @@ services:
         # 환경변수로 통제(Cycle 40 패턴). 미설정 시 로컬 기본값.
         # VM 배포: 루트 .env 에 NEXT_PUBLIC_WS_URL=ws://<VM_IP>:1234 지정.
         NEXT_PUBLIC_WS_URL: ${NEXT_PUBLIC_WS_URL:-ws://localhost:1234}
+        # 사내 프록시 — 빌드 호스트 환경변수에서 전달(값 하드코딩 금지).
+        HTTP_PROXY: ${HTTP_PROXY:-}
+        HTTPS_PROXY: ${HTTPS_PROXY:-}
+        NO_PROXY: ${NO_PROXY:-}
     container_name: docspace_web
     restart: unless-stopped
     depends_on:
