@@ -87,10 +87,11 @@ export class OidcService {
   }
 
   // GET /auth/oidc/callback — code→token 교환 + ID 토큰 검증 후 클레임 추출.
+  // idToken(raw)도 함께 반환 — 로그아웃 시 end_session 의 id_token_hint 로 쓴다.
   async handleCallback(
     params: Record<string, unknown>,
     checks: { state: string; nonce: string; codeVerifier: string },
-  ): Promise<OidcClaims> {
+  ): Promise<{ claims: OidcClaims; idToken?: string }> {
     const client = await this.getClient();
     const tokenSet = await client.callback(
       this.redirectUri,
@@ -107,10 +108,22 @@ export class OidcService {
       (c.email as string | undefined) ??
       c.sub;
     return {
-      sub: c.sub,
-      username,
-      email: c.email,
-      name: c.name,
+      claims: { sub: c.sub, username, email: c.email, name: c.name },
+      idToken: tokenSet.id_token,
     };
+  }
+
+  // POST/GET logout — Keycloak end_session_endpoint URL 빌드(단일 로그아웃, SLO).
+  // id_token_hint 가 있으면 Keycloak 확인 페이지 없이 바로 SSO 세션을 끊고
+  // post_logout_redirect_uri 로 돌아온다.
+  async buildEndSessionUrl(
+    idToken: string,
+    postLogoutRedirectUri: string,
+  ): Promise<string> {
+    const client = await this.getClient();
+    return client.endSessionUrl({
+      id_token_hint: idToken,
+      post_logout_redirect_uri: postLogoutRedirectUri,
+    });
   }
 }

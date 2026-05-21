@@ -3,10 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import type { SpaceWithPages } from "@/lib/types";
 import { useAuth } from "@/lib/auth/useAuth";
-import { apiFetch } from "@/lib/api";
 import { useRecentSpacesStore } from "@/lib/stores/useRecentSpacesStore";
 import SearchOverlay from "@/components/SearchOverlay";
 
@@ -112,8 +111,6 @@ export default function TopNav({
 
 // FR-001 (Cycle 27b) — 로그인한 사용자 메뉴. 미로그인 시 "로그인" 링크.
 function UserMenu() {
-  const router = useRouter();
-  const queryClient = useQueryClient();
   const { user, isLoading } = useAuth();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -129,17 +126,12 @@ function UserMenu() {
     return () => document.removeEventListener("mousedown", onDown);
   }, [open]);
 
-  const logout = useMutation<void, Error>({
-    mutationFn: async () => {
-      const r = await apiFetch("/api/auth/logout", { method: "POST" });
-      if (!r.ok && r.status !== 204) throw new Error("로그아웃 실패");
-    },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["me"] });
-      router.replace("/login");
-    },
-    onError: (err) => window.alert(err.message),
-  });
+  // Cycle 43 followup — 로그아웃은 단일 로그아웃(SLO). Keycloak end_session 까지
+  // 타야 하므로 fetch 가 아니라 top-level 네비게이션으로 진입한다. 서버가 로컬
+  // 쿠키를 클리어하고 Keycloak 으로 redirect → SSO 세션 종료 후 /login 으로 복귀.
+  const handleLogout = () => {
+    window.location.href = "/api/auth/oidc/logout";
+  };
 
   if (isLoading) {
     return (
@@ -193,12 +185,11 @@ function UserMenu() {
             type="button"
             onClick={() => {
               setOpen(false);
-              logout.mutate();
+              handleLogout();
             }}
-            disabled={logout.isPending}
-            className="w-full text-left px-3 py-2 text-[13px] text-[#de350b] hover:bg-[#ffebe6] disabled:opacity-50"
+            className="w-full text-left px-3 py-2 text-[13px] text-[#de350b] hover:bg-[#ffebe6]"
           >
-            {logout.isPending ? "로그아웃 중..." : "로그아웃"}
+            로그아웃
           </button>
         </div>
       )}

@@ -20,7 +20,14 @@ export class OidcController {
   private readonly cookieSameSite: 'lax' | 'strict' | 'none';
   private readonly maxAgeMs = 7 * 24 * 60 * 60 * 1000;
   private readonly txCookie = 'oidc_tx';
+  // Cycle 43 followup — 로그아웃(SLO) 시 end_session 의 id_token_hint 로 쓸
+  // id_token 보관 쿠키. httpOnly 라 JS 접근 불가.
+  private readonly idTokenCookie = 'oidc_id_token';
   private readonly postLoginRedirect: string;
+  // Keycloak 으로 보낼 post_logout_redirect_uri (절대 URL, realm 등록값에 포함돼야 함).
+  private readonly postLogoutRedirect: string;
+  // SLO 불가(또는 id_token 없음) 시 로컬 fallback 경로.
+  private readonly loginPath = '/login';
 
   constructor(
     private readonly oidc: OidcService,
@@ -35,6 +42,10 @@ export class OidcController {
     this.postLoginRedirect = config.get<string>(
       'OIDC_POST_LOGIN_REDIRECT',
       '/home',
+    );
+    this.postLogoutRedirect = config.get<string>(
+      'OIDC_POST_LOGOUT_REDIRECT',
+      'http://localhost:3000/login',
     );
   }
 
@@ -71,7 +82,7 @@ export class OidcController {
     res.clearCookie(this.txCookie, { path: '/' });
 
     try {
-      const claims = await this.oidc.handleCallback(
+      const { claims, idToken } = await this.oidc.handleCallback(
         req.query as Record<string, unknown>,
         tx,
       );
@@ -84,6 +95,16 @@ export class OidcController {
         path: '/',
         maxAge: this.maxAgeMs,
       });
+      // 로그아웃(SLO) 때 쓸 id_token 보관.
+      if (idToken) {
+        res.cookie(this.idTokenCookie, idToken, {
+          httpOnly: true,
+          secure: this.cookieSecure,
+          sameSite: this.cookieSameSite,
+          path: '/',
+          maxAge: this.maxAgeMs,
+        });
+      }
       res.redirect(this.postLoginRedirect);
     } catch (err) {
       this.logger.error(
@@ -91,5 +112,36 @@ export class OidcController {
       );
       res.status(401).send('OIDC login failed');
     }
+  }
+
+  // GET /auth/oidc/logout — 단일 로그아웃(SLO).
+  // 로컬 세션 쿠키(docspace_session, oidc_id_token)를 클리어하고, id_token 이
+  // 있으면 Keycloak end_session_endpoint 로 redirect 해 SSO 세션까지 끊는다.
+  // Keycloak 이 post_logout_redirect_uri(로그인 페이지)로 다시 돌려보낸다.
+  // 프론트는 fetch 가 아니라 top-level 네비게이션으로 이 라우트에 진입해야 한다.
+  @Get('logout')
+  async logout(@Req() req: Request, @Res() res: Response): Promise<void> {
+    const idToken = (req as Request & { cookies?: Record<string, string> })
+      .cookies?.[this.idTokenCookie];
+
+    res.clearCookie(this.cookieName, { path: '/' });
+    res.clearCookie(this.idTokenCookie, { path: '/' });
+
+    if (idToken) {
+      try {
+        const url = await this.oidc.buildEndSessionUrl(
+          idToken,
+          this.postLogoutRedirect,
+        );
+        res.redirect(url);
+        return;
+      } catch (err) {
+        this.logger.error(
+          `OIDC end-session failed: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    }
+    // id_token 없음 또는 end_session 실패 → 로컬만 로그아웃하고 로그인 페이지로.
+    res.redirect(this.loginPath);
   }
 }
