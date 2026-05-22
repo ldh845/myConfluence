@@ -10,7 +10,7 @@ GitHub 식별자는 `myConfluence` (저장소 이름), 프로젝트명은 `DocSp
 ## 기술 스택
 
 - **Frontend**: Next.js 14 (App Router, TypeScript) / Tailwind / shadcn/ui / TipTap 2 + Yjs / Zustand / TanStack Query
-- **Backend**: NestJS / Prisma 6 / PostgreSQL 16 (pg_trgm GIN 인덱스) / JWT httpOnly 쿠키
+- **Backend**: NestJS / Prisma 6 / PostgreSQL 16 (pg_trgm GIN 인덱스) / Keycloak OIDC SSO + 자체 `docspace_session` JWT httpOnly 쿠키
 - **협업**: Hocuspocus (NestJS가 호스팅, 같은 프로세스 안 :1234) — Redis adapter는 `USE_REDIS` 토글 옵션
 - **인프라**: Docker Compose(개발) 또는 사내 PC 직접 설치(운영). 둘 다 지원.
 
@@ -81,12 +81,24 @@ cd apps/api && npm run build                  # NestJS 컴파일 → dist/
 
 ## 사용자 정보 보충
 
-- 첫 가입자는 자동 `ADMIN` 역할.
-- 비밀번호 정책: 회원가입 시 최소 길이 3자 (개발 편의, 운영 강화 전).
-- 인증은 JWT httpOnly 쿠키 7일 만료. 미인증으로 보호 라우트 진입 시 미들웨어가 `/login` 으로 redirect.
+- 로그인은 Keycloak OIDC SSO 단일 경로 (Cycle 43). 자체 회원가입 페이지·
+  `/auth/signup`·`/auth/login`·bcrypt 모두 제거됨.
+- 첫 OIDC 로그인 사용자가 자동 `ADMIN`. 이후 사용자는 일반 권한.
+- 계정 매핑: Keycloak `sub` → `User.keycloakId`. 없으면 `preferred_username`
+  로 기존 계정 링크, 그래도 없으면 신규 생성 (SSO 전용 → `passwordHash=null`).
+- 세션은 자체 `docspace_session` JWT httpOnly 쿠키 7일 만료. 미인증으로 보호
+  라우트 진입 시 미들웨어가 `/login`(SSO 로그인 버튼)으로 redirect.
+- 로그아웃은 단일 로그아웃(SLO) — 같은 Keycloak 쓰는 서비스 전체에서 로그아웃.
 
 ## 진행 상황 스냅샷
 
-- 최신 사이클: **Cycle 40** (API 포트 컨벤션 강제, 2026-05-19).
-- 미구현: AI 챗 패널(SRS 5.9), 멘션 `@user`(인증 기반 후속), 다이어그램 협업.
-- 운영 시나리오: 사내 PC 단일 인스턴스 = `USE_REDIS=false` + Postgres 네이티브. 자세히는 `docs/DEPLOY.md`.
+- **최신 사이클 / 직전 작업 / 남은 일** → `docs/CYCLES.md` 의 마지막 항목 참조.
+  이 파일은 그 값을 복사하지 않는다 (복사본이 staleness 의 원인).
+- 아키텍처 현황 (사이클이 그 사실을 바꿀 때만 갱신):
+  - 인증: Keycloak OIDC SSO (Cycle 43). 세션은 자체 `docspace_session` JWT
+    httpOnly 쿠키 유지.
+  - 배포: Docker 이미지 컨테이너화 + VM 실빌드 검증 완료 (Cycle 42 / 42
+    followup). AFS(K8s) 입주 대기.
+- 미구현: AI 챗 패널(SRS 5.9), 멘션 `@user`, 다이어그램 동시 편집.
+- 운영 시나리오: 사내 PC 단일 인스턴스 = `USE_REDIS=false` + Postgres
+  네이티브. 자세히는 `docs/DEPLOY.md`.
