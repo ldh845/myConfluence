@@ -50,8 +50,11 @@ FROM node:22-bookworm-slim AS runtime
 WORKDIR /app
 
 # 의존성(Prisma CLI/엔진 포함)과 빌드 산출물, 마이그레이션 SQL 을 가져온다.
-# node_modules 는 루트로 호이스트되므로 루트에서 통째로 복사.
+# 일부 의존성만 루트 node_modules 로 hoist 되고, 나머지(prisma·@prisma/client·
+# @nestjs/* 등 상당수)는 apps/api/node_modules 에 남는다. 따라서 두 디렉터리를
+# 모두 복사해야 prisma CLI 와 런타임 require 가 성립한다.
 COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/apps/api/node_modules ./apps/api/node_modules
 COPY --from=build /app/package.json ./package.json
 COPY --from=build /app/apps/api/dist ./apps/api/dist
 COPY --from=build /app/apps/api/package.json ./apps/api/package.json
@@ -64,4 +67,6 @@ ENV PORT=3001
 EXPOSE 3001 1234
 
 # 기동 시 마이그레이션 적용 후 서버 시작. nest-cli sourceRoot=src 라 엔트리는 dist/src/main.
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/src/main"]
+# WORKDIR=/app/apps/api 라 node_modules/.bin/prisma 는 apps/api 워크스페이스 bin.
+# npx(못 찾으면 다운로드 시도→무한 대기) 대신 bin 을 직접 호출한다.
+CMD ["sh", "-c", "node_modules/.bin/prisma migrate deploy && node dist/src/main"]
