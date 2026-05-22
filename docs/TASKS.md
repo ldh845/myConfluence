@@ -115,5 +115,7 @@
 - **후속 작업**:
   - 편집기 첫 진입 시 "업데이트" 버튼이 잠깐 비활성화되는 문제 (프론트 코드 버그,
     이번 배포와 무관 — 코드 작업에서 해결)
-  - 환경별 설정 파일(compose override·nginx 설정)을 저장소에 템플릿/문서로 둘지 검토
-- **관련 Cycle**: Cycle 44
+  - ~~환경별 설정 파일(compose override·nginx 설정)을 저장소에 둘지 검토~~ →
+    완료: 배포 도구를 저장소 `deploy/` 로 편입(redeploy.sh·nginx-stack.conf·
+    override.example). 환경 적용(VM/AFS)은 별도 단계.
+- **관련 Cycle**: Cycle 44 + 45
