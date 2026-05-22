@@ -296,6 +296,10 @@ Dockerfile·compose 에 그 통로를 만들어 뒀다(값은 하드코딩하지
 
 절차:
 ```bash
+# 0) docker compose 플러그인 확인 — 없으면 설치
+#    (Ubuntu 의 docker.io 패키지엔 Compose V2 가 포함돼 있지 않다)
+docker compose version || sudo apt install -y docker-compose-v2 docker-buildx
+
 # 1) 사내 root CA 를 빌드 컨텍스트에 배치 (repo 엔 안 올라간다)
 mkdir -p ca-certs && cp /path/to/사내Proxy.crt ca-certs/
 
@@ -304,7 +308,8 @@ export HTTP_PROXY=http://16.7.241.20:8080
 export HTTPS_PROXY=http://16.7.241.20:8080
 export NO_PROXY=localhost,127.0.0.1
 
-# 3) 빌드
+# 3) 빌드 (docker 에 sudo 가 필요한 환경이면 `sudo -E docker compose build`
+#    — -E 로 위 프록시 env 를 빌드 프로세스까지 전달)
 docker compose build api web
 docker images | grep -i docspace   # api·web 이미지 확인
 ```
@@ -435,3 +440,4 @@ testuser/testpass → `/home` 진입 ✅. 로그아웃 → 재접속 시 재인�
 | (VM) `quay.io` referrers `TLS handshake timeout` | 사내 프록시 경유 시 일시적. **재시도하면 통과**. (containerd 프록시는 정상 설정된 상태에서 발생하는 간헐 현상) |
 | (VM) Keycloak issuer 에 `/auth` 누락 → OIDC discovery/iss 불일치 | `KC_HOSTNAME` 에 **경로(`/auth`)까지** 포함: `KC_HOSTNAME=http://166.79.31.248:8082/auth` + `KC_HTTP_RELATIVE_PATH=/auth`. 그래야 issuer 가 `…:8082/auth/realms/docspace` 로 떨어진다 |
 | (VM) `git pull` 이 `Proxy CONNECT aborted` / `unexpected TLS packet` | 사내 프록시 일시 불안정. 회복 전까지 **git bundle 우회**: (로컬) `git bundle create docspace.bundle <branch>` → `scp` 로 VM 전송 → (VM) `git remote set-url origin <bundle경로>` → `git pull` → `./redeploy.sh` → 완료 후 `git remote set-url origin <원래 URL>` 복원 |
+| `docker: unknown command: docker compose` | Ubuntu 의 docker.io 엔 Compose V2 미포함. `sudo apt install docker-compose-v2 docker-buildx` 설치 후 `docker compose version` 으로 확인 |
