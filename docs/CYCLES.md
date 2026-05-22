@@ -938,3 +938,21 @@
 - **검증**: VM(166.79.31.248)에서 라이브 nohup 배포를 잠시 내리고 `docker compose up` → 6개 서비스(postgres·api·web·keycloak·redis·nginx) 전부 Up. NestJS `Nest application successfully started`, `prisma migrate deploy` 통과(api↔postgres 정상), Hocuspocus `:1234` 가동, api/web/nginx HTTP 응답 정상. 검증 후 `compose down` + 라이브 배포 복구 완료.
 - **남은 일**: 기능 검증(SSO 로그인·페이지 작성 E2E) — web 을 올바른 `NEXT_PUBLIC_WS_URL` 로 재빌드 + 컨테이너 Keycloak issuer 호스트 정합 필요. AFS 입주용 production 이미지 검증.
 - **비고**: 스모크 테스트가 빌드로는 안 드러나는 런타임 결함 2개를 잡음. 함정 — embedded BuildKit 이 데몬 프록시를 base image metadata 해결에 안 써서 직통 연결→타임아웃 → base image 를 `docker pull` 로 먼저 받아 우회.
+
+---
+
+## Cycle 44 — 2026-05-22 — ✅ Done (VM 운영을 docker compose 풀스택으로 전환 + SSO E2E 재검증)
+- **제목**: VM 운영 형태 전환 (nohup 라이브 → docker compose 6컨테이너 풀스택) + `:8082` 직접 발행 + 옛 DB 복구
+- **카테고리**: 운영 / 배포 / 인프라 — VM 한정 운영 작업 (저장소 코드 변경 없음, 이전 "VM 실서버 SSO 적용"과 같은 성격)
+- **커밋**: 본 CYCLES.md(Docs). **코드 변경 없음** — OIDC/nginx 배선은 전부 VM-로컬 비커밋 파일(`docker-compose.override.yml`, `nginx-stack.conf`)로 처리("값만 교체, 코드 불변").
+- **변경 파일**:
+  - (VM-로컬, 저장소 비커밋) `~/docspace/docker-compose.override.yml` — nginx `8082:80` 발행 + `nginx-stack.conf` 마운트 + `depends_on`(api/web/keycloak); keycloak `KC_HOSTNAME=http://166.79.31.248:8082/auth` + `KC_HTTP_RELATIVE_PATH=/auth` + `KC_PROXY_HEADERS=xforwarded`; api `KC_ISSUER_URI`/`OIDC_REDIRECT_URI`/`OIDC_POST_LOGOUT_REDIRECT` 전부 `:8082/auth` 기준
+  - (VM-로컬, 저장소 비커밋) `~/docspace/nginx-stack.conf` — compose 네트워크 기준 경로 분기: `/`→web:3000, `/api`→api:3001(`/api` 프리픽스 제거), `/auth`→keycloak:8080, `/collab`→api:1234(WS). `/etc/nginx/conf.d/default.conf` 로 override 마운트
+  - web 이미지 재빌드 — `NEXT_PUBLIC_WS_URL=ws://166.79.31.248:8082/collab` (기존 `ws://…:1234` 에서 변경)
+  - `docs/CYCLES.md` — 본 항목
+- **검증**: 헬스체크 — 6 컨테이너(web/api/keycloak/postgres/redis/nginx) Up, `nginx -t` 통과, OIDC discovery issuer=`http://166.79.31.248:8082/auth/realms/docspace`, api 컨테이너→`:8082` 도달 확인. **외부 브라우저 E2E 통과** — `:8082` 접속 → SSO 로그인(testuser/testpass) → `/home` → 페이지 작성·저장 → 실시간 협업 2탭 동기화 → 로그아웃 SLO.
+- **남은 일**:
+  - 편집기 첫 진입 시 "업데이트" 버튼 비활성화 race condition — Cycle 41 백로그의 프론트 버그가 여전히 재현(이번 배포와 무관, 코드 사이클에서 해결 필요).
+  - `docker-compose.override.yml` + `nginx-stack.conf` 가 저장소 비커밋 VM-로컬 파일 — AFS 입주/타 환경 이전 시 재작성 필요. 저장소에 템플릿/문서화할지 검토.
+  - Keycloak `start-dev` 인메모리 H2 — 재시작 시 realm 재import 로 testuser `sub` 변동.
+- **비고**: 운영이 nohup → docker compose 풀스택으로 전환, HAProxy 불필요(compose nginx 가 `:8082` 직접 발행 — 옛 host HAProxy `:8082→:80` 가 inactive 였던 문제 해소). "값만 교체, 코드 불변" 유지(저장소 tracked 파일 무변경, OIDC 배선은 override 만으로). **함정**: 컨테이너 전환 시 DB 가 네이티브 PostgreSQL 16(`/var/lib/postgresql/16/main`)→컨테이너 `docspace_postgres`(볼륨 2026-05-22 01:47) 로 갈려 옛 데이터(8 페이지/4 공간/5 유저)가 안 보였음 — 5432 를 컨테이너에 뺏긴 네이티브 클러스터를 임시 `:5433` 으로 기동→`pg_dump`→컨테이너 DB drop/recreate→통째 복원→api 재기동(entrypoint 의 `prisma migrate deploy` 자동)으로 회수. 백업 보존(VM): `~/docspace-old.sql`, `~/docspace-container-backup-20260522-061915.sql`, 네이티브 postgres 데이터 디렉터리.
