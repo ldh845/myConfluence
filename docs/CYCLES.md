@@ -912,15 +912,16 @@
 
 ---
 
-## Cycle 42 followup — 2026-05-21 — 🔄 In Progress (Docker 빌드 프록시/CA 통로 — VM 실빌드 검증 대기)
-- **제목**: Docker 이미지 빌드에 사내 프록시/CA 주입 통로 추가 (api·web 이미지 첫 실빌드 준비)
+## Cycle 42 followup — 2026-05-21 — ✅ Done (Docker 빌드 프록시/CA 통로 + VM 실빌드 검증 완료 2026-05-22)
+- **제목**: Docker 이미지 빌드에 사내 프록시/CA 주입 통로 추가 + VM 실빌드 검증 (api·web 이미지 첫 빌드 성공)
 - **카테고리**: 운영 / 인프라 / 빌드 — Cycle 42 컨테이너화의 미검증 부분(이미지 실빌드) 해소
-- **커밋**: `d5645f8`(핵심), 본 CYCLES.md(Docs)
+- **커밋**: `d5645f8`(핵심 — 프록시/CA 통로), `e5b2c5d`(followup fix — workspace .bin PATH), 본 CYCLES.md(Docs)
 - **변경 파일**:
   - `apps/api/Dockerfile`·`apps/web/Dockerfile` — build 스테이지에 `ARG HTTP_PROXY/HTTPS_PROXY/NO_PROXY`(predefined build arg → `npm ci` RUN 에 자동 적용) + 사내 root CA 주입(`COPY ca-certs/` → `update-ca-certificates` → `NODE_EXTRA_CA_CERTS`). ca-certs 비어도 `|| true` 로 안 깨짐
+  - `apps/api/Dockerfile`·`apps/web/Dockerfile` (`e5b2c5d`) — `ENV PATH` 에 워크스페이스 `.bin`(`/app/apps/{api,web}/node_modules/.bin`)을 루트 `.bin` 앞에 추가 (prisma/nest/next not found 수정)
   - `docker-compose.yml` — api·web `build.args` 에 `HTTP_PROXY: ${HTTP_PROXY:-}` 등(빌드 호스트 env 에서 전달, 하드코딩 금지)
   - `.gitignore` — `ca-certs/*` 무시 + `!ca-certs/.gitkeep`(사내 CA 비공개). `ca-certs/.gitkeep` 신규
   - `docs/DEPLOY.md` — "사내 프록시 환경에서 빌드" 절차 갱신(ca-certs 배치 → `HTTP_PROXY` export → `docker compose build`)
-- **검증**: `docker compose config` 유효(두 서비스 build.args 에 프록시 주입 확인). `.gitignore` 동작(.crt 무시 / .gitkeep 트래킹) 확인. **실이미지 빌드는 VM 에서 사용자 검증 예정**(로컬 Windows 는 사내 프록시/CA 미주입이라 npm ci 가 EAI_AGAIN — Cycle 42 의 그 벽). VM 통과 시 ✅ 로 갱신.
-- **남은 일**: VM 에서 `docker compose build api web` 성공 확인 → 본 항목 ✅ 전환. AFS 입주 시 같은 통로로 그 환경 프록시/CA 주입(코드 불변).
-- **비고**: Cycle 42 의 핵심 미검증 항목(컨테이너 이미지 실빌드)을 사내망에서 가능케 하는 통로. 값(프록시 IP·CA)은 환경 특정이라 repo 미포함 — VM·AFS 동일 메커니즘.
+- **검증**: **VM 166.79.31.248(amadeus-conf, Ubuntu 24.04)에서 실빌드 성공 (2026-05-22).** `ca-certs/` 에 사내 root CA(`SEM_Proxy.crt`) 배치 + `HTTP_PROXY/HTTPS_PROXY/NO_PROXY` export 후 `sudo -E docker compose build api web`. 빌드 컨테이너의 `npm ci` 가 **237초 정상 완료(EAI_AGAIN 없음)** — 이 followup 의 핵심 목표(프록시/CA 주입)가 실제로 작동함을 확인. 첫 빌드는 `prisma: not found`(exit 127)로 실패 → `e5b2c5d` 로 workspace `.bin` PATH 수정 후 재빌드 성공. 이미지 생성: `docspace-api:latest`(2cce58e3bc9d, 1.38GB), `docspace-web:latest`(60d8ee3fd656, 380MB).
+- **남은 일**: AFS 입주 시 같은 통로로 그 환경의 프록시/CA 주입(코드 불변).
+- **비고**: 이번에 만난 함정 둘 — (1) VM 에 Docker Compose V2 플러그인 미설치 → `sudo apt install docker-compose-v2 docker-buildx`(환경 셋업, 코드 무관); (2) **npm workspaces 워크스페이스 의존성의 bin 위치** — 루트 `node_modules/.bin` 이 아니라 그 워크스페이스(`apps/api`·`apps/web`)의 `node_modules/.bin` 에 링크된다(패키지 본체만 루트로 hoist). 그래서 PATH 에 워크스페이스 `.bin` 을 앞세워야 prisma/nest/next 가 잡힌다. 값(프록시 IP·CA)은 환경 특정이라 repo 미포함 — VM·AFS 동일 메커니즘.
