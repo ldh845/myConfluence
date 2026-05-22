@@ -956,3 +956,19 @@
   - `docker-compose.override.yml` + `nginx-stack.conf` 가 저장소 비커밋 VM-로컬 파일 — AFS 입주/타 환경 이전 시 재작성 필요. 저장소에 템플릿/문서화할지 검토.
   - Keycloak `start-dev` 인메모리 H2 — 재시작 시 realm 재import 로 testuser `sub` 변동.
 - **비고**: 운영이 nohup → docker compose 풀스택으로 전환, HAProxy 불필요(compose nginx 가 `:8082` 직접 발행 — 옛 host HAProxy `:8082→:80` 가 inactive 였던 문제 해소). "값만 교체, 코드 불변" 유지(저장소 tracked 파일 무변경, OIDC 배선은 override 만으로). **함정**: 컨테이너 전환 시 DB 가 네이티브 PostgreSQL 16(`/var/lib/postgresql/16/main`)→컨테이너 `docspace_postgres`(볼륨 2026-05-22 01:47) 로 갈려 옛 데이터(8 페이지/4 공간/5 유저)가 안 보였음 — 5432 를 컨테이너에 뺏긴 네이티브 클러스터를 임시 `:5433` 으로 기동→`pg_dump`→컨테이너 DB drop/recreate→통째 복원→api 재기동(entrypoint 의 `prisma migrate deploy` 자동)으로 회수. 백업 보존(VM): `~/docspace-old.sql`, `~/docspace-container-backup-20260522-061915.sql`, 네이티브 postgres 데이터 디렉터리.
+
+---
+
+## Cycle 45 — 2026-05-22 — ✅ Done (배포 도구를 저장소 deploy/ 로 편입)
+- **제목**: VM-로컬로만 있던 배포 apparatus(redeploy.sh, nginx 경로 분기 conf, compose override)를 저장소 `deploy/` 로 정식 편입
+- **카테고리**: 운영 / 배포 / 인프라 — 배포 도구 버전관리·보존
+- **커밋**: `fc1982b`(핵심), 본 CYCLES.md(Docs)
+- **변경 파일**:
+  - `deploy/redeploy.sh`(신규, `100755`) — 재배포 스크립트: git pull(auto-stash) → DB 백업(`pg_dump`) → 이미지 빌드 → `compose up -d`(api entrypoint 가 `prisma migrate deploy`) → `:8082` 검증. 상단에 환경 특정 블록(`HTTP_PROXY`/`HTTPS_PROXY`/`NO_PROXY`/`NEXT_PUBLIC_WS_URL`) 집약, `--no-build` 옵션
+  - `deploy/nginx-stack.conf`(신규) — compose 네트워크 경로 분기(`/`→web:3000, `/api`→api:3001 프리픽스 제거, `/auth`→keycloak:8080, `/collab`→api:1234 WS)
+  - `deploy/docker-compose.override.example.yml`(신규) — nginx `8082:80` 발행 + `nginx-stack.conf` 마운트 + OIDC 배선(keycloak `KC_HOSTNAME=…/auth`, api `KC_ISSUER_URI`/`OIDC_*`). 루트로 복사해 사용
+  - `.gitignore` — 루트 `/docker-compose.override.yml` 비커밋(환경 특정), 저장소엔 `.example` 템플릿만
+  - `docs/DEPLOY.md` — 3.7 의 인라인 override/nginx 템플릿을 `deploy/` 참조로 교체 + 셋업·재배포 절차
+- **검증**: 저장소 빌드/실행 검증 아님(파일 편입). `redeploy.sh` 실행권한(`100755`) 확인, 내용은 Cycle 44 에서 검증된 로직 그대로 보존. compose override 는 자동 로드 파일명을 피해 `.example` 로 커밋(루트 override 는 .gitignore).
+- **남은 일**: VM 이 이 새 레이아웃(저장소 `deploy/` + 루트 override 복사)을 채택하도록 적용은 별도 단계. AFS 입주 시 `deploy/` 의 환경 블록만 그 환경 값으로 교체.
+- **비고**: 원칙 — 배포 도구는 저장소에, 환경 특정 값은 파일 상단에 모아 표시. 이 작업은 개발 PC 저장소만 수정(VM 미변경). `redeploy.sh` 로직은 Cycle 44 검증본이라 그대로 편입(임의 수정 없음).
