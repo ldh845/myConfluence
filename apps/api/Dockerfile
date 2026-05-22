@@ -2,8 +2,10 @@
 # build context 는 저장소 루트(.)다. npm workspaces 모노레포라
 # 루트 lockfile + 두 워크스페이스 package.json 으로 의존성을 설치한다.
 #
-# 빌드 스테이지는 full bookworm (bcrypt 등 네이티브 모듈 컴파일 도구 포함),
-# 런타임은 slim 으로 줄인다. 둘 다 glibc(bookworm) 기반이라 .node 호환.
+# 빌드·런타임 둘 다 full node:22-bookworm. 빌드는 네이티브 모듈 컴파일 도구가
+# 필요하고, 런타임은 Prisma 쿼리/마이그레이션 엔진이 시스템 OpenSSL(libssl)을
+# 동적 링크하는데 slim 이미지엔 libssl 이 없어 엔진이 무한 대기한다. 이미지 크기
+# 최적화는 AFS production 이미지에서 별도로 다룬다.
 
 # ---- deps + build ----
 # node:22 — 의존성(@hocuspocus/server, chevrotain)이 node>=22 를 요구한다
@@ -46,7 +48,7 @@ ENV PATH=/app/apps/api/node_modules/.bin:/app/node_modules/.bin:$PATH
 RUN cd apps/api && prisma generate && nest build
 
 # ---- runtime ----
-FROM node:22-bookworm-slim AS runtime
+FROM node:22-bookworm AS runtime
 WORKDIR /app
 
 # 의존성(Prisma CLI/엔진 포함)과 빌드 산출물, 마이그레이션 SQL 을 가져온다.
