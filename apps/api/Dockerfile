@@ -36,12 +36,13 @@ COPY apps/web/package.json apps/web/package.json
 RUN npm ci
 
 # api 소스 복사 후 Prisma client 생성 → 컴파일.
-# npm workspaces 는 실행 바이너리(nest/prisma)를 루트 node_modules/.bin 에
-# 호이스트하므로 PATH 에 추가하고 워크스페이스 디렉토리에서 직접 호출한다.
-# (`npm --prefix` 방식은 컨테이너에서 루트 .bin 을 PATH 에 못 넣어 127 실패)
+# npm workspaces 는 워크스페이스(apps/api) 의존성의 실행 바이너리(nest/prisma)를
+# 해당 워크스페이스의 node_modules/.bin 에 링크한다(패키지 본체만 루트로 hoist).
+# 따라서 워크스페이스 .bin 을 루트 .bin 보다 앞에 PATH 에 넣고 직접 호출한다.
+# (`npm --prefix` 방식은 컨테이너에서 PATH 가 안 잡혀 127 실패)
 # 순서 주의: @prisma/client 가 먼저 생성돼야 nest build 가 그 타입을 안다.
 COPY apps/api apps/api
-ENV PATH=/app/node_modules/.bin:$PATH
+ENV PATH=/app/apps/api/node_modules/.bin:/app/node_modules/.bin:$PATH
 RUN cd apps/api && prisma generate && nest build
 
 # ---- runtime ----

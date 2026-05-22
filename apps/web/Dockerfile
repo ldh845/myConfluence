@@ -40,10 +40,11 @@ ENV API_HOST=$API_HOST
 ENV API_PORT=$API_PORT
 ENV NEXT_PUBLIC_WS_URL=$NEXT_PUBLIC_WS_URL
 
-# npm workspaces 는 next 바이너리를 루트 node_modules/.bin 에 호이스트하므로
-# PATH 에 추가하고 워크스페이스 디렉토리에서 직접 호출한다.
-# (`npm --prefix` 방식은 컨테이너에서 루트 .bin 을 PATH 에 못 넣어 127 실패)
-ENV PATH=/app/node_modules/.bin:$PATH
+# npm workspaces 는 워크스페이스(apps/web) 의존성의 실행 바이너리(next)를 해당
+# 워크스페이스의 node_modules/.bin 에 링크한다(패키지 본체만 루트로 hoist).
+# 따라서 워크스페이스 .bin 을 루트 .bin 보다 앞에 PATH 에 넣고 직접 호출한다
+# (api Dockerfile 과 동일 패턴, hoist 결과에 의존하지 않음).
+ENV PATH=/app/apps/web/node_modules/.bin:/app/node_modules/.bin:$PATH
 RUN cd apps/web && next build
 
 # ---- runtime ----
