@@ -925,3 +925,16 @@
 - **검증**: **VM 166.79.31.248(amadeus-conf, Ubuntu 24.04)에서 실빌드 성공 (2026-05-22).** `ca-certs/` 에 사내 root CA(`SEM_Proxy.crt`) 배치 + `HTTP_PROXY/HTTPS_PROXY/NO_PROXY` export 후 `sudo -E docker compose build api web`. 빌드 컨테이너의 `npm ci` 가 **237초 정상 완료(EAI_AGAIN 없음)** — 이 followup 의 핵심 목표(프록시/CA 주입)가 실제로 작동함을 확인. 첫 빌드는 `prisma: not found`(exit 127)로 실패 → `e5b2c5d` 로 workspace `.bin` PATH 수정 후 재빌드 성공. 이미지 생성: `docspace-api:latest`(2cce58e3bc9d, 1.38GB), `docspace-web:latest`(60d8ee3fd656, 380MB).
 - **남은 일**: AFS 입주 시 같은 통로로 그 환경의 프록시/CA 주입(코드 불변).
 - **비고**: 이번에 만난 함정 둘 — (1) VM 에 Docker Compose V2 플러그인 미설치 → `sudo apt install docker-compose-v2 docker-buildx`(환경 셋업, 코드 무관); (2) **npm workspaces 워크스페이스 의존성의 bin 위치** — 루트 `node_modules/.bin` 이 아니라 그 워크스페이스(`apps/api`·`apps/web`)의 `node_modules/.bin` 에 링크된다(패키지 본체만 루트로 hoist). 그래서 PATH 에 워크스페이스 `.bin` 을 앞세워야 prisma/nest/next 가 잡힌다. 값(프록시 IP·CA)은 환경 특정이라 repo 미포함 — VM·AFS 동일 메커니즘.
+
+---
+
+## Cycle 42 followup — 2026-05-22 — ✅ Done (VM 컨테이너 런타임 검증)
+- **제목**: docker compose 풀스택을 VM에서 실제 기동·검증 (스모크 테스트)
+- **카테고리**: 운영 / 인프라 / 배포 — Cycle 42 컨테이너화의 런타임 검증
+- **커밋**: `394e328`(api runtime node_modules 누락 fix), `7fe1bb9`(api runtime OpenSSL — node:22-bookworm 전환), 본 CYCLES.md(Docs)
+- **변경 파일**:
+  - `apps/api/Dockerfile`(`394e328`) — runtime 스테이지에 `COPY apps/api/node_modules` 추가 + CMD `npx prisma`→`node_modules/.bin/prisma`. 루트로 hoist 안 된 의존성(prisma CLI·@prisma/client 등)이 runtime 이미지에 없어 `npx prisma`가 무한 대기하던 것 해소
+  - `apps/api/Dockerfile`(`7fe1bb9`) — runtime 베이스 `node:22-bookworm-slim`→`node:22-bookworm`. slim 엔 시스템 OpenSSL(libssl)이 없어 Prisma 엔진이 무한 대기 → full 이미지로
+- **검증**: VM(166.79.31.248)에서 라이브 nohup 배포를 잠시 내리고 `docker compose up` → 6개 서비스(postgres·api·web·keycloak·redis·nginx) 전부 Up. NestJS `Nest application successfully started`, `prisma migrate deploy` 통과(api↔postgres 정상), Hocuspocus `:1234` 가동, api/web/nginx HTTP 응답 정상. 검증 후 `compose down` + 라이브 배포 복구 완료.
+- **남은 일**: 기능 검증(SSO 로그인·페이지 작성 E2E) — web 을 올바른 `NEXT_PUBLIC_WS_URL` 로 재빌드 + 컨테이너 Keycloak issuer 호스트 정합 필요. AFS 입주용 production 이미지 검증.
+- **비고**: 스모크 테스트가 빌드로는 안 드러나는 런타임 결함 2개를 잡음. 함정 — embedded BuildKit 이 데몬 프록시를 base image metadata 해결에 안 써서 직통 연결→타임아웃 → base image 를 `docker pull` 로 먼저 받아 우회.
