@@ -422,6 +422,95 @@ testuser/testpass → `/home` 진입 ✅. 로그아웃 → 재접속 시 재인�
 
 ---
 
+## 3.7 컨테이너 풀스택 단독 운영 (Cycle 44 — compose nginx 가 :8082 직접 발행)
+
+3.6 은 호스트 nginx + HAProxy(`:8082→:80`) 전제였다. Cycle 44 에서 운영을
+**docker compose 풀스택 단독**으로 전환했다 — nohup 라이브 배포를 내리고
+6개 컨테이너(web/api/keycloak/postgres/redis/nginx)만으로 돌린다. **compose 의
+nginx 가 `8082:80` 을 직접 발행**하므로 host HAProxy 가 필요 없다(옛 HAProxy 가
+inactive 였던 문제도 해소). 외부는 `http://<host>:8082` 단일 오리진, nginx 가
+compose 네트워크 안에서 경로로 분기한다.
+
+> 환경 특정 배선(프록시/CA 와 마찬가지)이라 **저장소엔 안 커밋**한다. 아래는
+> VM-로컬 파일(`~/docspace/docker-compose.override.yml`, `nginx-stack.conf`)의
+> 템플릿이다. AFS 입주/타 환경 이전 시 그 환경 값으로 재작성한다.
+
+### docker-compose.override.yml (VM-로컬, 비커밋)
+```yaml
+services:
+  nginx:
+    ports:
+      - "8082:80"            # HAProxy 제거 — 외부 진입을 직접 발행
+    volumes:
+      - ./nginx-stack.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - api
+      - web
+      - keycloak
+  keycloak:
+    environment:
+      KC_HOSTNAME: http://166.79.31.248:8082/auth
+      KC_HTTP_RELATIVE_PATH: /auth
+      KC_PROXY_HEADERS: xforwarded
+  api:
+    environment:
+      KC_ISSUER_URI: http://166.79.31.248:8082/auth/realms/docspace
+      OIDC_REDIRECT_URI: http://166.79.31.248:8082/api/auth/oidc/callback
+      OIDC_POST_LOGOUT_REDIRECT: http://166.79.31.248:8082/login
+```
+web 이미지는 `NEXT_PUBLIC_WS_URL=ws://166.79.31.248:8082/collab` 로 재빌드
+(빌드타임 주입 — 3.5 의 "빌드타임 주입" 참조).
+
+### nginx-stack.conf (VM-로컬, 비커밋) — compose 네트워크 경로 분기
+```nginx
+server {
+    listen 80;
+    server_name _;
+
+    location /collab {                 # Hocuspocus WebSocket (api 같은 프로세스 :1234)
+        proxy_pass http://api:1234/;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_read_timeout 86400s;
+    }
+    location /auth/ {                   # Keycloak
+        proxy_pass http://keycloak:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host $host;
+    }
+    location /api/ {                    # NestJS — /api 프리픽스 제거하고 전달
+        proxy_pass http://api:3001/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+    location / {                        # Next.js
+        proxy_pass http://web:3000;
+        proxy_set_header Host $host;
+    }
+}
+```
+
+### 기동·검증
+```bash
+docker compose up -d
+docker compose ps                  # 6개 서비스 Up
+docker compose exec nginx nginx -t # conf 유효성
+```
+검증(Cycle 44): 6 컨테이너 Up, OIDC discovery issuer
+`http://166.79.31.248:8082/auth/realms/docspace`, 외부 브라우저 E2E(SSO 로그인
+→ 페이지 작성 → 실시간 협업 2탭 → 로그아웃 SLO) 통과.
+
+> **DB 주의**: nohup(네이티브 PostgreSQL)에서 compose(컨테이너 postgres)로
+> 전환하면 **DB 가 갈려 옛 데이터가 안 보인다**. 컨테이너 postgres 는 5432 를
+> 점유하고 네이티브 클러스터는 down 된다. 데이터는 네이티브 쪽에 남아 있으니
+> 아래 트러블슈팅의 복구 절차로 옮긴다.
+
+---
+
 ## 4. 트러블슈팅
 
 | 증상 | 원인/해결 |
@@ -442,3 +531,5 @@ testuser/testpass → `/home` 진입 ✅. 로그아웃 → 재접속 시 재인�
 | (VM) `git pull` 이 `Proxy CONNECT aborted` / `unexpected TLS packet` | 사내 프록시 일시 불안정. 회복 전까지 **git bundle 우회**: (로컬) `git bundle create docspace.bundle <branch>` → `scp` 로 VM 전송 → (VM) `git remote set-url origin <bundle경로>` → `git pull` → `./redeploy.sh` → 완료 후 `git remote set-url origin <원래 URL>` 복원 |
 | `docker: unknown command: docker compose` | Ubuntu 의 docker.io 엔 Compose V2 미포함. `sudo apt install docker-compose-v2 docker-buildx` 설치 후 `docker compose version` 으로 확인 |
 | (VM) `docker compose build` 가 base image metadata 단계에서 i/o timeout (직통 IP 로 dial) | embedded BuildKit 이 데몬 HTTP_PROXY 를 base image 해결에 안 쓴다. `docker pull <base image>`(예: `node:22-bookworm`)로 먼저 받아두면 — 이 경로는 containerd 프록시 경유라 정상 — BuildKit 이 로컬 이미지를 써서 우회된다 |
+| (compose nginx) 앱 컨테이너 재빌드/재생성 후 `/api`·`/auth` 등이 502 | nginx 는 config 로드 시점에 upstream(`api`/`web`/`keycloak`) IP 를 1회 해석·캐시한다. `docker compose up -d --build` 로 앱 컨테이너만 새 IP 를 받으면 nginx 가 옛 IP 를 들고 502. **`docker compose restart nginx`(단독)** 로 upstream 재해석하면 해소. (정공법: nginx conf 에 `resolver 127.0.0.11` + 변수 `proxy_pass` 로 동적 해석) |
+| (compose 전환) 옛 페이지·공간이 화면에서 사라짐 | nohup(네이티브 PostgreSQL 16, `/var/lib/postgresql/16/main`)→compose(컨테이너 `docspace_postgres`)로 전환하며 **DB 가 갈림**. 컨테이너 postgres 가 5432 점유 → 네이티브 클러스터 down. 복구: 네이티브 클러스터를 임시 `:5433` 으로 기동 → `pg_dump` → 컨테이너 DB drop/recreate → 덤프 복원 → api 재기동(entrypoint 의 `prisma migrate deploy` 자동). 백업 먼저 떠둘 것 |
