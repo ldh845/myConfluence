@@ -1,0 +1,28 @@
+# DocSpace 컨테이너 풀스택 — OIDC + nginx 경로 분기 배선 (환경별).
+# 사용법: 이 파일을 저장소 루트에 docker-compose.override.yml 로 복사하면
+#         compose 가 docker-compose.yml 에 자동 병합한다.
+#         실제 docker-compose.override.yml 은 .gitignore — 환경 특정이라 비커밋.
+# ▼ 다른 환경이면 아래 166.79.31.248:8082 을 그 환경 외부 접속 주소로 치환.
+services:
+  nginx:
+    ports:
+      - "8082:80"
+    volumes:
+      - ./deploy/nginx-stack.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - api
+      - web
+      - keycloak
+
+  keycloak:
+    environment:
+      KC_HOSTNAME: http://166.79.31.248:8082/auth
+      KC_HTTP_RELATIVE_PATH: /auth
+      KC_PROXY_HEADERS: xforwarded
+
+  api:
+    environment:
+      KC_ISSUER_URI: http://166.79.31.248:8082/auth/realms/docspace
+      OIDC_REDIRECT_URI: http://166.79.31.248:8082/api/auth/oidc/callback
+      OIDC_POST_LOGIN_REDIRECT: /home
+      OIDC_POST_LOGOUT_REDIRECT: http://166.79.31.248:8082/login

@@ -431,74 +431,33 @@ nginx 가 `8082:80` 을 직접 발행**하므로 host HAProxy 가 필요 없다(
 inactive 였던 문제도 해소). 외부는 `http://<host>:8082` 단일 오리진, nginx 가
 compose 네트워크 안에서 경로로 분기한다.
 
-> 환경 특정 배선(프록시/CA 와 마찬가지)이라 **저장소엔 안 커밋**한다. 아래는
-> VM-로컬 파일(`~/docspace/docker-compose.override.yml`, `nginx-stack.conf`)의
-> 템플릿이다. AFS 입주/타 환경 이전 시 그 환경 값으로 재작성한다.
+> 배포 도구는 저장소 `deploy/` 에 보존한다(Cycle 45 — 이전엔 VM-로컬만 존재).
+> 환경 특정 값은 각 파일 상단/지정 위치에 모여 있어 다른 환경이면 그 블록만
+> 고친다. 실제 `docker-compose.override.yml` 은 환경별이라 비커밋(`.gitignore`)
+> — 저장소엔 `.example` 템플릿만 둔다.
 
-### docker-compose.override.yml (VM-로컬, 비커밋)
-```yaml
-services:
-  nginx:
-    ports:
-      - "8082:80"            # HAProxy 제거 — 외부 진입을 직접 발행
-    volumes:
-      - ./nginx-stack.conf:/etc/nginx/conf.d/default.conf:ro
-    depends_on:
-      - api
-      - web
-      - keycloak
-  keycloak:
-    environment:
-      KC_HOSTNAME: http://166.79.31.248:8082/auth
-      KC_HTTP_RELATIVE_PATH: /auth
-      KC_PROXY_HEADERS: xforwarded
-  api:
-    environment:
-      KC_ISSUER_URI: http://166.79.31.248:8082/auth/realms/docspace
-      OIDC_REDIRECT_URI: http://166.79.31.248:8082/api/auth/oidc/callback
-      OIDC_POST_LOGOUT_REDIRECT: http://166.79.31.248:8082/login
-```
-web 이미지는 `NEXT_PUBLIC_WS_URL=ws://166.79.31.248:8082/collab` 로 재빌드
-(빌드타임 주입 — 3.5 의 "빌드타임 주입" 참조).
+### 구성 (`deploy/`)
+- `deploy/docker-compose.override.example.yml` — nginx `8082:80` 발행 +
+  `nginx-stack.conf` 마운트 + `depends_on`; keycloak `KC_HOSTNAME=…:8082/auth`
+  (+`KC_HTTP_RELATIVE_PATH`/`KC_PROXY_HEADERS`); api OIDC 변수 `:8082/auth` 기준.
+  **외부 접속 주소(`166.79.31.248:8082`)만 그 환경 주소로 치환.**
+- `deploy/nginx-stack.conf` — compose 네트워크 경로 분기: `/`→web:3000,
+  `/api`→api:3001(프리픽스 제거), `/auth`→keycloak:8080, `/collab`→api:1234(WS).
+  override 가 `/etc/nginx/conf.d/default.conf` 로 마운트.
+- `deploy/redeploy.sh` — git pull(auto-stash) → DB 백업 → 이미지 빌드 →
+  `compose up -d` → 검증. **상단 환경 블록(`HTTP_PROXY`·`NEXT_PUBLIC_WS_URL`)만
+  환경별로 수정.** `--no-build` 로 재빌드 생략(override/conf 만 바꿨을 때).
 
-### nginx-stack.conf (VM-로컬, 비커밋) — compose 네트워크 경로 분기
-```nginx
-server {
-    listen 80;
-    server_name _;
-
-    location /collab {                 # Hocuspocus WebSocket (api 같은 프로세스 :1234)
-        proxy_pass http://api:1234/;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host $host;
-        proxy_read_timeout 86400s;
-    }
-    location /auth/ {                   # Keycloak
-        proxy_pass http://keycloak:8080;
-        proxy_set_header Host $host;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header X-Forwarded-Host $host;
-    }
-    location /api/ {                    # NestJS — /api 프리픽스 제거하고 전달
-        proxy_pass http://api:3001/;
-        proxy_set_header Host $host;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    }
-    location / {                        # Next.js
-        proxy_pass http://web:3000;
-        proxy_set_header Host $host;
-    }
-}
-```
-
-### 기동·검증
+### 셋업·재배포
 ```bash
-docker compose up -d
-docker compose ps                  # 6개 서비스 Up
-docker compose exec nginx nginx -t # conf 유효성
+# 1) override 를 루트로 복사하고 외부 주소를 그 환경에 맞게 치환
+cp deploy/docker-compose.override.example.yml docker-compose.override.yml
+#    (KC_HOSTNAME / KC_ISSUER_URI / OIDC_* 의 호스트)
+
+# 2) 사내 root CA 배치 (3.5 참조) + 재배포
+#    (redeploy.sh 상단의 프록시/WS URL 값도 그 환경에 맞게 먼저 수정)
+mkdir -p ca-certs && cp /path/to/사내Proxy.crt ca-certs/
+./deploy/redeploy.sh            # 빌드 포함. override/conf 만 바꿨으면 --no-build
 ```
 검증(Cycle 44): 6 컨테이너 Up, OIDC discovery issuer
 `http://166.79.31.248:8082/auth/realms/docspace`, 외부 브라우저 E2E(SSO 로그인

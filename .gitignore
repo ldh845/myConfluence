@@ -2,6 +2,10 @@ node_modules/
 .next/
 .env
 .env.local
+
+# Cycle 45 — 컨테이너 배포 override 는 환경 특정이라 비커밋.
+# 저장소엔 deploy/docker-compose.override.example.yml 템플릿만 둔다.
+/docker-compose.override.yml
 *.db
 *.db-journal
 dev.db
