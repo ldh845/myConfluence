@@ -20,7 +20,7 @@ GitHub 식별자는 `myConfluence` (저장소 이름), 프로젝트명은 `DocSp
 apps/
   web/    Next.js 14. 사용자 화면 — (app)/ route group이 TopNav + Sidebar 영속 셸.
   api/    NestJS. REST API + Hocuspocus 협업 서버를 같은 프로세스에서 호스팅.
-docs/     운영/이력 문서 — DEPLOY.md, CYCLES.md
+docs/     운영/이력 문서 — DEPLOY.md, CYCLES.md(개발 로그), TASKS.md(사람용 Task 현황)
 .claude/skills/   팀 공유 스킬 (그 외 .claude/* 는 gitignore)
 ```
 
