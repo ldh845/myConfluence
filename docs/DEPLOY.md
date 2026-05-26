@@ -502,6 +502,47 @@ postgres 데이터 볼륨(`docspace_pgdata`)에 비번이 영속되므로, **다
 
 ---
 
+## 3.9 DB 정기 백업 (Cycle 46 — cron + 보존 정책)
+
+`deploy/db-backup.sh` 가 매일 1회 `pg_dump` 를 떠 `~/db-backups/` 에 보관.
+**보존**: 일별 7개(`daily/`) + 주별 4개(`weekly/`, 일요일분 hardlink) — 약
+한 달치 복원 지점. gzip 압축 + hardlink 로 디스크 효율.
+
+### 설치 (VM 1회)
+```bash
+# 1) timezone 확인 — KST 아니면 교체 후 cron 등록
+timedatectl
+sudo timedatectl set-timezone Asia/Seoul    # 이미 KST 면 생략
+
+# 2) 1회 수동 실행으로 권한·경로·pg_dump 동작 확인
+~/docspace/deploy/db-backup.sh
+ls -lh ~/db-backups/daily/                   # docspace-YYYYMMDD-HHMMSS.sql.gz 생성 확인
+
+# 3) cron 등록 (사용자 crontab — sudo 사용)
+sudo crontab -e
+# 아래 한 줄 추가 (매일 03:00 KST):
+#   0 3 * * * /home/sysadmin/docspace/deploy/db-backup.sh >> /home/sysadmin/db-backup.log 2>&1
+
+sudo crontab -l                              # 등록 확인
+```
+스크립트가 `sudo docker compose exec ...` 를 쓰므로 cron 도 sudo 권한 사용자
+(여기선 root crontab) 로 등록한다. 로그는 `~/db-backups/` 옆 `~/db-backup.log`.
+
+### 복원 dry-run
+운영 DB 를 건드리지 않고 백업이 살아 있는지 확인:
+```bash
+LATEST=$(ls -1t ~/db-backups/daily/docspace-*.sql.gz | head -1)
+gunzip -c "$LATEST" | head -50                # 헤더·CREATE 문 확인
+gunzip -c "$LATEST" | wc -l                   # 라인 수(데이터 양 가늠)
+```
+**실제 복원** 은 신규/임시 DB 에 (운영 DB 덮어쓰기는 별도 절차):
+```bash
+gunzip -c "$LATEST" | sudo docker compose exec -T postgres \
+  psql -U docspace -d docspace_restore_test
+```
+
+---
+
 ## 4. 트러블슈팅
 
 | 증상 | 원인/해결 |
