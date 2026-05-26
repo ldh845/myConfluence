@@ -99,6 +99,6 @@ cd apps/api && npm run build                  # NestJS 컴파일 → dist/
     httpOnly 쿠키 유지.
   - 배포: Docker 이미지 컨테이너화 + VM 실빌드 검증 완료 (Cycle 42 / 42
     followup). AFS(K8s) 입주 대기.
-- 미구현: AI 챗 패널(SRS 5.9), 멘션 `@user`, 다이어그램 동시 편집.
+- 미구현: AI 챗 패널(SRS 미명세 — 도입 시 스펙 정의 필요), 멘션 `@user`, 다이어그램 동시 편집.
 - 운영 시나리오: 사내 PC 단일 인스턴스 = `USE_REDIS=false` + Postgres
   네이티브. 자세히는 `docs/DEPLOY.md`.
