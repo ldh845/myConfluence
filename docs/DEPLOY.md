@@ -470,6 +470,38 @@ mkdir -p ca-certs && cp /path/to/사내Proxy.crt ca-certs/
 
 ---
 
+## 3.8 DB 비밀번호 교체 (Cycle 46 — 무중단 절차)
+
+운영 DB 비번을 임시값에서 강한 값으로 교체. compose 가 루트 `.env` 의
+`POSTGRES_PASSWORD` 를 보간해 postgres 컨테이너의 `POSTGRES_PASSWORD` 와 api
+컨테이너의 `DATABASE_URL` 에 동일 값을 주입하므로, 두 곳 동시 정합으로
+교체된다(드리프트 없음).
+
+```bash
+# 1) 새 비번 생성 (256-bit hex — DATABASE_URL 파싱 안전)
+NEW_PW=$(openssl rand -hex 32)
+echo "$NEW_PW"      # 1Password 등 안전한 곳에 보관 (이후 표시 안 됨)
+
+# 2) Postgres 컨테이너에 현재 접속해 비번 교체
+sudo docker compose exec postgres \
+  psql -U docspace -d docspace \
+  -c "ALTER USER docspace WITH PASSWORD '$NEW_PW';"
+
+# 3) 루트 .env 의 POSTGRES_PASSWORD 를 새 값으로 갱신
+#    (없으면 .env.example 을 .env 로 복사 후 채움)
+$EDITOR .env        # POSTGRES_PASSWORD=<NEW_PW>
+
+# 4) api 컨테이너만 재기동해 새 DATABASE_URL 픽업 (postgres 는 이미 새 비번)
+sudo -E docker compose up -d api
+sudo docker compose logs --tail=30 api    # "Nest application successfully started" + prisma migrate deploy 통과 확인
+```
+
+postgres 데이터 볼륨(`docspace_pgdata`)에 비번이 영속되므로, **다음 재기동
+때부터는 .env 의 새 비번이 일관되게 사용**된다. 교체 중 web/keycloak 는
+영향을 받지 않는다(다운타임 = api 재기동 ~5초).
+
+---
+
 ## 4. 트러블슈팅
 
 | 증상 | 원인/해결 |

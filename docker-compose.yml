@@ -5,7 +5,8 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: docspace
-      POSTGRES_PASSWORD: docspace
+      # Cycle 46 — 비번 외부화. 루트 .env 의 POSTGRES_PASSWORD 필수(:?required → 미설정 시 즉시 실패).
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set (see .env.example)}
       POSTGRES_DB: docspace
     ports:
       - "5432:5432"
@@ -27,8 +28,9 @@ services:
     container_name: docspace_api
     restart: unless-stopped
     environment:
-      # 컨테이너 네트워크 안에서는 postgres 서비스명으로 접속
-      DATABASE_URL: postgresql://docspace:docspace@postgres:5432/docspace?schema=public
+      # 컨테이너 네트워크 안에서는 postgres 서비스명으로 접속.
+      # Cycle 46 — 비번 외부화. ${POSTGRES_PASSWORD} 는 위 postgres 서비스와 동일 값.
+      DATABASE_URL: postgresql://docspace:${POSTGRES_PASSWORD}@postgres:5432/docspace?schema=public
       PORT: "3001"
       USE_REDIS: "false"
       # Keycloak 연동 값 — Cycle 43부터 실사용. 지금은 placeholder.
