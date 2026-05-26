@@ -584,6 +584,44 @@ curl -s -o /dev/null -w '%{http_code}\n' http://localhost:8082/    # 200/307
 
 ---
 
+## 3.12 재부팅·재배포 운영 함정 (Cycle 46 followup — VM 검증 중 발견)
+
+### (a) 네이티브 postgresql / nginx 잔존 → 포트 충돌 (영구 fix 1회)
+- **증상**: 재부팅 후 컨테이너 postgres/nginx 가 5432/80 포트 충돌로 부팅 실패
+- **원인**: VM 에 native postgresql/nginx 가 깔린 채 `systemctl enable` 상태 —
+  데몬 자동 기동 시점에 이들이 먼저 포트를 점유
+- **영구 fix (1회)**:
+  ```bash
+  sudo systemctl stop postgresql nginx
+  sudo systemctl disable postgresql nginx
+  ```
+- **확인**: `sudo systemctl is-enabled postgresql nginx` → 둘 다 `disabled`
+
+### (b) 재부팅 후 일부 컨테이너 `Exited (128)` 잠금
+- **증상**: 재부팅 직후 일부 컨테이너(특히 postgres·nginx)가 `Exited (128)` 정지
+  상태로 멈추고, `restart: unless-stopped` 자동 복구가 동작하지 않음
+- **원인**: docker 데몬 셧다운 시퀀스가 일부 컨테이너를 "stopped" 로 명시 마크 →
+  `unless-stopped` 정책 대상에서 제외됨
+- **해결 (재부팅 후 표준 절차로 명시)**:
+  ```bash
+  sudo docker compose up -d
+  ```
+- **확인**: `sudo docker compose ps` 에 6 서비스 모두 `Up`
+
+### (c) `compose down→up` 후 nginx 네트워크 attach 실패
+- **증상**: nginx 로그에 `[emerg] host not found in upstream "api"` 반복
+- **원인**: 컨테이너는 생성됐지만 docker 네트워크 attach 가 누락됨
+  (`docker inspect docspace_nginx` 의 `NetworkSettings.Networks` 가 `{}`)
+- **해결**:
+  ```bash
+  sudo docker network connect docspace_docspace_net docspace_nginx
+  sudo docker compose restart nginx
+  ```
+- **확인**: `docker inspect docspace_nginx` 에 `docspace_docspace_net` 항목 +
+  `sudo docker compose logs nginx` 에서 `host not found` 없음
+
+---
+
 ## 4. 트러블슈팅
 
 | 증상 | 원인/해결 |

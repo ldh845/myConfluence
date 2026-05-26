@@ -992,3 +992,22 @@
 - **검증**: `nest build` 통과 / `health.controller.spec.ts` 5 테스트 통과 / `docker compose config` 보간 정합(POSTGRES_PASSWORD 미설정 시 명시 실패) / 6 서비스에 logging anchor 적용 확인 / `bash -n deploy/db-backup.sh` 통과. **실 VM 작업(DB 비번 교체·cron 등록·daemon enable·재부팅 자동기동·로그 회전 실 발생)은 동훈님이 DEPLOY.md 절차대로 수행**, 결과는 사후 본 entry에 반영 또는 별도 followup
 - **남은 일**: Cycle 47/48(AFS 입주 준비 — K8s manifest·이미지 크기 최적화). secret manager 도입은 운영 본격화 시점 별도 사이클. Keycloak start-dev 인메모리 H2 영속화는 Cycle 47 후보. 편집기 "업데이트" 버튼 race condition(프론트 코드 사이클)
 - **비고**: AFS 입주 둘로 분리 — (a) Keycloak 실연동/issuer·secret 교체는 우리 코드 준비 완료(Cycle 43), AFS 팀 핸드오프 시점 ~5분 작업, (b) K8s manifest/이미지 최적화는 별도 사이클. 항목 5(daemon enable 검증)는 코드 변경 없이 절차만 DEPLOY.md 3.11 에 명시 — VM 실행 결과는 사후 기록. NestJS jest config(`rootDir: src`, `testRegex: \\.spec\\.ts$`)로 health spec 자동 픽업.
+
+---
+
+## Cycle 46 followup — 2026-05-26 — ✅ Done (VM 적용·검증 완료 + 운영 함정 3건)
+- **제목**: Cycle 46 VM 적용·검증 완료 + 운영 함정 3건 발견·문서화
+- **카테고리**: 운영 / 배포 (Cycle 46 의 VM 실적용 잔여 해소)
+- **커밋**: 본 Docs 커밋. **VM 작업 자체는 동훈님이 수행, 저장소 코드 변경 없음** (TASKS.md 상태 플립 + DEPLOY.md 함정 절 추가)
+- **변경 파일**:
+  - `docs/TASKS.md` — Task 5 상태 🔄 → ✅, "VM 실적용 결과 사후 기록" 후속 제거, "관련 Cycle" `Cycle 46 + 46 followup`, 현재 상태에 VM 검증 완료 사실 추가
+  - `docs/DEPLOY.md` — 3.12 신설(재부팅·재배포 운영 함정 a/b/c). 3.11 은 무수정
+- **검증 (VM 166.79.31.248, 2026-05-26)**:
+  1) DB 비번 강한 값(hex 32) 교체 → `prisma migrate deploy` 통과
+  2) cron 매일 03:00 KST 등록, 백업 1회 수동 실행 + 복원 dry-run 통과
+  3) 로그 로테이션 6 서비스 일괄 `max-size:10m, max-file:5` 적용 확인
+  4) health probe `/live` / `/ready` / `/health` 모두 200
+  5) `NODE_ENV=production` 컨테이너 내 확인
+  6) docker daemon enabled + 재부팅 후 자동 기동 (함정 a/b/c 해소 후), 외부 `:8082` → 307→SSO 정상
+- **남은 일**: 없음 — Cycle 46 영역 완전 종결
+- **비고**: 운영 함정 3건 본 사이클에서 최초 발견 — (a) 영구 fix 완료(`systemctl disable`), (b)(c) 절차 문서화로 우회. Cycle 47 후보 "Keycloak `start-dev` → 영속 DB 전환" 에서 (c) 의 nginx 네트워크 fragility 도 함께 검토 권장.
