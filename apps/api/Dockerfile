@@ -64,6 +64,9 @@ COPY --from=build /app/apps/api/prisma ./apps/api/prisma
 
 WORKDIR /app/apps/api
 
+# Cycle 46 — production 모드 명시 (web Dockerfile 정합). NestJS·관련 패키지가
+# dev/prod 분기 동작(에러 상세도, 로깅 등)을 NODE_ENV 로 결정한다.
+ENV NODE_ENV=production
 # Cycle 40 포트 컨벤션 — NestJS REST. Hocuspocus 협업 서버는 같은 프로세스 :1234.
 ENV PORT=3001
 EXPOSE 3001 1234
