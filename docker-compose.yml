@@ -1,7 +1,16 @@
+# Cycle 46 — 로그 로테이션 기본값. 모든 서비스가 동일 정책 사용.
+# 서비스당 한도: 10MB × 5 = 50MB. 초과 시 가장 오래된 것부터 회전.
+x-default-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
 services:
   postgres:
     image: postgres:16
     container_name: docspace_postgres
+    logging: *default-logging
     restart: unless-stopped
     environment:
       POSTGRES_USER: docspace
@@ -26,6 +35,7 @@ services:
         HTTPS_PROXY: ${HTTPS_PROXY:-}
         NO_PROXY: ${NO_PROXY:-}
     container_name: docspace_api
+    logging: *default-logging
     restart: unless-stopped
     environment:
       # 컨테이너 네트워크 안에서는 postgres 서비스명으로 접속.
@@ -63,6 +73,7 @@ services:
         HTTPS_PROXY: ${HTTPS_PROXY:-}
         NO_PROXY: ${NO_PROXY:-}
     container_name: docspace_web
+    logging: *default-logging
     restart: unless-stopped
     depends_on:
       - api
@@ -76,6 +87,7 @@ services:
   keycloak:
     image: quay.io/keycloak/keycloak:26.3
     container_name: docspace_keycloak
+    logging: *default-logging
     restart: unless-stopped
     command: ["start-dev", "--import-realm"]
     environment:
@@ -92,6 +104,7 @@ services:
   redis:
     image: redis:7-alpine
     container_name: docspace_redis
+    logging: *default-logging
     restart: unless-stopped
     ports:
       - "6379:6379"
@@ -103,6 +116,7 @@ services:
   nginx:
     image: nginx:1.27-alpine
     container_name: docspace_nginx
+    logging: *default-logging
     restart: unless-stopped
     ports:
       - "80:80"

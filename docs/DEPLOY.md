@@ -543,6 +543,23 @@ gunzip -c "$LATEST" | sudo docker compose exec -T postgres \
 
 ---
 
+## 3.10 로그 로테이션 (Cycle 46)
+
+`docker-compose.yml` 상단의 `x-default-logging` anchor 가 6 서비스 전체에
+일괄 적용된다 — **서비스당 10MB × 5 파일 = 50MB 한도**, 초과 시 가장 오래된
+것부터 회전(docker `json-file` 드라이버). 6 서비스 합쳐 최대 ~300MB.
+
+정책 변경(예: 한도 상향)은 `docker-compose.yml` 의 `x-default-logging` 한 곳
+만 수정하면 모든 서비스에 반영된다. 적용 후 `sudo docker compose up -d` 로
+컨테이너 재생성해야 새 로깅 설정이 발효된다(restart 만으론 불충분).
+
+```bash
+sudo docker compose logs --tail=50 api      # 회전 후에도 정상 조회
+ls -lh /var/lib/docker/containers/*/         # 회전된 .log.1 .log.2 ... 확인 (sudo)
+```
+
+---
+
 ## 4. 트러블슈팅
 
 | 증상 | 원인/해결 |
