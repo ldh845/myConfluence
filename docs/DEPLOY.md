@@ -560,6 +560,30 @@ ls -lh /var/lib/docker/containers/*/         # 회전된 .log.1 .log.2 ... 확�
 
 ---
 
+## 3.11 VM 재부팅 시 자동 기동 (Cycle 46)
+
+`docker-compose.yml` 의 6 서비스 전부 `restart: unless-stopped` — Docker 데몬이
+살아 있으면 컨테이너는 알아서 재기동된다. 남은 것은 **VM 재부팅 시 Docker 데몬
+자체가 자동 기동되는가** 만 확인하면 된다.
+
+```bash
+systemctl is-enabled docker         # enabled 면 OK. disabled 면 ↓
+sudo systemctl enable docker
+sudo systemctl enable containerd    # Docker 29 가 containerd 위에서 동작 — 함께 enable
+
+# 실 검증 (안전한 시점에 1회):
+sudo reboot
+# 재부팅 후
+sudo docker compose ps              # 6 서비스 모두 Up 으로 자동 기동돼 있어야 함
+curl -s -o /dev/null -w '%{http_code}\n' http://localhost:8082/    # 200/307
+```
+
+`restart: unless-stopped` 정책이라 사용자가 명시적으로 `docker compose stop` 한
+컨테이너는 재부팅 후에도 stopped 로 남는다(의도된 동작). 컨테이너를 영구
+중단하려면 `stop`, 일시 중단 후 자동 복귀를 원하면 `pause` 또는 데몬 재기동.
+
+---
+
 ## 4. 트러블슈팅
 
 | 증상 | 원인/해결 |

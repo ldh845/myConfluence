@@ -972,3 +972,23 @@
 - **검증**: 저장소 빌드/실행 검증 아님(파일 편입). `redeploy.sh` 실행권한(`100755`) 확인, 내용은 Cycle 44 에서 검증된 로직 그대로 보존. compose override 는 자동 로드 파일명을 피해 `.example` 로 커밋(루트 override 는 .gitignore).
 - **남은 일**: VM 이 이 새 레이아웃(저장소 `deploy/` + 루트 override 복사)을 채택하도록 적용은 별도 단계. AFS 입주 시 `deploy/` 의 환경 블록만 그 환경 값으로 교체.
 - **비고**: 원칙 — 배포 도구는 저장소에, 환경 특정 값은 파일 상단에 모아 표시. 이 작업은 개발 PC 저장소만 수정(VM 미변경). `redeploy.sh` 로직은 Cycle 44 검증본이라 그대로 편입(임의 수정 없음).
+
+---
+
+## Cycle 46 — 2026-05-26 — ✅ Done (운영 안정성 강화 7건 — 보안·관측·K8s 준비 선행)
+- **제목**: 운영 부채 정리(EOL/obsolete 후속) + DB 비번 강화·정기 백업 + 로그 로테이션 + health 분리 + NODE_ENV·daemon 자동기동
+- **카테고리**: 운영 / 인프라 / 보안 — Cycle 47/48(AFS 입주) 선행 정비
+- **커밋**: `5f8ef13`(46-1 위생), `cb60637`(46-2 DB 비번), `7fd977f`(46-3 백업), `cba6b14`(46-4 로그), `e2ebc03`(46-5 health), `aa12141`(46-6 NODE_ENV), 본 CYCLES.md(46-7 Docs)
+- **변경 파일**:
+  - `.gitattributes` 신규 — `* text=auto eol=lf` + 바이너리 명시. CRLF/LF 유령 diff 영구 해소
+  - `docker-compose.yml` — postgres `POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?required}` + api `DATABASE_URL` 보간, 정합 보장. `x-default-logging` anchor(10m×5, 6 서비스 일괄)
+  - `.env.example`(루트), `apps/api/.env.example` — POSTGRES_PASSWORD 외부화 + `openssl rand -hex 32` 권장(base64 `+/=` 가 URL 파싱 깰 수 있어 hex 채택)
+  - `deploy/db-backup.sh`(신규, `100755`) — pg_dump+gzip, 일별 7개·주별 4개(hardlink), 멱등 보존
+  - `apps/api/src/health/health.controller.ts` — `/health/live`(즉시 200·DB 미접근) + `/health/ready`(DB 검사, 실패 시 503) 신규, `/health` 호환 유지(deprecation 없음)
+  - `apps/api/src/health/health.controller.spec.ts` 신규 — 5 테스트(live·ready 정상·ready 503·compat 정상·compat 503) 통과
+  - `apps/api/Dockerfile` runtime — `ENV NODE_ENV=production` (web 정합)
+  - `docs/DEPLOY.md` — 3.8 DB 비번 무중단 교체 / 3.9 cron 백업+timezone / 3.10 로그 로테이션 정책 / 3.11 daemon 자동기동 절차
+  - `docs/TASKS.md` — obsolete 후속 4건 제거(Task 1 ×3, Task 3 ×1), 신규 Task 5("운영 안정성 강화") 추가, Task 1 의 DB 비번/백업·모니터링 항목은 Task 5 로 이관 완료 처리
+- **검증**: `nest build` 통과 / `health.controller.spec.ts` 5 테스트 통과 / `docker compose config` 보간 정합(POSTGRES_PASSWORD 미설정 시 명시 실패) / 6 서비스에 logging anchor 적용 확인 / `bash -n deploy/db-backup.sh` 통과. **실 VM 작업(DB 비번 교체·cron 등록·daemon enable·재부팅 자동기동·로그 회전 실 발생)은 동훈님이 DEPLOY.md 절차대로 수행**, 결과는 사후 본 entry에 반영 또는 별도 followup
+- **남은 일**: Cycle 47/48(AFS 입주 준비 — K8s manifest·이미지 크기 최적화). secret manager 도입은 운영 본격화 시점 별도 사이클. Keycloak start-dev 인메모리 H2 영속화는 Cycle 47 후보. 편집기 "업데이트" 버튼 race condition(프론트 코드 사이클)
+- **비고**: AFS 입주 둘로 분리 — (a) Keycloak 실연동/issuer·secret 교체는 우리 코드 준비 완료(Cycle 43), AFS 팀 핸드오프 시점 ~5분 작업, (b) K8s manifest/이미지 최적화는 별도 사이클. 항목 5(daemon enable 검증)는 코드 변경 없이 절차만 DEPLOY.md 3.11 에 명시 — VM 실행 결과는 사후 기록. NestJS jest config(`rootDir: src`, `testRegex: \\.spec\\.ts$`)로 health spec 자동 픽업.
