@@ -4,143 +4,204 @@
 > 입력/갱신한다. 가독성 우선 — 커밋 해시·파일 경로·미세 버그·도구 내부 용어는
 > 빼고 "무엇을 했고 결과가 무엇인지"만 담는다.
 > **`docs/CYCLES.md` 와의 차이**: CYCLES.md 는 커밋·파일·함정까지 들어가는
-> AI/개발자용 상세 개발 로그다. 이 파일은 그 반대 — 사람용 롤업. 한 Task =
-> 여러 cycle 의 묶음(예: "Docker 이미지" = Cycle 42 + 42 followup 들). 깊은
-> 기술 디테일이 필요하면 각 항목의 "관련 Cycle" 로 CYCLES.md 를 본다.
-> **시작 시점**: 이 파일은 지금부터 시작한다(Cycle 1~41 은 소급하지 않음 — 그
-> 역사는 CYCLES.md 에 있음).
-> **갱신 규칙**: 앞으로 cycle 이 끝나면 CYCLES.md 갱신과 함께, 그 cycle 이 속한
-> Task 항목(상태·한 일·현재 상태·후속 작업)도 같이 갱신한다. 새 성격의 일이면
-> 새 Task 를 추가한다.
+> AI/개발자용 상세 개발 로그다. 이 파일은 그 반대 — 사람용 롤업. 깊은 기술
+> 디테일이 필요하면 각 Task 의 "관련 Cycle" 로 CYCLES.md 를 본다.
+> **시작 시점**: 이 파일은 v1(시간순 retrospective rollup, Cycle 1~46)에서
+> v2(주제 중심, Cycle 47~)로 전환했다. Cycle 1~41 은 Task A 에 마일스톤 요약
+> 형태로만 보존하고, 상세는 CYCLES.md 에서 본다.
+> **갱신 규칙**: 사이클이 끝나면 그 사이클이 *기여한 주제 Task 의 진척* 에 한
+> 줄 entry append, *닫힌 남은 일* 은 ✓ 표시(원래 항목은 "닫힘 이력"으로 이동,
+> 닫은 cycle 명시), *새로 발견된 todo* 는 해당 Task 의 "남은 일"에 추가.
+> **새 Task 는 진짜로 새 주제(완전히 다른 영역)가 emerge 할 때만 추가** —
+> 기존 주제의 변형·확장은 기존 Task 안에서 처리한다.
+
+**Task-level 상태 라벨** (CYCLES.md 의 사이클-level `✅/🔄/⛔/⏭/📝` 와는 별도):
+🟢 Active — 현재 활발히 진행 / 🟡 Maintenance — 큰 작업 완료, 잔여 보강만 /
+🔵 Backlog — 시작 안 함, 우선순위 대기 / ⚫ Closed — 영역 완전 종료 /
+⛔ Blocked — 외부 의존으로 진행 불가
 
 ---
 
-## Task 1 — [Confluence 대체] 사내 VM 운영 환경 구축
+## Task A — 코어 위키 플랫폼
 
-- **상태**: ✅ 완료 · Jira: 등록됨
-- **기간**: 2026-05-20
-- **할 일**: Confluence 대체 시스템의 첫 실서버 환경을 사내 VM 에 구축해, 외부
-  PC 에서 접근 가능한 동작 환경을 마련한다.
-- **한 일**:
-  - 사내 프록시·사내 인증서 환경 셋업 (SSH 접속, npm/git/Prisma 가 사내 프록시·root CA 통과)
-  - PostgreSQL 16 설치 + 전용 DB 생성 + 검색용 확장(pg_trgm) 활성
-  - 소스 배포·환경설정 후 의존성 설치·DB 마이그레이션 (fresh DB 에서 막히던 마이그레이션 영구 수정)
-  - Node 18→20 상향 + 프로덕션 빌드 + 백그라운드(nohup) 기동
-  - nginx 리버스 프록시 구성 + 외부 PC 브라우저로 동작 검증 (로그인·페이지 작성·실시간 협업)
-  - 환경 구축 절차·이력 문서화
-- **현재 상태**: 7단계 모두 완료 — 사내 VM 에 nohup 기반 실서버 환경을 구축하고,
-  외부 PC 브라우저에서 로그인·페이지 작성·실시간 협업까지 동작 확인.
-- **후속 작업**:
-  - 편집기 첫 진입 시 "업데이트" 버튼 비활성화 문제
-  (DB 비번 강화, 백업·모니터링은 Task 5 에서 완료)
-- **접속 정보**: 웹 http://166.79.31.248:8082 / 첫 가입자 자동 ADMIN /
-  SSH `ssh -p 12222 sysadmin@166.79.31.248`
-- **관련 Cycle**: Cycle 41
-
----
-
-## Task 2 — [Confluence 대체] Docker 이미지 / 개발 환경 구축
-
-- **상태**: ✅ 완료 · Jira: 등록됨
-- **기간**: 2026-05-21 ~ 2026-05-22 (사내 프록시 이슈 진단으로 예상보다 소요)
-- **할 일**: DocSpace(api+web)를 Docker 이미지로 포장하고 개발용 Keycloak 을
-  포함한 docker-compose 개발 환경을 구성한다. 사내 AFS(K8s) 입주를 위한
-  컨테이너화 기반 마련 — 인증 등 앱 코드는 건드리지 않는다.
-- **한 일**:
-  - api·web 을 Docker 멀티스테이지 이미지로 포장 (Node 22 기반)
-  - 개발용 Keycloak 을 포함한 docker-compose 풀스택 정의 (web·api·keycloak·postgres)
-  - 개발용 Keycloak realm·client·테스트 사용자 사전 정의
-  - 환경마다 달라지는 값(협업 WS 주소·API 호스트)을 빌드 시 주입하도록 정리 (IP 하드코딩 제거)
-  - 사내 프록시·사내 인증서 환경에서 빌드가 되도록 통로 구축
-  - VM 실서버에서 실제 빌드 + 6개 서비스 기동(스모크) 검증 완료, 그 과정의 빌드/런타임 결함 수정
-- **현재 상태**: 빌드 + 런타임 + 기능 검증(SSO E2E)까지 완료(기능 검증은 Task 3 에서
-  수행). 컨테이너 풀스택이 VM 에서 정상 동작함을 확인했다. 남은 것은 AFS 입주용
-  production 이미지 검증과 Node 22 전환에 따른 후속 점검뿐이다.
-- **후속 작업**:
-  - AFS 입주용 production 이미지 검증 (크기 최적화 등)
-  - Node 22 베이스 전환 후속 점검
-- **관련 Cycle**: Cycle 42 + 42 followups
+- **범위**: 페이지·스페이스·편집기·댓글·반응·첨부·다이어그램·버전·검색·페이지
+  공유 등 Confluence 대체의 핵심 기능 영역.
+- **상태**: 🟡 Maintenance
+- **진척**:
+  - **Cycles 1~41 — 플랫폼 본체 구축.** 주요 마일스톤:
+    - Cycle 10-1/2 — draft/publish 메커니즘 (`Page.draftContent`, autosave,
+      publish 트랜잭션)
+    - Cycle 27a~e — 사용자·권한 모델 (User FK 연결, 첫 가입자 자동 ADMIN)
+    - Cycle 32 — 개인 공간 (SpaceType PERSONAL)
+    - Cycle 33 — 공간 homepage (`Space.homePageId`, 공간 진입 시 자동 이동)
+    - Cycle 35 — draft 노출 규칙 (`Page.publishedAt`, 첫 발행 전 페이지는
+      트리/검색에서 숨김)
+    - Cycle 39 — Hocuspocus Redis adapter 토글 (USE_REDIS)
+    - Cycle 40 — API 포트 컨벤션 (api PORT == web API_PORT == 3001)
+  - 상세는 `docs/CYCLES.md` 1~41 참조.
+- **남은 일**: (현재 plat-level 큰 항목 없음 — 신규 기능은 Task G)
+- **닫힘 이력**: (v1 retro 미수행)
+- **차단 / 의존**: 없음
+- **Jira Epic**: 미등록
+- **관련 Cycle**: Cycle 1~41
 
 ---
 
-## Task 3 — [Confluence 대체] 자체 인증 → Keycloak OIDC SSO 전환
+## Task B — 인증·인가 (Keycloak OIDC SSO)
 
-- **상태**: ✅ 완료 · Jira: 등록됨
-- **기간**: 2026-05-21 (당일 완료, 후속 작업 남음)
-- **할 일**: 자체 ID/비밀번호 인증을 Keycloak OIDC 기반 SSO 로 전환한다. 다른
-  사내 서비스와 같은 Keycloak 을 공유해 "한 번 로그인"이 성립하게 한다. 개발용
-  Keycloak 으로 개발·검증하고, AFS 전환 시엔 환경변수만 교체한다.
-- **한 일**:
-  - 백엔드 OIDC 로그인 통합 (authorization code flow, ID 토큰 검증)
-  - Keycloak 계정 ↔ DocSpace 사용자 매핑·자동 생성
-  - 로그인 화면을 "SSO 로그인" 버튼으로 전환하고 자체 회원가입 페이지 제거
-  - 자체 인증(아이디/비번 로그인·가입) 코드 제거
-  - 단일 로그아웃(SLO) — 로그아웃 시 Keycloak 세션까지 종료(다른 서비스에서도 로그아웃)
-  - 기존 세션·권한 틀은 그대로 두고 Keycloak 을 "로그인 입구"에만 연결 (안전한 점진 전환)
-  - VM 실서버에 적용·검증 완료
-- **현재 상태**: 로그인은 Keycloak OIDC 단일 경로, 로그아웃은 단일 로그아웃,
-  자체 인증 흔적은 모두 제거됐다. 개발용 Keycloak + VM 실서버 검증까지 끝났고,
-  AFS 실연동은 환경변수 교체만 남았다.
-- **후속 작업**:
-  - AFS Keycloak 실연동 (client 등록 요청 후 환경변수만 교체)
-  - 운영 DB 의 기존 자체 가입 사용자 마이그레이션
+- **범위**: Keycloak OIDC 기반 SSO + 단일 로그아웃(SLO) + 권한 모델.
+- **상태**: 🟡 Maintenance (AFS 실연동 대기)
+- **진척**:
+  - Cycle 43 — 백엔드 OIDC 통합 (authorization code flow, ID 토큰 검증,
+    계정 매핑 `keycloakId`)
+  - Cycle 43 (2/2) — 프론트 SSO 전환 + 자체 인증(아이디/비번·bcrypt) 제거
+  - Cycle 43 followups — 단일 로그아웃(SLO, Keycloak end_session), VM 실서버
+    SSO 적용·검증
+- **남은 일**:
+  - AFS Keycloak 실연동 (env 교체만, AFS 팀 의존) — ⛔ Blocked
+  - 운영 DB 의 기존 자체 가입 사용자 마이그레이션 (잔여 감사)
+- **닫힘 이력**:
+  - ✓ 컨테이너로 api 운영 시 issuer 호스트 정합 — Cycle 43 fp + Cycle 44
+- **차단 / 의존**: AFS 팀의 Keycloak realm/client 등록·값 전달
+- **Jira Epic**: 등록됨
 - **관련 Cycle**: Cycle 43 + 43 followups
 
 ---
 
-## Task 4 — [Confluence 대체] 컨테이너 풀스택 단독 운영 전환 + 외부 SSO E2E 검증
+## Task C — 실시간 협업 (Hocuspocus + Yjs)
 
-- **상태**: ✅ 완료 · Jira: 등록됨
-- **기간**: 2026-05-22
-- **할 일**: VM 운영을 임시 방식(nohup 직접 실행)에서 docker compose 풀스택
-  단독 운영으로 전환하고, 외부 브라우저 기준으로 SSO·편집·협업이 끝까지
-  동작하는지(E2E) 검증한다.
-- **한 일**:
-  - 운영을 docker compose 6컨테이너 풀스택 단독 운영으로 전환 (임시 nohup 배포 종료)
-  - 진입 경로 단순화 — compose 의 nginx 가 외부 포트(:8082)를 직접 발행하고 경로별로
-    분기(앱·인증·실시간 협업), 별도 HAProxy 의존 제거
-  - 컨테이너 환경 기준으로 SSO/협업 주소 배선 정리 (저장소 코드는 무변경, 환경설정만)
-  - 외부 PC 브라우저로 E2E 검증 통과 — SSO 로그인 → 페이지 작성·저장 → 2개 탭
-    실시간 협업 동기화 → 로그아웃까지
-  - 운영 전환 중 옛 데이터가 안 보이는 문제 발견·복구 (이전 DB 의 8 페이지/4 공간/5 유저
-    를 컨테이너 DB 로 이관, 백업 보존)
-- **현재 상태**: VM 이 docker compose 풀스택만으로 운영되며 외부에서 SSO 포함
-  전 기능이 정상 동작한다. 옛 데이터도 복구돼 표시된다. 이로써 컨테이너 운영이
-  실사용 가능한 수준임을 외부 사용자 관점에서 확인했다.
-- **후속 작업**:
-  - 편집기 첫 진입 시 "업데이트" 버튼이 잠깐 비활성화되는 문제 (프론트 코드 버그,
-    이번 배포와 무관 — 코드 작업에서 해결)
-  - ~~환경별 설정 파일(compose override·nginx 설정)을 저장소에 둘지 검토~~ →
-    완료: 배포 도구를 저장소 `deploy/` 로 편입(redeploy.sh·nginx-stack.conf·
-    override.example). 환경 적용(VM/AFS)은 별도 단계.
-- **관련 Cycle**: Cycle 44 + 45
+- **범위**: 페이지 본문 동시 편집, presence/awareness, Redis Pub/Sub 어댑터
+  옵션.
+- **상태**: 🟡 Maintenance
+- **진척**: 코어 사이클들에서 협업 기반 구축 (Yjs/Hocuspocus 통합, Redis
+  어댑터 옵션화 등 — Task A 의 Cycle 39 참조).
+- **남은 일**:
+  - 다이어그램(Excalidraw) 동시 편집 미지원 — 현재 last-write-wins. Task G 와
+    연계해 별도 사이클에서 검토.
+- **닫힘 이력**: (해당 없음)
+- **차단 / 의존**: 없음
+- **Jira Epic**: 미등록
+- **관련 Cycle**: 코어 사이클들 (상세 CYCLES.md)
 
 ---
 
-## Task 5 — [Confluence 대체] 운영 안정성 강화 (보안·관측·K8s 준비 선행)
+## Task D — 운영 환경 / 배포 (VM·Docker·compose)
 
-- **상태**: ✅ 완료 · Jira: 미등록
-- **기간**: 2026-05-26
-- **할 일**: 운영 부채(약한 DB 비번·백업 없음·로그 무한 증가·재부팅 대비
-  부재 등)를 정리하고, K8s/AFS 입주 시 바로 도움될 작은 항목(health probe
-  분리, NODE_ENV)을 미리 정비한다.
-- **한 일**:
-  - 사전 위생 — EOL 표준 고정으로 CRLF/LF 유령 diff 영구 해소. 다른 사이클에서
-    이미 닫힌 후속작업 4건 제거(문서 정확성)
-  - DB 비밀번호 강화 — 임시값 제거, 외부 환경변수로 외부화(미설정 시 즉시
-    실패). 256-bit 권장 + URL 파싱 안전한 hex
-  - DB 정기 백업 — 매일 자동 백업 스크립트(gzip + 일별 7개·주별 4개 보존),
-    cron 등록·복원 절차 문서화
-  - docker 로그 로테이션 — 6 서비스 일괄 정책(서비스당 50MB 한도)
-  - /health 엔드포인트 liveness/readiness 분리 — K8s probe·LB 호환. 기존
-    /health 호환 유지, 단위 테스트 5건 통과
-  - api 컨테이너 NODE_ENV=production (web 정합)
-  - VM 재부팅 시 자동 기동 절차 정비(운영 문서만)
-- **현재 상태**: 운영 부채 정리 완료(저장소 영역). VM 적용 작업(DB 비번
-  실교체·cron 등록·daemon enable·재부팅 자동기동 검증)은 동훈님이 DEPLOY.md
-  절차대로 수행. **VM 적용·검증 완료(2026-05-26) — 6 영역 모두 통과, 운영
-  함정 3건은 DEPLOY.md 3.12 에 문서화.**
-- **후속 작업**:
-  - 본 Task 의 Jira 신규 등록
-  - AFS 입주 본격 준비(K8s manifest·이미지 크기 최적화)는 별도 사이클
+- **범위**: 사내 VM 실서버 구축, Docker 이미지화, docker compose 풀스택 운영,
+  배포 자동화(`deploy/`).
+- **상태**: 🟢 Active
+- **진척**:
+  - Cycle 41 — 사내 VM 운영 환경 구축 (초기 nohup 기반 배포)
+  - Cycle 42 + followups — Docker 이미지(api/web 멀티스테이지), 개발용
+    Keycloak compose, 사내 프록시/CA 빌드 통로, VM 실빌드·런타임 검증
+  - Cycle 44 — docker compose 풀스택 단독 운영 전환, HAProxy 제거 (compose
+    nginx 가 :8082 직접 발행, 경로 분기)
+  - Cycle 45 — 배포 도구 저장소 `deploy/` 편입 (redeploy.sh,
+    nginx-stack.conf, docker-compose.override.example.yml)
+- **남은 일**: (현재 큰 항목 없음)
+- **닫힘 이력**:
+  - ✓ 서비스 자동 재시작 (nohup → systemd/PM2) — Cycle 44 compose
+    `restart: unless-stopped` 로 해소
+  - ✓ 호스트 HAProxy 에 :1234 직접 매핑 검토 — Cycle 44 에서 HAProxy 제거,
+    obsolete
+  - ✓ 환경별 설정 파일(compose override·nginx) 저장소 편입 — Cycle 45
+    `deploy/` 편입
+  - ✓ `typescript.ignoreBuildErrors=true` 영구 fix — Cycle 42 followup
+    (web 빌드 타입 에러 3곳 영구 수정)
+- **차단 / 의존**: 없음
+- **Jira Epic**: 등록됨
+- **접속 정보**: 웹 http://166.79.31.248:8082 / 첫 가입자 자동 ADMIN /
+  SSH `ssh -p 12222 sysadmin@166.79.31.248`
+- **관련 Cycle**: Cycle 41 + 42 + 42 followups + 44 + 45
+
+---
+
+## Task E — 운영 안정성·관측
+
+- **범위**: 운영 부채 정리(약한 DB 비번·백업 부재·로그 무한 증가·재부팅 대비) +
+  K8s 입주 호환성 선행 정비(health probe, NODE_ENV).
+- **상태**: 🟡 Maintenance
+- **진척**:
+  - Cycle 46 — DB 비번 강화(외부화·hex 32), cron 정기 백업(일별 7+주별 4),
+    docker 로그 로테이션(서비스당 50MB), health probe live/ready 분리, api
+    NODE_ENV=production, daemon 자동기동 절차
+  - Cycle 46 followup — VM 적용·검증 완료(6 영역 모두 통과) + 운영 함정 3건을
+    DEPLOY.md 3.12 에 문서화
+- **남은 일**:
+  - Keycloak `start-dev` 인메모리 H2 → 영속 외부 DB 전환
+  - `compose down→up` 후 nginx 네트워크 attach fragility 영구 fix
+- **닫힘 이력**:
+  - ✓ DB 비밀번호 강화 — Cycle 46
+  - ✓ 백업·모니터링 (DB 백업·로그 로테이션) — Cycle 46
+  - ✓ VM 재부팅 자동기동 검증 — Cycle 46 followup
+  - ✓ EOL CRLF/LF 유령 diff — Cycle 46 (`.gitattributes`)
+- **차단 / 의존**: 없음
+- **Jira Epic**: 미등록
 - **관련 Cycle**: Cycle 46 + 46 followup
+
+---
+
+## Task F — AFS / K8s 입주 준비
+
+- **범위**: 사내 AFS(K8s) 입주를 위한 production 이미지·K8s manifest·Keycloak
+  실연동.
+- **상태**: 🔵 Backlog (AFS 팀 일정 의존)
+- **진척**: (아직 시작 안 함)
+- **남은 일**:
+  - K8s manifest / Helm chart 스캐폴딩
+  - production 이미지 크기 최적화 (현재 api ≈ 1.38GB)
+  - AFS Keycloak realm/client 실연동 (Task B 와 연계 — env 교체만)
+  - Resource limits · Secret/ConfigMap 템플릿 설계
+- **닫힘 이력**: (해당 없음)
+- **차단 / 의존**: AFS 팀의 신규 시스템 입주 일정 및 realm 제공
+- **Jira Epic**: 미등록
+- **관련 Cycle**: (예정 — Cycle 48+ 후보)
+
+---
+
+## Task G — 미구현 기능 (SRS 기반)
+
+- **범위**: SRS 에 명시됐으나 미구현인 기능 영역.
+- **상태**: 🔵 Backlog
+- **진척**: (아직 시작 안 함)
+- **남은 일**:
+  - 멘션 (FR-072) + 인앱 알림 (FR-100) — 가장 가시적 가치, 우선순위 높음
+  - 알림 종류별 설정 / 이메일 알림 (FR-101 / FR-102)
+  - AI 챗 패널 — CLAUDE.md 언급만 있고 SRS 에는 미명세 — **스펙 정의 선행 필요**
+  - 다이어그램 동시 편집 (Task C 와 연계)
+  - 페이지 본문 내 멘션 (편집기 통합 필요)
+- **닫힘 이력**: (해당 없음)
+- **차단 / 의존**: 없음 (우선순위 조정만)
+- **Jira Epic**: 미등록
+- **관련 Cycle**: (예정)
+
+---
+
+## 부록 — 옛 Task 1~5 ↔ 새 Task A~G 매핑 (역추적용)
+
+| 옛 | 새 | 비고 |
+|---|---|---|
+| Task 1 — 사내 VM 운영 환경 구축 | D + (DB 비번/백업 항목은 E) | 닫힘 이력 분산 |
+| Task 2 — Docker 이미지 / 개발 환경 | D + (AFS production 이미지는 F) | |
+| Task 3 — 자체 인증 → Keycloak OIDC | B | 1:1 |
+| Task 4 — 컨테이너 풀스택 단독 운영 | D | 1:1 |
+| Task 5 — 운영 안정성 강화 | E | 1:1 |
+
+## 부록 — Cycle ↔ Task 매핑 (검색용)
+
+| Cycle | 영향 Task |
+|---|---|
+| Cycle 1~41 | A (주) + B/C/D 부분 |
+| Cycle 42 + followups | D |
+| Cycle 43 + followups | B |
+| Cycle 44 | D |
+| Cycle 45 | D |
+| Cycle 46 + followup | E |
+| Cycle 47 | (TASKS 재구조화 자체) |
+
+---
+
+> **프론트 항목 제외 명시**: 옛 Task 1·4 의 "편집기 첫 진입 시 '업데이트' 버튼
+> 비활성화 race condition" 등 프론트 도메인 항목은 v2 로 이관하지 않는다 —
+> 동훈 님 도메인 밖이라 cross-ref 도 부담. 동료 트래커 / `Issue_list.md` 에서
+> 관리한다.

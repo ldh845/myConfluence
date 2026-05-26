@@ -64,16 +64,19 @@ DocSpace 프로젝트의 사이클(Cycle N) 작업 수행 시 반드시 따를 �
 ## 규칙 4: Cycle 종료 시 docs/TASKS.md 갱신 검토
 
 `docs/TASKS.md` 는 사람용 Task 현황(팀 공유·주간 보고·Jira 입력용) 문서다.
-CYCLES.md(AI/개발자용 상세 로그)와 짝을 이루며, 한 Task = 여러 cycle 의 롤업.
+CYCLES.md(AI/개발자용 상세 로그)와 짝을 이루며, **한 Task = 주제(Theme/Epic)
+단위, 사이클이 기여한 진척이 누적**된다(Cycle 47 v2 전환).
 
 cycle 작업을 CYCLES.md 에 기록한 뒤:
 
-- 그 cycle 이 TASKS.md 의 어느 Task 에 속하는지 판단한다. 해당 Task 가 있고
-  사람 레벨의 상태·한 일·후속 작업에 변동이 생겼으면 갱신안을 만든다. 해당
-  Task 가 없으면 새 Task 항목이 필요한지 판단해 필요 시 초안을 만든다.
+- 그 cycle 이 TASKS.md 의 어느 주제 Task 에 속하는지 판단한다. 해당 Task 의
+  *진척* 에 한 줄 entry append, *닫힌 남은 일* 은 ✓ 표시(원래 항목은 "닫힘
+  이력"으로 이동, 닫은 cycle 명시), *새로 발견된 todo* 는 "남은 일"에 추가한다.
+- **새 Task 는 진짜 새 주제(완전히 다른 영역)가 emerge 할 때만 추가** — 기존
+  주제의 변형·확장은 기존 Task 안에서 처리한다.
 - **TASKS.md 는 사람용이므로 preview-before-edit 를 지킨다** — AI 가 갱신안을
   만들되 반드시 사용자에게 먼저 보여주고 확인받은 뒤 반영한다. 승인 전엔 미수정.
-- 작은 cycle 이라 사람 레벨 Task 상태에 변화가 없으면 "TASKS.md 갱신 불필요"로
-  판단하고 넘어가도 된다 — 매 cycle 강제 갱신이 아니다.
+- 작은 cycle 이라 주제 진척·닫힘·남은 일에 변동이 없으면 "TASKS.md 갱신 불필요"
+  로 판단하고 넘어가도 된다 — 매 cycle 강제 갱신이 아니다.
 - 수위: 커밋 해시·세부 파일 경로·미세 버그는 CYCLES.md 에만. TASKS.md 엔 사람이
   읽을 수준으로 압축한다.

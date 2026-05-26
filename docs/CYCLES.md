@@ -1011,3 +1011,17 @@
   6) docker daemon enabled + 재부팅 후 자동 기동 (함정 a/b/c 해소 후), 외부 `:8082` → 307→SSO 정상
 - **남은 일**: 없음 — Cycle 46 영역 완전 종결
 - **비고**: 운영 함정 3건 본 사이클에서 최초 발견 — (a) 영구 fix 완료(`systemctl disable`), (b)(c) 절차 문서화로 우회. Cycle 47 후보 "Keycloak `start-dev` → 영속 DB 전환" 에서 (c) 의 nginx 네트워크 fragility 도 함께 검토 권장.
+
+---
+
+## Cycle 47 — 2026-05-26 — ✅ Done (TASKS.md v2 재구조화 — 주제 중심 7 Task)
+- **제목**: TASKS.md 를 시간순 retrospective rollup(v1) → 주제(Theme/Epic) 중심 v2 로 전환
+- **카테고리**: 프로세스 / 문서 (코드 변경 0)
+- **커밋**: 본 Docs 커밋
+- **변경 파일**:
+  - `docs/TASKS.md` — 전면 재작성. 헤더 갱신 규칙 + Task-level 상태 라벨 5종(🟢/🟡/🔵/⚫/⛔) + 7 Task(A 코어 플랫폼 / B 인증 / C 협업 / D 운영 환경 / E 운영 안정성 / F AFS K8s / G 미구현 기능) + 부록 매핑 표 2개(옛↔새, Cycle↔Task)
+  - `.claude/skills/docspace-cycle-rules.md` — 규칙 4 본문에서 "여러 cycle 의 롤업" → "주제 단위 진척 누적", "새 Task 항목이 필요한지" → "**새 주제 emerge 시에만 새 Task**" 로 표현 교체. preview-before-edit·매 cycle 강제 아님·수위 등 다른 절차 무변경
+  - `docs/CYCLES.md` — 본 entry
+- **검증**: 새 7 Task 골격 렌더 / 닫힘 항목 누락 0 (git log 로 옛 TASKS.md 변경 5건 교차 확인, silently 제거된 4건 모두 Task D ×3 + Task B ×1 닫힘 이력에 명시) / 헤더 갱신 규칙·스킬 규칙 4 새 모델 반영 / CLAUDE.md grep 결과 Task 키워드 1건(docs/ 폴더 설명)뿐이라 추상 수준 무변경
+- **남은 일**: 없음 — 본 사이클은 구조 자체. 다음 사이클부터 새 갱신 규칙 적용. 옵션 b(Cycle 1~41 retro-fit) 는 별도 사이클 후보
+- **비고**: Task A 마일스톤은 사용자와 협의해 6→7로 분리 — `Cycle 10-1/2` (draft/publish 메커니즘: `Page.draftContent`) 와 `Cycle 35` (draft 노출 규칙: `Page.publishedAt`)는 도입 시점·컨셉이 다른 별도 milestone(CLAUDE.md "알려진 함정"이 가리키는 게 정확히 후자)이라 둘 다 표기. 프론트 도메인 항목("편집기 update 버튼 race")은 v2 미이관 — 동료 트래커 영역.
