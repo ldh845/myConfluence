@@ -1226,3 +1226,21 @@
   8) '링크 제거' / '취소' 동작 그대로
 - **남은 일**: '파일' 탭(페이지 첨부 파일 연결) — 54-C 에서 통합 다이얼로그와 함께 추가
 - **비고**: **Ctrl+K 충돌 해결 전략** — capture phase + `stopPropagation` 으로 편집 모드의 LinkButton 핸들러가 먼저 가로채 TopNav bubble 핸들러 차단. `isEditable` 가드로 조회 모드 자연 분리. 향후 다른 편집 단축키(Ctrl+/, Ctrl+E 등)도 같은 패턴 적용 가능. 탭 UI 의 '파일' 자리 안내 텍스트는 사용자가 Cycle 54-C 적용 전까지 기능을 기다리지 않도록 명시. **Cycle 54 진행 상황**: D(완료) + A(완료) → 남은 sub-cycle: 54-B(표 그리드 8→10) + 54-C(파일/그림 통합 + figcaption) + 54-F(날짜 블록). 멘션(E)은 Cycle 55 메가 사이클로 분리.
+
+---
+
+## Cycle 54-B — 2026-05-27 — ✅ Done (표 그리드 8x8 → 10x10)
+- **제목**: TableInsertButton 그리드를 Confluence 표준인 10x10 으로 확장
+- **카테고리**: UX / 편집 툴바 (Cycle 54 sub-cycle B)
+- **커밋**: `69dde79`(54-B-1 FE), 본 CYCLES.md(54-B-2 Docs)
+- **변경 파일**:
+  - `apps/web/components/EditorToolbar.tsx` TableInsertButton — `MAX` 상수 8→10. 셀 폭 22px 고정 (`gridTemplateColumns: repeat(MAX, 22px)`)으로 비좁아짐 방지. popup 너비 `w-[210px]` → `w-fit` (콘텐츠가 결정)
+- **검증**: tsc + next build EXIT 0 (`/` 434kB 유지 — CSS/상수 변경만이라 번들 무영향). Yjs 협업 영향 없음. 마이그레이션 **없음**
+- **동작 확인 안내**:
+  1) **마이그레이션 불필요** — CSS/상수 변경만
+  2) 편집 모드 → 툴바 ▦ 클릭 → 그리드가 10x10 으로 확장
+  3) 셀 hover 시 "N 행 × M 열" 카운트 정상 (최대 10x10)
+  4) 11x11 이상은 '직접 입력' 으로 (한도 100x20 유지)
+  5) 기존 작은 표 삽입(예: 3x3) 동작 그대로
+- **남은 일**: (54-B 영역 종결) — 다음 sub-cycle: 54-F(날짜 블록) / 54-C(파일/그림+캡션)
+- **비고**: 1행 변경(MAX 상수) + 2 CSS 클래스 변경. 셀 폭을 1fr→22px 고정으로 바꾼 이유: 1fr 유지 시 popup 너비가 그대로면 10셀이 비좁아 hover 정확도 저하. popup 너비도 w-fit 으로 둬서 8→10 확장이 자연스럽게 표시됨. **Cycle 54 진행 상황**: D + A + B(완료) → 남은 sub-cycle: 54-C(파일/그림+figcaption) + 54-F(날짜 블록). Cycle 55(멘션) 별도.

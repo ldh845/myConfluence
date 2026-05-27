@@ -62,11 +62,13 @@
   - Cycle 54-A — 링크 다이얼로그를 Confluence 표준 탭 UI
     (연결 문구/웹 연결)로 재구성. 편집 모드 한정 Ctrl+K 단축키 추가
     (TopNav 검색과 capture phase + stopPropagation 으로 분리).
+  - Cycle 54-B — 표 삽입 그리드 8x8 → 10x10 (Confluence 표준).
+    셀 폭 22px 고정으로 비좁아짐 방지, '직접 입력'(한도 100x20) 그대로.
 - **남은 일**: (현재 plat-level 큰 항목 없음 — 신규 기능은 Task G)
 - **닫힘 이력**: (v1 retro 미수행)
 - **차단 / 의존**: 없음
 - **Jira Epic**: 미등록
-- **관련 Cycle**: Cycle 1~41, 49, 50, 51, 52, 53, 54-D, 54-A
+- **관련 Cycle**: Cycle 1~41, 49, 50, 51, 52, 53, 54-D, 54-A, 54-B
 
 ---
 
@@ -249,6 +251,7 @@
 | Cycle 53 | A |
 | Cycle 54-D | A |
 | Cycle 54-A | A |
+| Cycle 54-B | A |
 
 ---
 
