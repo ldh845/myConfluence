@@ -38,6 +38,7 @@ import {
 } from "@/lib/tiptap/slash-command";
 import EditorToolbar from "./EditorToolbar";
 import TaskItemNodeView from "./TaskItemNodeView";
+import ImageNodeView from "./ImageNodeView";
 import * as Y from "yjs";
 import { HocuspocusProvider } from "@hocuspocus/provider";
 import { IndexeddbPersistence } from "y-indexeddb";
@@ -356,11 +357,79 @@ export default function CollaborativeEditor({
         Color.configure({ types: ["textStyle"] }),
         Highlight.configure({ multicolor: true }),
         // FR-033 (Cycle 12-1) — 본문 이미지. allowBase64=false로 서버 업로드
-        // 강제 (DB 비대화 방지). 외부 URL/크기 조절/캡션은 12-2에서.
+        // 강제 (DB 비대화 방지).
+        // Cycle 54-C — caption attr + NodeView(figure+figcaption) 확장.
+        //   기존 image 노드는 caption=""로 자연 호환. parseHTML 에 figure 매칭
+        //   추가(기존 img 도 부모 parseHTML 로 흡수). renderHTML 도 caption 유무로
+        //   figure/img 분기 — markdown 직렬화 / copy 시에도 시각화 보존.
         Image.configure({
           inline: false,
           allowBase64: false,
           HTMLAttributes: { class: "cf-image" },
+        }).extend({
+          addAttributes() {
+            return {
+              ...this.parent?.(),
+              caption: {
+                default: "",
+                // figure 안에서 직접 figcaption 텍스트를 가져온다. img 단독이면 빈 값.
+                parseHTML: (el: HTMLElement) => {
+                  // el 은 figure 또는 img 둘 중 하나. figure 면 자식 figcaption 의 텍스트.
+                  if (el.tagName.toLowerCase() === "figure") {
+                    return el.querySelector("figcaption")?.textContent ?? "";
+                  }
+                  return "";
+                },
+                // caption 속성은 figure 의 figcaption 으로만 출력. img 속성으로는 X.
+                renderHTML: () => ({}),
+              },
+            };
+          },
+          parseHTML() {
+            return [
+              // figure>img(+figcaption) 형태. img 의 src/alt 를 attrs 로 흡수.
+              {
+                tag: "figure.cf-image-figure",
+                getAttrs: (el) => {
+                  if (!(el instanceof HTMLElement)) return false;
+                  const img = el.querySelector("img");
+                  if (!img) return false;
+                  const src = img.getAttribute("src");
+                  if (!src) return false;
+                  return {
+                    src,
+                    alt: img.getAttribute("alt") ?? "",
+                    title: img.getAttribute("title") ?? null,
+                    caption: el.querySelector("figcaption")?.textContent ?? "",
+                  };
+                },
+              },
+              // 기존 img — 부모 Image extension 의 parseHTML 흡수.
+              ...(this.parent?.() ?? []),
+            ];
+          },
+          renderHTML({ node, HTMLAttributes }) {
+            const caption = (node.attrs.caption as string | undefined) ?? "";
+            // caption 없으면 기존 단순 img 그대로 — 역호환.
+            if (!caption.trim()) {
+              return ["img", HTMLAttributes];
+            }
+            // caption 있으면 figure 구조. img 의 caption attr 은 출력하지 않는다.
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            const { caption: _drop, ...imgAttrs } = HTMLAttributes as Record<
+              string,
+              unknown
+            >;
+            return [
+              "figure",
+              { class: "cf-image-figure" },
+              ["img", imgAttrs],
+              ["figcaption", { class: "cf-image-caption" }, caption],
+            ];
+          },
+          addNodeView() {
+            return ReactNodeViewRenderer(ImageNodeView);
+          },
         }),
         // FR-071 (Cycle 16-3b-1) — 인라인 댓글 마크.
         InlineCommentMark,

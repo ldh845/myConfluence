@@ -188,6 +188,7 @@ export default function EditorToolbar({ editor }: Props) {
         <>
           <Divider />
           <ImageAltButton editor={editor} />
+          <ImageCaptionButton editor={editor} />
         </>
       )}
       {editor.isActive("table") && (
@@ -846,18 +847,46 @@ function ImageButton({ editor }: { editor: Editor }) {
   );
 }
 
-// FR-033 (Cycle 12-2) — 선택된 이미지 노드의 alt 편집(간이 캡션).
-// 12-3에서 figure/figcaption 정식 캡션 + 플로팅 UI로 교체 예정.
+// FR-033 (Cycle 12-2) — 선택된 이미지의 alt 편집(접근성용 대체 텍스트).
+// Cycle 54-C — '캡션' 의미는 ImageCaptionButton 으로 분리. alt 는 짧은 대체
+// 텍스트(스크린리더용), caption 은 그림 아래 설명 — 둘은 별개.
 function ImageAltButton({ editor }: { editor: Editor }) {
   const editAlt = () => {
     const current =
       (editor.getAttributes("image").alt as string | undefined) ?? "";
-    const next = window.prompt("이미지 캡션(alt 텍스트)", current);
+    const next = window.prompt(
+      "이미지 대체 텍스트(alt) — 스크린리더용 짧은 설명",
+      current,
+    );
     if (next === null) return;
     editor.chain().focus().updateAttributes("image", { alt: next }).run();
   };
   return (
-    <TB title="이미지 캡션 편집" onClick={editAlt}>
+    <TB title="이미지 대체 텍스트(alt) 편집" onClick={editAlt}>
+      🔤
+    </TB>
+  );
+}
+
+// Cycle 54-C — 그림 아래 캡션(figcaption) 편집. alt 와 분리된 의미.
+//   NodeView 의 figcaption 클릭으로도 같은 prompt 가 뜸 — 두 경로 일관.
+function ImageCaptionButton({ editor }: { editor: Editor }) {
+  const editCaption = () => {
+    const current =
+      (editor.getAttributes("image").caption as string | undefined) ?? "";
+    const next = window.prompt(
+      "그림 캡션 — 그림 아래 표시되는 설명",
+      current,
+    );
+    if (next === null) return;
+    editor
+      .chain()
+      .focus()
+      .updateAttributes("image", { caption: next.trim() })
+      .run();
+  };
+  return (
+    <TB title="이미지 캡션(figcaption) 편집" onClick={editCaption}>
       📝
     </TB>
   );
