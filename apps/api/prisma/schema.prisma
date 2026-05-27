@@ -24,36 +24,40 @@ enum SpaceType {
 }
 
 model User {
-  id               String        @id @default(cuid())
-  username         String        @unique
+  id                         String        @id @default(cuid())
+  username                   String        @unique
   // Cycle 43 — OIDC(SSO) 전용 사용자는 비밀번호가 없으므로 nullable.
   // 자체 가입(/auth/signup) 사용자만 bcrypt 해시를 채운다.
-  passwordHash     String?
+  passwordHash               String?
   // Cycle 43 — Keycloak subject(sub). OIDC 로그인 계정 매핑 키(unique).
   // 자체 가입만 한 사용자는 null. 첫 OIDC 로그인 시 username 매칭으로 링크되거나 신규 생성.
-  keycloakId       String?       @unique
-  name             String
-  department       String
-  role             Role          @default(DEVELOPER)
+  keycloakId                 String?       @unique
+  name                       String
+  department                 String
+  role                       Role          @default(DEVELOPER)
   // Cycle 48 — Keycloak claim 캐시 (Admin 페이지 사용자 목록용).
   // OIDC callback 의 findOrCreateOidcUser 가 매 로그인마다 동기화.
-  email            String?
-  emailVerified    Boolean       @default(false)
-  lastLoginAt      DateTime?
-  createdAt        DateTime      @default(now())
-  updatedAt        DateTime      @updatedAt
-  authoredPages    Page[]        @relation("PageAuthor")
-  editedPages      Page[]        @relation("PageEditor")
+  email                      String?
+  emailVerified              Boolean       @default(false)
+  lastLoginAt                DateTime?
+  // Cycle 49 — 사용자별 환경설정(현재 1건). SystemSidebar '내 공간' 섹션에
+  // 본인 personal space 를 항상 표시할지 토글. PATCH /auth/me/prefs 로 갱신.
+  // 향후 prefs 가 더 늘면 UserPreferences 테이블로 분리 검토.
+  showPersonalSpaceInSidebar Boolean       @default(false)
+  createdAt                  DateTime      @default(now())
+  updatedAt                  DateTime      @updatedAt
+  authoredPages              Page[]        @relation("PageAuthor")
+  editedPages                Page[]        @relation("PageEditor")
   // FR-001 / FR-002 (Cycle 27d) — Comment / PageShare 작성자 양방향 관계.
   // user 삭제 시 SetNull → authorName / 시스템 표기로 fallback.
-  authoredComments Comment[]     @relation("CommentAuthor")
-  createdShares    PageShare[]   @relation("ShareCreator")
+  authoredComments           Comment[]     @relation("CommentAuthor")
+  createdShares              PageShare[]   @relation("ShareCreator")
   // FR-001 (Cycle 27e) — ActivityLog actor / Reaction user 양방향 관계.
   // activities는 SetNull(로그 보존), reactions는 Cascade(개인 반응이라 같이 정리).
-  activities       ActivityLog[] @relation("ActivityActor")
-  reactions        Reaction[]    @relation("UserReaction")
+  activities                 ActivityLog[] @relation("ActivityActor")
+  reactions                  Reaction[]    @relation("UserReaction")
   // Cycle 32 — 사용자가 소유한 개인 공간.
-  ownedSpaces      Space[]       @relation("SpaceOwner")
+  ownedSpaces                Space[]       @relation("SpaceOwner")
 }
 
 model Space {
