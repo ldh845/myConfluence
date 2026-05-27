@@ -9,6 +9,7 @@ import { useAuth } from "@/lib/auth/useAuth";
 import { useRecentSpacesStore } from "@/lib/stores/useRecentSpacesStore";
 import { getSpaceHomePageId } from "@/lib/spaceHome";
 import SearchOverlay from "@/components/SearchOverlay";
+import NotificationBellButton from "@/components/NotificationBellButton";
 
 type Props = {
   spaces: SpaceWithPages[];
@@ -97,6 +98,7 @@ export default function TopNav({
         />
       </div>
 
+      <NotificationBellButton />
       <AdminGearButton />
       <UserMenu />
 
