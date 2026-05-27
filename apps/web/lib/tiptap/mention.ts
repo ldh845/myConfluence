@@ -1,11 +1,16 @@
 import { Node, mergeAttributes } from "@tiptap/core";
 import { ReactRenderer } from "@tiptap/react";
 import Suggestion from "@tiptap/suggestion";
+import { PluginKey } from "@tiptap/pm/state";
 import tippy, { type Instance as TippyInstance } from "tippy.js";
 import MentionSuggestionPopup, {
   type MentionUser,
   type MentionPopupHandle,
 } from "@/components/MentionSuggestionPopup";
+
+// Suggestion 의 기본 pluginKey('suggestion$') 가 slash-command 와 충돌하므로
+// (한 editor 에 같은 key 인스턴스 두 개 → RangeError) 고유 키 명시 필요.
+const mentionPluginKey = new PluginKey("mentionSuggestion");
 
 // Cycle 55 — @user 멘션. @tiptap/extension-mention 은 core 2.x 와 suggestion
 // 3.x 사이 peer conflict 가 있어 직접 Node + Suggestion plugin 으로 구현
@@ -64,6 +69,7 @@ export const MentionNode = Node.create({
     return [
       Suggestion({
         editor: this.editor,
+        pluginKey: mentionPluginKey,
         char: "@",
         startOfLine: false,
         // GET /api/users?q=... 검색. 250ms 사이즈는 사용자가 빠르게 입력해도
