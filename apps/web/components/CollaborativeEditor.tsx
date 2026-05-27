@@ -32,6 +32,7 @@ import { MarkdownInputRules } from "@/lib/tiptap/markdown-input-rules";
 import { MathInline } from "@/lib/tiptap/math-inline";
 import { MathBlock } from "@/lib/tiptap/math-block";
 import { DateExtension } from "@/lib/tiptap/date";
+import { MentionNode } from "@/lib/tiptap/mention";
 import {
   SlashCommand,
   slashCommandSuggestion,
@@ -438,6 +439,10 @@ export default function CollaborativeEditor({
         MathBlock,
         // Cycle 54-F — 날짜 inline atom. + / slash 카탈로그에서 진입.
         DateExtension,
+        // Cycle 55 — @user 멘션. @ trigger + GET /api/users?q= 자동완성.
+        //   향후 알림(Notification) 도입 시 멘션 transaction 을 hook 으로 잡아
+        //   POST /notifications 호출.
+        MentionNode,
         // FR-036 (Cycle 13) — StarterKit 미커버 input rules (체크리스트/링크/이미지).
         MarkdownInputRules,
         SlashCommand.configure({ suggestion: slashCommandSuggestion }),
