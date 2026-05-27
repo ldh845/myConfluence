@@ -486,7 +486,11 @@ export default function HomePage() {
 
   return (
     <>
-      <div className="max-w-[960px] mx-auto px-10 pt-2 pb-16">
+      {/* Cycle 52 — 조회 모드 본문 폭 제약 제거(max-w-[960px] mx-auto 폐기).
+          편집 모드(FullScreenEditor, Cycle 38 followup `eb30e3d`)와 동일한
+          반응형 좌우 패딩만 남겨 사이드바·TopNav 사이의 main 영역을 가로로
+          꽉 채운다. 모드 전환 시 폭 jump 없음. */}
+      <div className="px-8 lg:px-12 xl:px-16 pt-2 pb-16">
         {!currentPage ? (
           // 빈 스페이스로 진입한 경우 그 스페이스 이름을 안내.
           spaceIdFromUrl && activeSpace && activeSpace.pages.length === 0 ? (
