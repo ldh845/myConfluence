@@ -15,6 +15,7 @@ import { ActivitiesModule } from './activities/activities.module';
 import { ReactionsModule } from './reactions/reactions.module';
 import { AuthModule } from './auth/auth.module';
 import { OidcModule } from './auth/oidc.module';
+import { AdminModule } from './admin/admin.module';
 import { UsersModule } from './users/users.module';
 
 @Module({
@@ -33,6 +34,7 @@ import { UsersModule } from './users/users.module';
     ReactionsModule,
     AuthModule,
     OidcModule,
+    AdminModule,
     UsersModule,
   ],
   controllers: [AppController, HealthController],
