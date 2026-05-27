@@ -100,18 +100,29 @@ export class PagesService {
   // FR-130 (Cycle 22) — 홈 화면 "최근 수정된 페이지" 카드용.
   // 인증 도입 전이라 "내가 편집한 페이지"가 아닌 "전체 최근 수정 페이지"로 대체.
   // Cycle 35-followup — draft는 "최근 작업"에도 등장하지 않는다.
-  recent(limit = 10) {
-    const safeLimit = Math.min(Math.max(limit, 1), 50);
+  // Cycle 51 — 스페이스 단위 필터(spaceId) + offset 페이지네이션 옵션 추가.
+  //   /?spaceId=X&view=pages 의 SpacePagesView 가 사용. 둘 다 미지정 시 기존
+  //   동작(/home 의 limit-only 호출) 과 완전 동일.
+  recent(opts: { limit?: number; spaceId?: string; offset?: number } = {}) {
+    const safeLimit = Math.min(Math.max(opts.limit ?? 10, 1), 50);
+    const safeOffset = Math.max(opts.offset ?? 0, 0);
     return this.prisma.page.findMany({
-      where: { deletedAt: null, NOT: { publishedAt: null } },
+      where: {
+        deletedAt: null,
+        NOT: { publishedAt: null },
+        ...(opts.spaceId ? { spaceId: opts.spaceId } : {}),
+      },
       orderBy: { updatedAt: 'desc' },
       take: safeLimit,
+      skip: safeOffset,
       select: {
         id: true,
         title: true,
         spaceId: true,
         updatedAt: true,
         space: { select: { name: true } },
+        author: { select: { id: true, name: true } },
+        lastEditor: { select: { id: true, name: true } },
       },
     });
   }

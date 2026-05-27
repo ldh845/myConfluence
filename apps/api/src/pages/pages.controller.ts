@@ -101,9 +101,19 @@ export class PagesController {
   }
 
   // FR-130 (Cycle 22) — 홈 화면 최근 수정 페이지.
+  // Cycle 51 — spaceId(옵셔널) + offset(옵셔널) 추가. 미지정 시 기존 동작 그대로.
+  //   /?spaceId=X&view=pages 의 SpacePagesView 가 spaceId+offset 으로 호출.
   @Get('recent')
-  recent(@Query('limit') limit?: string) {
-    return this.pages.recent(limit ? Number(limit) : 10);
+  recent(
+    @Query('limit') limit?: string,
+    @Query('spaceId') spaceId?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.pages.recent({
+      limit: limit ? Number(limit) : 10,
+      spaceId: spaceId || undefined,
+      offset: offset ? Number(offset) : 0,
+    });
   }
 
   @Get(':id')
