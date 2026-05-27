@@ -47,14 +47,7 @@ export const MentionNode = Node.create({
   },
 
   parseHTML() {
-    // Cycle 55 followup 4 — 매칭 너그럽게. tiptap-markdown/markdown-it 의
-    //   라운드트립에서 class/style 일부가 strip 되는 케이스 대응.
-    //   우선순위: data-type=mention(가장 명확) > class.cf-mention > data-id 단독.
-    return [
-      { tag: 'span[data-type="mention"]' },
-      { tag: "span.cf-mention[data-id]" },
-      { tag: "span[data-id]", priority: 40 },
-    ];
+    return [{ tag: "span.cf-mention[data-id]" }];
   },
 
   renderHTML({ HTMLAttributes, node }) {
@@ -171,13 +164,13 @@ export const MentionNode = Node.create({
     ];
   },
 
-  // Cycle 55 followup 3 — markdown 라운드트립 (raw HTML 방식).
-  //   직렬화: raw HTML <span class="cf-mention" data-id="..." style="...">@label</span>
-  //   파싱: Markdown.configure({html:true}) 가 HTML 태그를 그대로 보존 →
-  //         ProseMirror Parser 가 parseHTML 의 span.cf-mention[data-id] 매칭 →
-  //         mention 노드 복원.
-  //   followup 2 의 inline ruler 방식이 동작하지 않은 우회 — raw HTML 가 가장
-  //   직접적이고 markdown-it 기본 동작에 의존.
+  // Cycle 55 followup 5 — markdown 직렬화 평문으로 롤백 (라운드트립 일시 포기).
+  //   followup 2(inline ruler)/3(raw HTML+html:true)/4(parseHTML 너그럽게)
+  //   세 차례 시도 모두 실패. followup 3 은 부수효과로 편집 시 본문 누적
+  //   회귀(데이터 손상 위험) → 긴급 롤백. 멘션 라운드트립은 CLAUDE.md
+  //   '마크다운 직렬화 한계' 카테고리에 합류 (inline-comment-mark.ts 등과 동일).
+  //   근본 해결은 content 저장 방식 자체를 markdown → HTML 으로 전환하는
+  //   별도 메가 사이클에서.
   addStorage() {
     return {
       markdown: {
@@ -185,18 +178,7 @@ export const MentionNode = Node.create({
           state: { write: (s: string) => void },
           node: { attrs: MentionAttrs },
         ) {
-          const id = node.attrs.id ?? "";
-          const label = node.attrs.label ?? "";
-          const esc = (s: string) =>
-            s
-              .replace(/&/g, "&amp;")
-              .replace(/"/g, "&quot;")
-              .replace(/</g, "&lt;")
-              .replace(/>/g, "&gt;");
-          // raw HTML — Markdown.configure({html:true}) 와 함께 보존됨.
-          state.write(
-            `<span class="cf-mention" data-id="${esc(id)}" data-type="mention" style="display:inline-block;padding:0 4px;border-radius:3px;background:#deebff;color:#0747a6;font-size:0.95em;cursor:pointer;">@${esc(label)}</span>`,
-          );
+          state.write(`@${node.attrs.label}`);
         },
         parse: {},
       },
