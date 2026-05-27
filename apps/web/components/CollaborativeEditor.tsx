@@ -158,6 +158,26 @@ const BlockIndent = Extension.create({
   },
 });
 
+// Cycle 57 — content 저장 markdown → JSON 전환.
+//   string content 가 '{' 로 시작하면 ProseMirror JSON, 그 외에는 기존 markdown.
+//   호환 자동 감지 — 새 자동저장은 JSON, 옛 markdown 도 그대로 로드 가능.
+//   MarkdownParser.parse 가 object 면 그대로 반환(tiptap-markdown 의 setContent
+//   가로채기에서 자연 우회).
+//   반환 타입은 TipTap 의 Content (string | object | array | null) 와 호환.
+type EditorSeed = string | Record<string, unknown> | unknown[];
+function parseContent(raw: string | null | undefined): EditorSeed {
+  if (!raw) return "";
+  const trimmed = raw.trimStart();
+  if (trimmed.startsWith("{")) {
+    try {
+      return JSON.parse(raw) as Record<string, unknown>;
+    } catch {
+      // fallthrough — markdown 으로
+    }
+  }
+  return raw;
+}
+
 export default function CollaborativeEditor({
   pageId,
   initialMarkdown,
@@ -479,7 +499,10 @@ export default function CollaborativeEditor({
       // Cycle 10-2b-1 — 조회 모드는 Yjs 없이 published content를 직접 시드.
       // 편집 모드는 Collaboration extension이 ydoc에서 채워주므로 content
       // prop을 주면 안 된다(중복 시드 → 본문 두 번 표시).
-      content: !editable ? initialMarkdown : undefined,
+      // Cycle 57 — parseContent: JSON 이면 object, markdown 이면 string.
+      //   tiptap-markdown 의 Markdown.setContent 가 가로채면 parser.parse(content)
+      //   호출 — object 면 그대로 반환되어 ProseMirror 가 JSON 으로 시드.
+      content: !editable ? parseContent(initialMarkdown) : undefined,
       editorProps: {
         attributes: {
           class: "cf-article outline-none min-h-[320px]",
@@ -547,7 +570,8 @@ export default function CollaborativeEditor({
     const trySeed = () => {
       const frag = ydoc.getXmlFragment("default");
       if (frag.length === 0 && initialMarkdown) {
-        editor.commands.setContent(initialMarkdown, false);
+        // Cycle 57 — JSON / markdown 자동 분기.
+        editor.commands.setContent(parseContent(initialMarkdown), false);
       }
       seededRef.current = pageId;
     };
@@ -596,13 +620,15 @@ export default function CollaborativeEditor({
     };
 
     const onUpdate = () => {
-      const storage = (
-        editor.storage as unknown as {
-          markdown?: { getMarkdown: () => string };
-        }
-      ).markdown;
-      if (!storage) return;
-      latestMd = storage.getMarkdown();
+      // Cycle 57 — markdown 대신 ProseMirror JSON 직렬화. 모든 노드/마크의
+      //   라운드트립을 100% 보장 (mention/figcaption/inline 댓글/색상/하이라이트).
+      //   기존 markdown 직렬화의 사용자 정의 노드 한계 (CLAUDE.md '마크다운
+      //   직렬화 한계') 해소.
+      try {
+        latestMd = JSON.stringify(editor.getJSON());
+      } catch {
+        return;
+      }
       if (timer) clearTimeout(timer);
       // FR-038 / NFR-A-020 — 5초 간격 자동 저장
       timer = setTimeout(flush, 5000);

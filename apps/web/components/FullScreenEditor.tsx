@@ -332,15 +332,13 @@ export default function FullScreenEditor({
             if (trimmedTitle !== page.title) {
               onTitleChange(trimmedTitle);
             }
-            // Cycle 36 — 편집기 현재 마크다운을 직접 추출해 발행에 동봉.
+            // Cycle 36 — 편집기 현재 컨텐츠를 직접 추출해 발행에 동봉.
             // editor가 아직 안 떴으면 빈 문자열로 폴백 — 빈 본문 발행은
             // 백엔드가 허용(content="" explicit).
-            const md =
-              (
-                editor?.storage as
-                  | { markdown?: { getMarkdown: () => string } }
-                  | undefined
-              )?.markdown?.getMarkdown() ?? "";
+            // Cycle 57 — markdown 대신 ProseMirror JSON 직렬화 (mention/
+            //   figcaption/inline 댓글 등 사용자 정의 노드 라운드트립 보장).
+            //   기존 markdown 직렬화의 한계 해소.
+            const md = editor ? JSON.stringify(editor.getJSON()) : "";
             onPublish(md, note.trim());
           }}
           // Cycle 36-followup — 첫 발행(publishedAt=null)이면 hasDraft 게이트
