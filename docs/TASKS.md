@@ -39,6 +39,9 @@
     - Cycle 39 — Hocuspocus Redis adapter 토글 (USE_REDIS)
     - Cycle 40 — API 포트 컨벤션 (api PORT == web API_PORT == 3001)
   - 상세는 `docs/CYCLES.md` 1~41 참조.
+  - Cycle 49 — 개인 공간 UX 정식화 (OIDC 로그인 시 자동 생성, SystemSidebar
+    "+내 공간 추가" 토글, UserMenu "내 개인 공간" 진입). Cycle 32 personal
+    space 에 정식 진입점 부여.
 - **남은 일**: (현재 plat-level 큰 항목 없음 — 신규 기능은 Task G)
 - **닫힘 이력**: (v1 retro 미수행)
 - **차단 / 의존**: 없음
@@ -219,6 +222,7 @@
 | Cycle 46 + followup | E |
 | Cycle 47 | (TASKS 재구조화 자체) |
 | Cycle 48 | H |
+| Cycle 49 | A |
 
 ---
 

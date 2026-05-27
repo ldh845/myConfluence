@@ -1060,3 +1060,22 @@
   - 프론트 테스트 인프라(jest+RTL 또는 vitest+RTL) 도입 — 별도 사이클 후보. 그 후 AdminGearButton·AdminPage 컴포넌트 spec 보강
   - (Cycle 48 Phase 2) SMTP 설정 — 변동 없음, Task H 백로그 유지
 - **비고**: 변경 금지 항목 모두 유지 — 권한 가드(`role!=='ADMIN'`→null DOM 미생성), 라우트 가드(비-ADMIN `/home` replace), 백엔드 `RolesGuard`, `useAuth.ts` DEV ONLY `NEXT_PUBLIC_DEV_FORCE_ADMIN` 블록. 사용자 보고 원인: 기존 단순 진입 → SystemSidebar(스페이스 사이드바) + `/admin` 좌측 메뉴가 동시에 보여 답답함. 드롭다운 + 단일 메인 영역으로 해소.
+
+---
+
+## Cycle 49 — 2026-05-27 — ✅ Done (개인 공간 정식화 — OIDC 자동 생성 + 사이드바 토글 + UserMenu 진입)
+- **제목**: 개인 공간(Personal Space) 기능 정식화 — 자동 생성·식별 가능 진입점·사용자 토글
+- **카테고리**: 코어 플랫폼 / 사용자 UX (Cycle 32 personal space 의 정식 진입점)
+- **커밋**: `d451888`(49-1 schema+migration), `12a438e`(49-2 BE 자동생성+prefs API), `56e514a`(49-3 BE spec), `be0d992`(49-4 FE), 본 CYCLES.md(49-5 Docs)
+- **변경 파일**:
+  - **Prisma**: `User.showPersonalSpaceInSidebar Boolean @default(false)` + 마이그레이션 `20260527100000_user_pref_personal_space`. **Space 모델 무변경** — 기존 `type=PERSONAL + ownerId`(Cycle 32) 가 식별 필드로 충분, 신규 컬럼 없음
+  - **모듈 의존성**: `SpacesModule` 에 `SpacesService` export 추가. `OidcModule` imports 에 `SpacesModule` 추가 (AuthModule↔SpacesModule 순환 회피 — SpacesModule 은 AuthModule 만 import)
+  - **OIDC 자동 생성**: `oidc.controller.callback` 의 `findOrCreateOidcUser` 직후 `spacesService.getOrCreatePersonal(user)` 호출. idempotent — 이미 있으면 skip. 실패 시 best-effort(로그만, 로그인 진행)
+  - **prefs API**: `AuthService.updateMyPrefs(userId, patch)` + AuthUser·sanitize 에 `showPersonalSpaceInSidebar` 추가 + `UpdatePrefsDto`(class-validator) + `AuthController.PATCH /auth/me/prefs`(JwtAuthGuard)
+  - **FE 타입 보강**: `useAuth.AuthUser` 에 prefs 필드 추가(DEV ONLY 블록 무수정). `SpaceWithPages` 에 `type`/`ownerId` 추가(백엔드 이미 반환)
+  - **SystemSidebar**: '내 공간' 섹션 헤더 옆 작은 토글("+ 내 공간 추가" / "개인 공간 ✓"). 토글 시 PATCH 호출 + invalidate `['me']`·`['spaces']` 즉시 갱신. 표시 로직: 별표한 공간 ∪ (토글 ON ? 본인 personal space : 없음) dedupe. 접힌·펼친 모드 둘 다 spaces 변수 공유로 자동 반영
+  - **TopNav UserMenu**: 정보 블록 다음·로그아웃 위에 "내 개인 공간" 항목. `['spaces']` 캐시에서 본인 personal space → `homePageId` 로 진입. 캐시 미존재 시 `GET /api/spaces/personal` lazy 안전망. 사이드바 토글 상태와 무관 — 항상 진입 가능
+  - **spec**: `update-prefs.dto.spec.ts`(4) + `auth.service.spec.ts updateMyPrefs`(2). 전체 6 suites · **20 tests 통과**(회귀 없음)
+- **검증**: nest build EXIT 0, jest 20/20, tsc EXIT 0, next build (`/admin` 5.69kB 유지). 실 DB 적용·Keycloak 로그인 시 personal space 자동 생성·prefs 토글·UserMenu 진입 확인은 VM/dev
+- **남은 일**: (이번 사이클은 UX/식별 정식화만 — 본 사이클 영역 종결)
+- **비고**: **사용자 명시 결정** — 공유/PRIVATE 가드 모델(SpaceMember/SpaceShare/visibility) 일절 추가 안 함. "스페이스 권한 시스템"은 모든 스페이스에 일괄 도입할 별도 사이클. 본 사이클은 순수 UX(자동 생성·진입점·토글). 식별 필드는 신규 컬럼 없이 기존 `type=PERSONAL+ownerId` 활용. **사전 조사에서 발견한 보안 누수**(`GET /pages/search`·`/pages/full-search`·`/pages/recent`·`GET /pages/:id` 의 공간 권한 필터·인증 가드 부재 — 남의 PERSONAL 페이지가 노출됨)는 별도 사이클 후보 — 위 "스페이스 권한 시스템" 사이클에서 일괄 처리 권장. **CLAUDE.md 알려진 함정 재현**: Prisma DLL 잠금(node 프로세스가 query_engine-windows.dll.node 잡음) → 정리 후 generate.
