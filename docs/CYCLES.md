@@ -1045,3 +1045,18 @@
   - SMTP 설정 (이메일 발송 — 알림·비밀번호 재설정 등)
   - 추가 운영 도구 (감사 로그·세션 관리 등) — 필요 시점
 - **비고**: ADMIN 권한 **source of truth = Keycloak realm role 'admin'**. 매 로그인 동기화 — Keycloak 회수 시 즉시 아닌 다음 로그인부터 반영(쿠키 만료까지 격차 있음, 7d 기본). 이중 가드(프런트 useAuth + 백엔드 RolesGuard) — middleware 는 JWT secret 미접근 원칙 유지. Keycloak admin realm role 부여 절차: 콘솔 → realm `docspace` → Realm roles → Create role `admin` → 해당 사용자 → Role mappings → Assign `admin`. 새 주제(관리자 영역)이 emerge 해 TASKS.md 에 Task H 신규 추가.
+
+---
+
+## Cycle 48 followup — 2026-05-27 — ✅ Done (TopNav 톱니바퀴 드롭다운화)
+- **제목**: 관리자 페이지 진입 UX — 톱니바퀴를 단순 진입 버튼 → 드롭다운 트리거로 변경, `/admin` 페이지의 좌측 탭 사이드바 제거(SystemSidebar 와 중복 해소)
+- **카테고리**: UX / 관리자 페이지 (Cycle 48 Phase 1 후속)
+- **커밋**: `aa06fa3`(core), 본 CYCLES.md(Docs)
+- **변경 파일**:
+  - `apps/web/components/TopNav.tsx` — `AdminGearButton` 드롭다운화. UserMenu 패턴(`useRef` + `mousedown` 외부 클릭 닫기) 답습 + **Esc 키 닫기 추가**, `aria-haspopup`/`aria-expanded`. 항목 2개("일반 설정"/"사용자 관리") — 각각 `router.push('/admin?tab=...')`
+  - `apps/web/app/(app)/admin/page.tsx` — 좌측 TABS `<aside>` 제거(SystemSidebar 와 중복). `useSearchParams()` 로 `?tab` 읽어 초기 탭 결정(없으면 `general`). 페이지 내부 탭 setter 제거 — 전환은 드롭다운에서만. `useSearchParams` Suspense 경계 패턴((app)/layout · login/page 답습)
+- **검증**: `tsc --noEmit` EXIT 0, `next build` `/admin` 5.67kB(이전 5.82→감소, 사이드바 코드 제거 효과). 백엔드 spec **13/13 통과**(RolesGuard 5 + AdminService 3 + Health 5 — 회귀 없음). **프론트 컴포넌트 spec 은 `apps/web` 에 jest/vitest 인프라 부재로 미작성** — 인프라 도입은 별도 사이클 분량
+- **남은 일**:
+  - 프론트 테스트 인프라(jest+RTL 또는 vitest+RTL) 도입 — 별도 사이클 후보. 그 후 AdminGearButton·AdminPage 컴포넌트 spec 보강
+  - (Cycle 48 Phase 2) SMTP 설정 — 변동 없음, Task H 백로그 유지
+- **비고**: 변경 금지 항목 모두 유지 — 권한 가드(`role!=='ADMIN'`→null DOM 미생성), 라우트 가드(비-ADMIN `/home` replace), 백엔드 `RolesGuard`, `useAuth.ts` DEV ONLY `NEXT_PUBLIC_DEV_FORCE_ADMIN` 블록. 사용자 보고 원인: 기존 단순 진입 → SystemSidebar(스페이스 사이드바) + `/admin` 좌측 메뉴가 동시에 보여 답답함. 드롭다운 + 단일 메인 영역으로 해소.
