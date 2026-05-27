@@ -96,16 +96,31 @@ export default function TopNav({
         />
       </div>
 
-      <button
-        aria-label="설정"
-        className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-[#ebecf0] text-[#42526e]"
-      >
-        ⚙️
-      </button>
+      <AdminGearButton />
       <UserMenu />
 
       <SearchOverlay open={searchOpen} onClose={() => setSearchOpen(false)} />
     </header>
+  );
+}
+
+// Cycle 48 — 톱니바퀴(관리자 페이지 진입). ADMIN role 사용자만 노출 — DOM 미생성.
+// 권한 source: useAuth().user.role 은 OIDC callback 에서 Keycloak realm role 로
+// 매 로그인마다 동기화된다. 백엔드도 동일 가드(RolesGuard) 적용 — 이중 가드.
+function AdminGearButton() {
+  const router = useRouter();
+  const { user } = useAuth();
+  if (user?.role !== "ADMIN") return null;
+  return (
+    <button
+      type="button"
+      onClick={() => router.push("/admin")}
+      aria-label="관리자 페이지"
+      title="관리자 페이지"
+      className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-[#ebecf0] text-[#42526e]"
+    >
+      ⚙️
+    </button>
   );
 }
 
