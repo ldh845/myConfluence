@@ -779,10 +779,28 @@ function LinkButton({ editor }: { editor: Editor }) {
       .run();
   };
 
+  // Cycle 54-A — Ctrl/Cmd+K 단축키. **편집 모드(editor.isEditable === true)
+  //   한정**으로만 링크 다이얼로그를 연다. TopNav 의 검색 오버레이 단축키와
+  //   글로벌로 충돌하므로 **capture phase + stopPropagation** 으로 우리 가
+  //   먼저 가로채 TopNav 핸들러가 발화하지 않도록 차단. 조회 모드/외부 라우트
+  //   에서는 isEditable=false → TopNav 의 검색 단축키가 정상 작동.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!editor.isEditable) return;
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        e.stopPropagation();
+        setOpen(true);
+      }
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [editor]);
+
   return (
     <>
       <TB
-        title="링크"
+        title="링크 (Ctrl+K)"
         active={editor.isActive("link")}
         onClick={() => setOpen(true)}
       >
