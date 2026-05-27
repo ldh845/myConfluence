@@ -10,5 +10,7 @@ import { SpacesService } from './spaces.service';
   imports: [AuthModule, ActivitiesModule],
   controllers: [SpacesController],
   providers: [SpacesService],
+  // Cycle 49 — OidcModule 이 callback 에서 spacesService.getOrCreatePersonal 호출.
+  exports: [SpacesService],
 })
 export class SpacesModule {}

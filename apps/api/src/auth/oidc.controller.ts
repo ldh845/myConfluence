@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import type { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { OidcService } from './oidc.service';
+import { SpacesService } from '../spaces/spaces.service';
 
 // Cycle 43 — Keycloak OIDC 로그인 라우트(추가만). 기존 자체 인증(/auth/signup,
 // /auth/login)과 jwt.strategy/가드는 그대로. callback 끝에서 기존과 동일한
@@ -32,6 +33,7 @@ export class OidcController {
   constructor(
     private readonly oidc: OidcService,
     private readonly auth: AuthService,
+    private readonly spaces: SpacesService,
     private readonly config: ConfigService,
   ) {
     this.cookieName = config.get<string>('COOKIE_NAME', 'docspace_session');
@@ -87,6 +89,20 @@ export class OidcController {
         tx,
       );
       const user = await this.auth.findOrCreateOidcUser(claims);
+      // Cycle 49 — 사용자별 personal space 자동 생성(idempotent: 이미 있으면 skip).
+      // 실패해도 로그인 자체는 막지 않는다 — best-effort.
+      try {
+        await this.spaces.getOrCreatePersonal({
+          id: user.id,
+          name: user.name,
+        });
+      } catch (err) {
+        this.logger.warn(
+          `personal space auto-create failed for user ${user.id}: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+      }
       const token = this.auth.issueToken(user);
       res.cookie(this.cookieName, token, {
         httpOnly: true,

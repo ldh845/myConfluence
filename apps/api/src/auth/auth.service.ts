@@ -19,6 +19,8 @@ export type AuthUser = {
   department: string;
   role: string;
   createdAt: Date;
+  // Cycle 49 — 사용자별 환경설정. /auth/me 응답 포함, /auth/me/prefs 로 갱신.
+  showPersonalSpaceInSidebar: boolean;
 };
 
 @Injectable()
@@ -35,6 +37,7 @@ export class AuthService {
     department: string;
     role: string;
     createdAt: Date;
+    showPersonalSpaceInSidebar: boolean;
   }): AuthUser {
     return {
       id: user.id,
@@ -43,7 +46,22 @@ export class AuthService {
       department: user.department,
       role: user.role,
       createdAt: user.createdAt,
+      showPersonalSpaceInSidebar: user.showPersonalSpaceInSidebar,
     };
+  }
+
+  // Cycle 49 — 사용자 prefs 부분 갱신 (PATCH /auth/me/prefs).
+  // 현재 prefs 필드는 1개(showPersonalSpaceInSidebar). 향후 prefs 가 늘면
+  // 본 메서드 시그니처만 확장 — 컨트롤러·DTO 는 옵셔널 필드 추가만 하면 됨.
+  async updateMyPrefs(
+    userId: string,
+    patch: { showPersonalSpaceInSidebar?: boolean },
+  ): Promise<AuthUser> {
+    const updated = await this.prisma.user.update({
+      where: { id: userId },
+      data: patch,
+    });
+    return this.sanitize(updated);
   }
 
   async findById(id: string): Promise<AuthUser | null> {
