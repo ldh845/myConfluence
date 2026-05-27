@@ -1079,3 +1079,18 @@
 - **검증**: nest build EXIT 0, jest 20/20, tsc EXIT 0, next build (`/admin` 5.69kB 유지). 실 DB 적용·Keycloak 로그인 시 personal space 자동 생성·prefs 토글·UserMenu 진입 확인은 VM/dev
 - **남은 일**: (이번 사이클은 UX/식별 정식화만 — 본 사이클 영역 종결)
 - **비고**: **사용자 명시 결정** — 공유/PRIVATE 가드 모델(SpaceMember/SpaceShare/visibility) 일절 추가 안 함. "스페이스 권한 시스템"은 모든 스페이스에 일괄 도입할 별도 사이클. 본 사이클은 순수 UX(자동 생성·진입점·토글). 식별 필드는 신규 컬럼 없이 기존 `type=PERSONAL+ownerId` 활용. **사전 조사에서 발견한 보안 누수**(`GET /pages/search`·`/pages/full-search`·`/pages/recent`·`GET /pages/:id` 의 공간 권한 필터·인증 가드 부재 — 남의 PERSONAL 페이지가 노출됨)는 별도 사이클 후보 — 위 "스페이스 권한 시스템" 사이클에서 일괄 처리 권장. **CLAUDE.md 알려진 함정 재현**: Prisma DLL 잠금(node 프로세스가 query_engine-windows.dll.node 잡음) → 정리 후 generate.
+
+---
+
+## Cycle 50 — 2026-05-27 — ✅ Done (/home 활동 피드 사용자 활동 5종 필터링)
+- **제목**: /home UpdatesView 가 시스템 이벤트(삭제/복원/영구삭제·버전·share 토큰 등) 제외, 사용자 활동 5종만 표시
+- **카테고리**: UX / 활동 피드 (Cycle 24 ActivityLog 의 표시 계층 필터링)
+- **커밋**: `0afa8af`(50-1 BE types IN 필터), `6e08ed2`(50-2 FE /home), `3c390c7`(50-3 BE spec), 본 CYCLES.md(50-4 Docs)
+- **변경 파일**:
+  - `apps/api/src/activities/activities.service.ts` — `list()` 에 `types?: string[]` 옵션 추가. 비어있지 않으면 `where.type = { in: types }`, 비어있고 단일 `type` 있으면 단일 매칭 폴백(기존 호환), 둘 다 없으면 type 필터 자체 없음. **`types` 가 단일 `type` 보다 우선**
+  - `apps/api/src/activities/activities.controller.ts` — `@Query('types')` 추가. 콤마 split + trim + 빈 토큰 제거 후 service 에 배열 전달. 기존 `?type=` 단일 쿼리는 무변경(/activity 호환)
+  - `apps/web/app/(app)/home/page.tsx` — `HOME_ACTIVITY_TYPES` 상수(`page.created`/`page.published`/`page.moved`/`page.copied`/`comment.created` — 5종). UpdatesView 의 fetch URL 에 `?types=...` 포함, queryKey 에도 포함되어 캐시 분리 정확
+  - `apps/api/src/activities/activities.service.spec.ts` 신규 — 14 케이스(types 단건/다중/빈배열/type 폴백/우선순위/없음 + spaceId·actorName 결합/limit 1~100 clamp/offset 음수→0/orderBy createdAt desc/{items,total} 반환 + log 정상·throw swallow)
+- **검증**: jest activities.service.spec **14/14 통과**, nest build EXIT 0 (50-1 단계), tsc + next build EXIT 0 (50-2 단계, `/home` 4.68kB). **/activity 페이지 무영향 확인** — 자체 type 필터 UI 가 단일 `?type=` 사용. `?types=` 미지정 호출은 기존과 동일 응답(회귀 없음)
+- **남은 일**: 없음 — 본 사이클은 표시 계층 필터링 한정 (사용자 명시 제약). 추후 활동 카테고리화·구독 등은 별도 사이클 후보
+- **비고**: **사용자 명시 제약** — ActivityLog 데이터/스키마 손대지 않음, 새 type enum 추가 금지, 표시 계층(필터링)만. `page.published` 를 "편집/발행" 의미로 사용자 합의 — 첫 발행/재발행이 사실상 콘텐츠 갱신을 의미. /home 만 적용, /activity 의 고급 탐색은 시스템 이벤트도 노출 (감사/관리자 시야 유지). 백엔드 다중 IN 쿼리는 일반 패턴이라 향후 다른 화면에서도 재사용 가능.

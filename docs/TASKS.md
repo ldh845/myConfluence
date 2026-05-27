@@ -42,11 +42,14 @@
   - Cycle 49 — 개인 공간 UX 정식화 (OIDC 로그인 시 자동 생성, SystemSidebar
     "+내 공간 추가" 토글, UserMenu "내 개인 공간" 진입). Cycle 32 personal
     space 에 정식 진입점 부여.
+  - Cycle 50 — /home 활동 피드를 사용자 활동 5종(페이지 생성/발행/이동/복사 +
+    댓글)만 표시하도록 표시 계층 필터링. 백엔드 `?types=` 다중 IN 추가,
+    /activity 의 고급 탐색은 시스템 이벤트 포함 유지.
 - **남은 일**: (현재 plat-level 큰 항목 없음 — 신규 기능은 Task G)
 - **닫힘 이력**: (v1 retro 미수행)
 - **차단 / 의존**: 없음
 - **Jira Epic**: 미등록
-- **관련 Cycle**: Cycle 1~41
+- **관련 Cycle**: Cycle 1~41, 49, 50
 
 ---
 
@@ -223,6 +226,7 @@
 | Cycle 47 | (TASKS 재구조화 자체) |
 | Cycle 48 | H |
 | Cycle 49 | A |
+| Cycle 50 | A |
 
 ---
 
