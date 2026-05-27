@@ -30,8 +30,20 @@ export function useAuth() {
     staleTime: 60_000,
   });
 
+  // === [DEV ONLY] 화면 테스트용 ADMIN 강제 우회 ===
+  // 운영 빌드(NODE_ENV !== "development")에서는 forceAdmin이 항상 false →
+  // tree-shaking으로 if 블록 자체가 빌드 결과물에서 제거된다.
+  // 활성화: apps/web/.env.local 에 NEXT_PUBLIC_DEV_FORCE_ADMIN=true 추가.
+  // 백엔드 RolesGuard 는 진짜 토큰의 role 을 그대로 검증하므로 보안 우회 아님.
+  const forceAdmin =
+    process.env.NODE_ENV === "development" &&
+    process.env.NEXT_PUBLIC_DEV_FORCE_ADMIN === "true";
+  const patchedUser = query.data
+    ? { ...query.data, role: forceAdmin ? ("ADMIN" as const) : query.data.role }
+    : null;
+
   return {
-    user: query.data ?? null,
+    user: patchedUser,
     isLoading: query.isLoading,
     refetch: () => queryClient.invalidateQueries({ queryKey: ["me"] }),
   };
