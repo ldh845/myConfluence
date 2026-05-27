@@ -51,11 +51,14 @@
   - Cycle 51 — 스페이스 사이드바 '페이지' 메뉴 동작 변경. 첫 페이지 자동
     이동 폐기, 그 공간의 최근 업데이트 페이지 목록(SpacePagesView)으로 이동.
     백엔드 GET /pages/recent 에 spaceId/offset 옵셔널 확장(기존 /home 호환).
+  - Cycle 52 — 페이지 조회 화면 본문 폭 제약 제거. max-w-[960px] mx-auto
+    폐기로 main 영역 가로 꽉 차게. 편집 모드(Cycle 38 followup)와 동일한
+    반응형 패딩 패턴으로 통일해 모드 전환 시 폭 jump 없음.
 - **남은 일**: (현재 plat-level 큰 항목 없음 — 신규 기능은 Task G)
 - **닫힘 이력**: (v1 retro 미수행)
 - **차단 / 의존**: 없음
 - **Jira Epic**: 미등록
-- **관련 Cycle**: Cycle 1~41, 49, 50, 51
+- **관련 Cycle**: Cycle 1~41, 49, 50, 51, 52
 
 ---
 
@@ -234,6 +237,7 @@
 | Cycle 49 | A |
 | Cycle 50 | A |
 | Cycle 51 | A |
+| Cycle 52 | A |
 
 ---
 

@@ -1130,3 +1130,22 @@
   6) `/home` 의 "최근 작업" 카드 등 기존 `?limit=N` 단일 호출 회귀 없음
 - **남은 일**: 정렬 토글(updatedAt 외 옵션), 작성자/편집자 필터, 무한 스크롤, 페이지별 미리보기 — 모두 본 사이클 범위 외(요구사항 명시). 필요 시 별도 사이클
 - **비고**: **라우트 옵션 A 채택** (`/?spaceId=X&view=pages`) — 코드베이스가 dynamic `[id]` 폴더 없이 쿼리 베이스로 일관(Cycle 29 `/home?view=` 패턴 답습)이라 그 라인이 자연스러움. 옵션 B(`/spaces/:id/pages` dynamic route)는 활성 스페이스 컨텍스트 추적 코드 신규 + 컨벤션 깸으로 배제. **페이지네이션 패턴**: '더 보기' 버튼 + offset 누적 — 코드베이스에 무한 스크롤 선례 없고 활동 피드도 단발 limit. 가장 단순한 답습. **초기 limit 10** — 사용자 합의. draft/휴지통 제외는 백엔드가 보장 — CLAUDE.md "draft 페이지 모델" 정책 그대로. 빈 상태 만들기 버튼은 TopNav 만들기와 동일 draft 패턴(중복 추출은 비용 대비 효과 적어 인라인).
+
+---
+
+## Cycle 52 — 2026-05-27 — ✅ Done (페이지 조회 화면 본문 폭 제약 제거)
+- **제목**: 페이지 조회 모드의 `max-w-[960px] mx-auto` 폐기 — main 영역 가로 꽉 차게
+- **카테고리**: UX / 페이지 레이아웃
+- **커밋**: `36d2c57`(52-1 FE), 본 CYCLES.md(52-2 Docs)
+- **변경 파일**:
+  - `apps/web/app/(app)/page.tsx` (line 489 한 줄): `max-w-[960px] mx-auto px-10 pt-2 pb-16` → `px-8 lg:px-12 xl:px-16 pt-2 pb-16`. 편집 모드(`FullScreenEditor.tsx:221`, Cycle 38 followup `eb30e3d`)와 동일한 반응형 패딩 패턴으로 통일. 사이클 의도 주석 추가
+- **검증**: tsc EXIT 0 / next build EXIT 0. 모든 라우트 크기 변동 없음 (`/` 432kB 유지 — CSS 클래스 변경만이라 번들 크기 무영향). 마이그레이션 **없음**
+- **동작 확인 안내**:
+  1) **마이그레이션 불필요** — CSS 한 줄 변경
+  2) 페이지 조회 시 본문이 사이드바·TopNav 사이의 main 영역을 가로로 꽉 채움 (좌우 큰 여백 사라짐)
+  3) 양옆 32→48→64px 반응형 패딩 유지 — 텍스트가 가장자리에 닿지 않음
+  4) PageHeader / 본문 / 댓글 / WelcomeBanner / 빈 스페이스 안내 모두 같은 wrapper 안이라 동일 폭으로 정렬
+  5) 편집(E 키) ↔ 조회 전환 시 폭 jump 없음 — 두 모드가 동일 `px-8 lg:px-12 xl:px-16` 패턴 사용
+  6) /home / /admin / /spaces / SpacePagesView 폭 무변동 (회귀 없음, 모두 별도 wrapper)
+- **남은 일**: 가독성 토글(max-width 옵션) — 사용자가 긴 줄 가독성을 보강하고 싶을 때 별도 사이클
+- **비고**: 단일 라인 변경. 사전 조사에서 `max-w-` grep 으로 폭 제약 위치를 단독 확인 — page.tsx 의 wrapper 만 유일한 폭 제약(PageHeader / PageComments / CollaborativeEditor 모두 자체 폭 제약 없음, 부모 wrapper 폭을 그대로 받음). `mx-auto` 제거가 핵심 — 가운데 정렬이 사용자가 본 "좌우 여백" 의 직접 원인이었음. TOC 사이드 패널(220px 고정 컬럼)은 grid 가 자동 우측 정렬하므로 본문 영역(`minmax(0,1fr)`)이 자연스럽게 넓어짐.
