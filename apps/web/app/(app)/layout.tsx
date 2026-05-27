@@ -161,7 +161,12 @@ function AppShell({ children }: { children: React.ReactNode }) {
   };
 
   // Cycle 29 — /spaces(공간 검색)는 사이드바 없는 전체 폭 페이지.
-  const isFullWidth = pathname === "/spaces";
+  // Cycle 58 followup — /?profileId=X (사용자 프로파일) 도 사이드바 없이 전체
+  //   폭. 사용자 의도: 프로파일 화면 자체가 main 영역 차지, 공간 사이드바
+  //   불필요.
+  const profileIdParam =
+    pathname === "/" ? searchParams.get("profileId") : null;
+  const isFullWidth = pathname === "/spaces" || !!profileIdParam;
 
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden bg-white">
