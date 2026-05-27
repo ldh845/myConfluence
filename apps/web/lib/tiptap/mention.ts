@@ -164,14 +164,85 @@ export const MentionNode = Node.create({
     ];
   },
 
-  // markdown 직렬화: 텍스트(@name) 만 — html=false 정책. parse 는 자동 X.
+  // Cycle 55 followup — markdown 라운드트립 보강. MathInline (Cycle 20) 와
+  //   동일 패턴: unique markup `@[label](mention:id)` 으로 직렬화 + markdown-it
+  //   inline ruler 로 다시 mention token push → renderer 가 raw HTML 출력 →
+  //   ProseMirror 의 parseHTML 매칭으로 mention 노드 복원.
+  //   기존엔 `@name` 텍스트만 저장 → 발행 후 일반 텍스트로 표시되던 이슈 fix.
   addStorage() {
     return {
       markdown: {
-        serialize(state: { write: (s: string) => void }, node: { attrs: MentionAttrs }) {
-          state.write(`@${node.attrs.label}`);
+        serialize(
+          state: { write: (s: string) => void },
+          node: { attrs: MentionAttrs },
+        ) {
+          const id = node.attrs.id ?? "";
+          const label = node.attrs.label ?? "";
+          state.write(`@[${label}](mention:${id})`);
         },
-        parse: {},
+        parse: {
+          setup(md: {
+            inline: {
+              ruler: {
+                before: (
+                  ref: string,
+                  name: string,
+                  fn: (state: unknown, silent: boolean) => boolean,
+                ) => void;
+              };
+            };
+            renderer: {
+              rules: Record<
+                string,
+                (
+                  tokens: Array<{ meta?: { id: string; label: string } }>,
+                  idx: number,
+                ) => string
+              >;
+            };
+          }) {
+            md.inline.ruler.before(
+              "emphasis",
+              "mention",
+              (state: unknown, silent: boolean) => {
+                const s = state as {
+                  src: string;
+                  pos: number;
+                  push: (
+                    type: string,
+                    tag: string,
+                    nesting: number,
+                  ) => { markup: string; meta?: { id: string; label: string } };
+                };
+                // '@' 부터 시작.
+                if (s.src.charCodeAt(s.pos) !== 0x40 /* @ */) return false;
+                const rest = s.src.slice(s.pos);
+                // 모양: @[label](mention:id). label 안에 닫는 대괄호/괄호 금지.
+                const m = rest.match(
+                  /^@\[([^\]]+)\]\(mention:([^)]+)\)/,
+                );
+                if (!m) return false;
+                if (!silent) {
+                  const token = s.push("mention", "span", 0);
+                  token.markup = "@";
+                  token.meta = { label: m[1], id: m[2] };
+                }
+                s.pos += m[0].length;
+                return true;
+              },
+            );
+            md.renderer.rules.mention = (tokens, idx) => {
+              const meta = tokens[idx].meta ?? { id: "", label: "" };
+              const esc = (s: string) =>
+                s
+                  .replace(/&/g, "&amp;")
+                  .replace(/"/g, "&quot;")
+                  .replace(/</g, "&lt;")
+                  .replace(/>/g, "&gt;");
+              return `<span class="cf-mention" data-id="${esc(meta.id)}" style="display:inline-block;padding:0 4px;border-radius:3px;background:#deebff;color:#0747a6;font-size:0.95em;cursor:pointer;">@${esc(meta.label)}</span>`;
+            };
+          },
+        },
       },
     };
   },
