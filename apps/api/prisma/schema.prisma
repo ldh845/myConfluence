@@ -62,6 +62,11 @@ model User {
   // 본인 데이터라 user 삭제 시 Cascade.
   savedPages                 SavedPage[]   @relation("UserSaved")
   watchedPages               WatchList[]   @relation("UserWatching")
+  // Cycle 59 — 알림 (Notification). 본인이 받는 알림 + 본인이 발생시킨 알림.
+  // recipient: Cascade(본인 데이터). actor: SetNull(원 사용자 삭제돼도 알림 보존,
+  // payload.actorName 으로 fallback).
+  notificationsReceived      Notification[] @relation("NotificationRecipient")
+  notificationsCreated       Notification[] @relation("NotificationActor")
 }
 
 model Space {
@@ -123,6 +128,8 @@ model Page {
   // Cycle 53 — '나중을 위해 저장' / '지켜보기' back-relation. 페이지 삭제 시 Cascade.
   savedBy      SavedPage[]   @relation("PageSaved")
   watchers     WatchList[]   @relation("PageWatching")
+  // Cycle 59 — 알림 back-relation. page 삭제 시 SetNull (알림은 보존).
+  notifications Notification[] @relation("NotificationPage")
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
 
@@ -299,6 +306,29 @@ model SavedPage {
   @@id([userId, pageId])
   @@index([userId])
   @@index([pageId])
+}
+
+// Cycle 59 — 알림. recipient 가 받는 모든 알림(멘션, 향후 댓글/지켜보기 등).
+// 같은 (recipient, actor, page, type) 조합은 한 번만 (@@unique) — 한 발행에
+// 같은 사용자 여러 번 멘션해도 알림 1개.
+// type 은 string (유연 확장). 현재 값: 'mention'.
+// payload 는 자유 — actorName 스냅샷, pageTitle 스냅샷 등 alleviation 데이터.
+model Notification {
+  id          String   @id @default(cuid())
+  recipientId String
+  recipient   User     @relation("NotificationRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+  actorId     String?
+  actor       User?    @relation("NotificationActor", fields: [actorId], references: [id], onDelete: SetNull)
+  type        String
+  pageId      String?
+  page        Page?    @relation("NotificationPage", fields: [pageId], references: [id], onDelete: SetNull)
+  payload     Json?
+  readAt      DateTime?
+  createdAt   DateTime @default(now())
+
+  @@unique([recipientId, actorId, pageId, type], name: "Notification_dedupe_key")
+  @@index([recipientId, readAt])
+  @@index([recipientId, createdAt])
 }
 
 // Cycle 53 — '지켜보기' (Watch). 향후 알림 발송의 기반. 이번 사이클은 토글만,
