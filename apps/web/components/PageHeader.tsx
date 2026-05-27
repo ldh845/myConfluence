@@ -1,16 +1,16 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { PageFull, PageNode, SpaceWithPages } from "@/lib/types";
 import type {
   ConnectionState,
   PresenceUser,
   SaveStatus,
 } from "@/components/CollaborativeEditor";
-import { useFavoritesStore } from "@/lib/stores/useFavoritesStore";
 import { downloadPageMarkdown } from "@/lib/export/markdown";
 import { openPrintDialog } from "@/lib/export/print";
+import { useAuth } from "@/lib/auth/useAuth";
 
 function relativeTime(iso: string): string {
   const diffSec = Math.max(
@@ -66,6 +66,9 @@ type Props = {
   onMoveClick?: () => void;
   onCopyClick?: () => void;
   onShareClick?: () => void;
+  // Cycle 53 — 인라인 댓글 사이드/하단 표시 토글 (V 단축키).
+  showInlineComments?: boolean;
+  onToggleInlineComments?: () => void;
 };
 
 export default function PageHeader({
@@ -86,15 +89,88 @@ export default function PageHeader({
   onMoveClick,
   onCopyClick,
   onShareClick,
+  showInlineComments,
+  onToggleInlineComments,
 }: Props) {
   const crumbs = space ? buildBreadcrumb(page, space.pages) : [];
   const ancestors = crumbs.slice(0, -1);
   const [draft, setDraft] = useState(page.title);
   const inputRef = useRef<HTMLInputElement>(null);
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
 
-  // FR-025 (Cycle 18-2) — 즐겨찾기 토글. localStorage persist.
-  const isFavorite = useFavoritesStore((s) => s.ids.includes(page.id));
-  const toggleFavorite = useFavoritesStore((s) => s.toggle);
+  // Cycle 53 — '나중을 위해 저장' 상태. 로그인 사용자만 의미가 있다.
+  //   key 에 user.id 포함 — 다른 사용자로 갈아끼면 자동 분리.
+  const savedQuery = useQuery<{ saved: boolean }>({
+    queryKey: ["save", page.id, user?.id ?? null],
+    queryFn: async () => {
+      const r = await fetch(`/api/pages/${page.id}/save`, {
+        credentials: "include",
+      });
+      if (!r.ok) return { saved: false };
+      return (await r.json()) as { saved: boolean };
+    },
+    enabled: !!user,
+    staleTime: 30_000,
+  });
+  const isSaved = savedQuery.data?.saved ?? false;
+
+  const saveMutation = useMutation({
+    mutationFn: async (next: boolean) => {
+      const r = await fetch(`/api/pages/${page.id}/save`, {
+        method: next ? "POST" : "DELETE",
+        credentials: "include",
+      });
+      if (!r.ok) throw new Error("save toggle failed");
+      return (await r.json()) as { saved: boolean };
+    },
+    onSuccess: (data) => {
+      queryClient.setQueryData(
+        ["save", page.id, user?.id ?? null],
+        data,
+      );
+    },
+  });
+  const toggleSaved = () => {
+    if (!user || saveMutation.isPending) return;
+    saveMutation.mutate(!isSaved);
+  };
+
+  // Cycle 53 — '지켜보기' 상태. 구조는 saved 와 동일.
+  const watchQuery = useQuery<{ watching: boolean }>({
+    queryKey: ["watch", page.id, user?.id ?? null],
+    queryFn: async () => {
+      const r = await fetch(`/api/pages/${page.id}/watch`, {
+        credentials: "include",
+      });
+      if (!r.ok) return { watching: false };
+      return (await r.json()) as { watching: boolean };
+    },
+    enabled: !!user,
+    staleTime: 30_000,
+  });
+  const isWatching = watchQuery.data?.watching ?? false;
+
+  const watchMutation = useMutation({
+    mutationFn: async (next: boolean) => {
+      const r = await fetch(`/api/pages/${page.id}/watch`, {
+        method: next ? "POST" : "DELETE",
+        credentials: "include",
+      });
+      if (!r.ok) throw new Error("watch toggle failed");
+      return (await r.json()) as { watching: boolean };
+    },
+    onSuccess: (data) => {
+      queryClient.setQueryData(
+        ["watch", page.id, user?.id ?? null],
+        data,
+      );
+    },
+  });
+  const toggleWatching = () => {
+    if (!user || watchMutation.isPending) return;
+    watchMutation.mutate(!isWatching);
+  };
 
   useEffect(() => {
     setDraft(page.title);
@@ -109,6 +185,51 @@ export default function PageHeader({
       });
     }
   }, [isBodyEditable, page.title]);
+
+  // Cycle 53 — 단축키 V/F/W/S. 조회 모드 전용(편집 모드는 FullScreenEditor 가
+  //   PageHeader 대신 전체 화면을 차지하므로 PageHeader 가 마운트조차 안 됨 →
+  //   자연 가드). 입력 포커스(INPUT/TEXTAREA/SELECT/contentEditable) 시 skip.
+  //   E 단축키는 (app)/page.tsx 가 양쪽 모드에서 처리(편집 진입/이탈 토글).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      const t = e.target as HTMLElement | null;
+      const tag = t?.tagName;
+      if (
+        tag === "INPUT" ||
+        tag === "TEXTAREA" ||
+        tag === "SELECT" ||
+        !!t?.isContentEditable
+      ) {
+        return;
+      }
+      const key = e.key.toLowerCase();
+      switch (key) {
+        case "v":
+          if (onToggleInlineComments) {
+            e.preventDefault();
+            onToggleInlineComments();
+          }
+          break;
+        case "f":
+          e.preventDefault();
+          toggleSaved();
+          break;
+        case "w":
+          e.preventDefault();
+          toggleWatching();
+          break;
+        case "s":
+          if (onShareClick) {
+            e.preventDefault();
+            onShareClick();
+          }
+          break;
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onToggleInlineComments, toggleSaved, toggleWatching, onShareClick]);
 
   const commit = () => {
     const next = draft.trim();
@@ -125,6 +246,8 @@ export default function PageHeader({
     setDraft(page.title);
     inputRef.current?.blur();
   };
+
+  const notLoggedInTitle = "로그인이 필요합니다";
 
   return (
     <div className="mb-4">
@@ -186,8 +309,10 @@ export default function PageHeader({
               ● 편집 중
             </span>
           )}
+          {/* (1) 편집 — 양쪽 모드에서 노출. 단축키 E. */}
           <button
             onClick={onToggleEdit}
+            title={isBodyEditable ? "편집 종료 (E)" : "편집 (E)"}
             className={`inline-flex items-center gap-1 px-2 py-1 rounded text-[12px] ${
               isBodyEditable
                 ? "bg-[#0052cc] text-white hover:bg-[#0747a6]"
@@ -213,29 +338,52 @@ export default function PageHeader({
               <span>{publishing ? "발행 중..." : "발행"}</span>
             </button>
           )}
-          <ActionButton icon="💬" label="댓글" disabled />
-          {/* FR-025 (Cycle 18-2) — ⭐ 즐겨찾기. 채워진 별은 활성. */}
-          <ActionButton
-            icon={isFavorite ? "⭐" : "☆"}
-            label="즐겨찾기"
-            onClick={() => toggleFavorite(page.id)}
-          />
-          {/* FR-022 (Cycle 18-3b) — 페이지 이동 다이얼로그 열기. */}
-          <ActionButton icon="↗" label="이동" onClick={onMoveClick} />
-          {/* FR-023 (Cycle 18-4b) — 페이지 복사 다이얼로그 열기. */}
-          <ActionButton icon="⧉" label="복사" onClick={onCopyClick} />
-          <ActionButton icon="👁️" label="지켜보기" disabled />
-          <ActionButton icon="🔗" label="공유" disabled />
-          <ActionButton
-            icon="🕘"
-            label="히스토리"
-            onClick={onHistoryClick}
-          />
+          {/* Cycle 53 — 조회 모드 전용 메인 액션 4개 + ⋯. */}
+          {!isBodyEditable && (
+            <>
+              {/* (2) 인라인 댓글 보기 (V) — 본문 아래 InlineCommentsList show/hide */}
+              <ActionButton
+                icon="💬"
+                label="인라인 댓글 보기"
+                tooltip={`인라인 댓글 보기 (V)`}
+                active={!!showInlineComments}
+                onClick={onToggleInlineComments}
+              />
+              {/* (3) 나중을 위해 저장 (F) — SavedPage 토글 */}
+              <ActionButton
+                icon={isSaved ? "🔖" : "💾"}
+                label={isSaved ? "저장됨" : "나중을 위해 저장"}
+                tooltip={user ? `나중을 위해 저장 (F)` : notLoggedInTitle}
+                active={isSaved}
+                disabled={!user || saveMutation.isPending}
+                onClick={toggleSaved}
+              />
+              {/* (4) 지켜보기 (W) — WatchList 토글 */}
+              <ActionButton
+                icon={isWatching ? "👁️" : "👁"}
+                label={isWatching ? "지켜보는 중" : "지켜보기"}
+                tooltip={user ? `지켜보기 (W)` : notLoggedInTitle}
+                active={isWatching}
+                disabled={!user || watchMutation.isPending}
+                onClick={toggleWatching}
+              />
+              {/* (5) 공유 (S) — SharePageDialog */}
+              <ActionButton
+                icon="🔗"
+                label="공유"
+                tooltip={`공유 (S)`}
+                onClick={onShareClick}
+              />
+            </>
+          )}
+          {/* (6) ⋯ 더보기 — 이동/복사/히스토리/내보내기/공간 홈/삭제 */}
           <MoreMenu
             page={page}
             space={space}
             onDelete={onDelete}
-            onShareClick={onShareClick}
+            onMoveClick={onMoveClick}
+            onCopyClick={onCopyClick}
+            onHistoryClick={onHistoryClick}
           />
         </div>
       </div>
@@ -348,43 +496,55 @@ function SaveStatusBadge({ status }: { status: SaveStatus }) {
   return <span className={`text-[12px] ${cls}`}>{text}</span>;
 }
 
+// Cycle 53 — active(채워진 상태) / tooltip(단축키 노출) 옵션 추가.
+//   active 시 파란색 배경(deebff) + 진한 파란 글자(0052cc) 로 상태 표시.
 function ActionButton({
   icon,
   label,
   onClick,
   disabled,
+  active,
+  tooltip,
 }: {
   icon: string;
   label: string;
   onClick?: () => void;
   disabled?: boolean;
+  active?: boolean;
+  tooltip?: string;
 }) {
+  const base = "inline-flex items-center gap-1 px-2 py-1 rounded text-[12px]";
+  const cls = disabled
+    ? `${base} text-[#a5adba] cursor-not-allowed`
+    : active
+      ? `${base} bg-[#deebff] text-[#0052cc] font-semibold hover:bg-[#b3d4ff]`
+      : `${base} text-[#42526e] hover:bg-[#ebecf0]`;
   return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      className={`inline-flex items-center gap-1 px-2 py-1 rounded text-[12px] ${
-        disabled
-          ? "text-[#a5adba] cursor-not-allowed"
-          : "text-[#42526e] hover:bg-[#ebecf0]"
-      }`}
-    >
+    <button onClick={onClick} disabled={disabled} title={tooltip} className={cls}>
       <span>{icon}</span>
       <span>{label}</span>
     </button>
   );
 }
 
+// Cycle 53 — MoreMenu 재구성:
+//   추가: 이동 / 복사 / 히스토리 (상단에서 옮김)
+//   제거: 공유 링크 (메인 '공유 (S)' 와 중복)
+//   유지: Markdown / PDF 내보내기 / 공간 홈 / 페이지 삭제
 function MoreMenu({
   page,
   space,
   onDelete,
-  onShareClick,
+  onMoveClick,
+  onCopyClick,
+  onHistoryClick,
 }: {
   page: PageFull;
   space: SpaceWithPages | null;
   onDelete: () => void;
-  onShareClick?: () => void;
+  onMoveClick?: () => void;
+  onCopyClick?: () => void;
+  onHistoryClick?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const queryClient = useQueryClient();
@@ -412,6 +572,9 @@ function MoreMenu({
     alert("이 페이지를 공간 홈으로 지정했습니다.");
   };
 
+  const itemCls =
+    "w-full text-left px-3 py-1.5 text-[#172b4d] hover:bg-[#ebecf0]";
+
   return (
     <div className="relative">
       <button
@@ -428,9 +591,44 @@ function MoreMenu({
             onClick={() => setOpen(false)}
           />
           <div className="absolute right-0 mt-1 w-48 bg-white border border-[#dfe1e6] rounded shadow-lg z-20 py-1 text-sm">
+            {/* Cycle 53 — 상단에서 옮긴 액션 3개 */}
+            {onMoveClick && (
+              <button
+                className={itemCls}
+                onClick={() => {
+                  setOpen(false);
+                  onMoveClick();
+                }}
+              >
+                ↗ 이동
+              </button>
+            )}
+            {onCopyClick && (
+              <button
+                className={itemCls}
+                onClick={() => {
+                  setOpen(false);
+                  onCopyClick();
+                }}
+              >
+                ⧉ 복사
+              </button>
+            )}
+            {onHistoryClick && (
+              <button
+                className={itemCls}
+                onClick={() => {
+                  setOpen(false);
+                  onHistoryClick();
+                }}
+              >
+                🕘 히스토리
+              </button>
+            )}
+            <div className="my-1 border-t border-[#dfe1e6]" />
             {/* FR-121 (Cycle 21) — 내보내기 메뉴. */}
             <button
-              className="w-full text-left px-3 py-1.5 text-[#172b4d] hover:bg-[#ebecf0]"
+              className={itemCls}
               onClick={() => {
                 setOpen(false);
                 void downloadPageMarkdown({
@@ -443,23 +641,13 @@ function MoreMenu({
               📄 Markdown으로 내보내기
             </button>
             <button
-              className="w-full text-left px-3 py-1.5 text-[#172b4d] hover:bg-[#ebecf0]"
+              className={itemCls}
               onClick={() => {
                 setOpen(false);
                 openPrintDialog();
               }}
             >
               🖨️ PDF로 내보내기
-            </button>
-            {/* FR-120 (Cycle 23) — 공유 링크 다이얼로그. */}
-            <button
-              className="w-full text-left px-3 py-1.5 text-[#172b4d] hover:bg-[#ebecf0]"
-              onClick={() => {
-                setOpen(false);
-                onShareClick?.();
-              }}
-            >
-              🔗 공유 링크
             </button>
             <div className="my-1 border-t border-[#dfe1e6]" />
             {/* Cycle 33 — 공간 홈 페이지 지정. */}
@@ -468,10 +656,7 @@ function MoreMenu({
                 ✓ 공간 홈
               </div>
             ) : (
-              <button
-                className="w-full text-left px-3 py-1.5 text-[#172b4d] hover:bg-[#ebecf0]"
-                onClick={setAsSpaceHome}
-              >
+              <button className={itemCls} onClick={setAsSpaceHome}>
                 🏠 공간 홈으로 지정
               </button>
             )}
