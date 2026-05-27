@@ -18,7 +18,12 @@ export type OidcClaims = {
   sub: string;
   username: string;
   email?: string;
+  emailVerified?: boolean;
   name?: string;
+  // Cycle 48 — Keycloak realm role 목록(예: ["admin", "user"]). ID token 의
+  // `realm_access.roles` 에서 추출. ADMIN 권한의 source of truth — 매 로그인마다
+  // findOrCreateOidcUser 가 DocSpace User.role 을 이 값으로 동기화한다.
+  realmRoles?: string[];
 };
 
 @Injectable()
@@ -107,8 +112,21 @@ export class OidcService {
       (c.preferred_username as string | undefined) ??
       (c.email as string | undefined) ??
       c.sub;
+    // Cycle 48 — Keycloak realm roles 추출. ID token 의 `realm_access.roles` 가
+    // 표준 위치. 클라이언트 scope 설정에 따라 누락될 수 있어 옵셔널.
+    const realmAccess = c.realm_access as { roles?: string[] } | undefined;
+    const realmRoles = Array.isArray(realmAccess?.roles)
+      ? (realmAccess.roles as string[])
+      : undefined;
     return {
-      claims: { sub: c.sub, username, email: c.email, name: c.name },
+      claims: {
+        sub: c.sub,
+        username,
+        email: c.email,
+        emailVerified: c.email_verified as boolean | undefined,
+        name: c.name,
+        realmRoles,
+      },
       idToken: tokenSet.id_token,
     };
   }
