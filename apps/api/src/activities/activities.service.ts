@@ -55,6 +55,9 @@ export class ActivitiesService {
     //   /activity 는 기존 단일 type 그대로 사용(고급 탐색 화면).
     types?: string[];
     actorName?: string;
+    // Cycle 58 — 단일 actorId 필터. 사용자 프로파일 페이지의 '이 사용자의
+    //   활동' 피드에 사용. actorName 과 동시 사용 시 둘 다 적용(AND).
+    actorId?: string;
     limit?: number;
     offset?: number;
   }) {
@@ -71,6 +74,7 @@ export class ActivitiesService {
       ...(opts.actorName
         ? { actorName: { contains: opts.actorName, mode: 'insensitive' } }
         : {}),
+      ...(opts.actorId ? { actorId: opts.actorId } : {}),
     };
     const [items, total] = await Promise.all([
       this.prisma.activityLog.findMany({

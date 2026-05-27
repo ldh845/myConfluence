@@ -14,6 +14,7 @@ export class ActivitiesController {
     @Query('type') type?: string,
     @Query('types') types?: string,
     @Query('actorName') actorName?: string,
+    @Query('actorId') actorId?: string,
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
   ) {
@@ -29,6 +30,8 @@ export class ActivitiesController {
       type: type || undefined,
       types: typesArr && typesArr.length > 0 ? typesArr : undefined,
       actorName: actorName || undefined,
+      // Cycle 58 — 사용자 프로파일 페이지의 활동 피드용.
+      actorId: actorId || undefined,
       limit: limit ? Number(limit) : 20,
       offset: offset ? Number(offset) : 0,
     });
