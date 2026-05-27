@@ -1094,3 +1094,15 @@
 - **검증**: jest activities.service.spec **14/14 통과**, nest build EXIT 0 (50-1 단계), tsc + next build EXIT 0 (50-2 단계, `/home` 4.68kB). **/activity 페이지 무영향 확인** — 자체 type 필터 UI 가 단일 `?type=` 사용. `?types=` 미지정 호출은 기존과 동일 응답(회귀 없음)
 - **남은 일**: 없음 — 본 사이클은 표시 계층 필터링 한정 (사용자 명시 제약). 추후 활동 카테고리화·구독 등은 별도 사이클 후보
 - **비고**: **사용자 명시 제약** — ActivityLog 데이터/스키마 손대지 않음, 새 type enum 추가 금지, 표시 계층(필터링)만. `page.published` 를 "편집/발행" 의미로 사용자 합의 — 첫 발행/재발행이 사실상 콘텐츠 갱신을 의미. /home 만 적용, /activity 의 고급 탐색은 시스템 이벤트도 노출 (감사/관리자 시야 유지). 백엔드 다중 IN 쿼리는 일반 패턴이라 향후 다른 화면에서도 재사용 가능.
+
+---
+
+## Cycle 50 followup — 2026-05-27 — ✅ Done (/home 활동 노출 5종→2종 추가 축소)
+- **제목**: 사용자 피드백 — /home 활동 피드에서 page.published / page.moved / page.copied 도 제외, 사용자 생성 행위 2종(page.created + comment.created)만 노출
+- **카테고리**: UX / 활동 피드 (Cycle 50 후속 — 노출 범위 미세 조정)
+- **커밋**: `8e89a54`(core FE), 본 CYCLES.md(Docs)
+- **변경 파일**:
+  - `apps/web/app/(app)/home/page.tsx` — `HOME_ACTIVITY_TYPES` 를 5종→2종으로 축소. 주석 갱신(편집/이동/복사 제외 사유 명시). 그 외 무변경
+- **검증**: tsc EXIT 0, next build EXIT 0 (`/home` 4.67kB, 직전 4.68→ -1B). 백엔드 무변경(`?types=` 다중 IN 필터는 그대로, 클라이언트가 보내는 목록만 축소). 빌드 산출물의 다른 라우트 크기 변동 없음
+- **남은 일**: 없음
+- **비고**: Cycle 50 본문의 "사용자 활동 5종" 표현은 followup 시점에 outdated — 본 entry 가 현재 시점의 노출 정책(2종) source of truth. /activity 무영향 (자체 단일 `?type=` 사용). 추가 type 가 향후 필요해지면 `HOME_ACTIVITY_TYPES` 한 줄로 확장 가능. Cycle 50 본 사이클의 5종 합의는 합의 과정의 발자국으로 본문에 그대로 보존(시간순 기록 컨벤션).
