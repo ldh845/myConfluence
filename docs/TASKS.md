@@ -67,11 +67,15 @@
   - Cycle 54-F — 날짜 inline atom 노드 신규 (TipTap DateExtension).
     slash/＋ 카탈로그에 '날짜' 항목, 색박스(date lozenge) NodeView,
     클릭 시 prompt 재입력. markdown 직렬화는 텍스트만(라운드트립 시 시각화 손실).
+  - Cycle 54-C — 이미지 삽입 통합 다이얼로그(탭: 첨부/웹 URL) + Image
+    extension caption attr + figure NodeView. ImageInsertDialog 신규,
+    ImageNodeView 신규, ImageAltButton 의미 분리 + ImageCaptionButton 추가.
+    기존 image 노드 자연 호환(Yjs migration 0).
 - **남은 일**: (현재 plat-level 큰 항목 없음 — 신규 기능은 Task G)
 - **닫힘 이력**: (v1 retro 미수행)
 - **차단 / 의존**: 없음
 - **Jira Epic**: 미등록
-- **관련 Cycle**: Cycle 1~41, 49, 50, 51, 52, 53, 54-D, 54-A, 54-B, 54-F
+- **관련 Cycle**: Cycle 1~41, 49, 50, 51, 52, 53, 54-D, 54-A, 54-B, 54-F, 54-C
 
 ---
 
@@ -256,6 +260,7 @@
 | Cycle 54-A | A |
 | Cycle 54-B | A |
 | Cycle 54-F | A |
+| Cycle 54-C | A |
 
 ---
 

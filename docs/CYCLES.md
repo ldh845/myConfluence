@@ -1269,3 +1269,35 @@
   - HTML `<input type="date">` 기반 인라인 picker (현재는 prompt 단순화) — followup
   - locale 표시 (한국어 "2026년 5월 27일" 등) — followup
 - **비고**: TipTap inline atom 패턴은 MathInline (Cycle 20) 답습. NodeView 는 React 없이 vanilla dom — 단순한 클릭 핸들러라 ReactNodeViewRenderer 비용 회피. 색박스는 Confluence date lozenge 시각화 모방. 새 type enum / DB 컬럼 없음. **Cycle 54 진행 상황**: D + A + B + F(완료) → 남은 sub-cycle: **54-C** (파일/그림 통합 + figcaption). Cycle 55(멘션) 별도.
+
+---
+
+## Cycle 54-C — 2026-05-27 — ✅ Done (파일/그림 통합 다이얼로그 + figcaption 캡션)
+- **제목**: 이미지 삽입을 통합 다이얼로그(탭: 첨부/웹 URL)로 + Image 확장에 figcaption 캡션 도입
+- **카테고리**: 편집기 / TipTap 확장 (Cycle 54 sub-cycle C — 가장 큰 sub)
+- **커밋**: `461a07a`(54-C-1 다이얼로그), `e4f2689`(54-C-2 캡션 NodeView), 본 CYCLES.md(54-C-3 Docs)
+- **변경 파일**:
+  - `apps/web/components/ImageInsertDialog.tsx` (신규) — Confluence 표준 탭 2개 ('이 페이지 첨부' / '웹에서의 그림'). 첨부 탭은 GET /pages/:id/attachments 이미지 그리드 + '+ 새 이미지 업로드'(POST 동일 endpoint, AttachmentList 와 같은 `['attachments', pageId]` queryKey 자동 동기화). URL 탭은 입력 + 미리보기(onError 숨김) + 대체 텍스트 입력
+  - `apps/web/components/ImageNodeView.tsx` (신규) — `NodeViewWrapper as='figure'`. caption 있으면 figcaption 표시(클릭 시 prompt 편집 → updateAttributes 로 Yjs 자동 전파), 편집 모드에서 빈 캡션은 '캡션 추가...' placeholder, 읽기 모드는 숨김
+  - `apps/web/components/CollaborativeEditor.tsx` — Image extension `.extend({ addAttributes, parseHTML, renderHTML, addNodeView })`. caption attr default '' (기존 image 노드 자연 호환). parseHTML 에 `figure.cf-image-figure>img+figcaption` 매칭 추가 + 기존 img 부모 fallback. renderHTML 에 caption 유무로 figure/img 분기 (역호환). addNodeView `ReactNodeViewRenderer(ImageNodeView)`
+  - `apps/web/components/EditorToolbar.tsx`:
+    - ImageButton: URL prompt → ImageInsertDialog 호출. pageId 는 `usePageStore` 에서 (TaskItemNodeView 와 같은 패턴 — NodeView/툴바가 prop 못 받는 한계 회피용 store)
+    - ImageAltButton: 의미 명확화('대체 텍스트(alt) 편집', 🔤). prompt 메시지를 '스크린리더용 짧은 설명' 으로 갱신
+    - ImageCaptionButton 신규(📝) — figcaption 편집 분리. NodeView 의 figcaption 클릭과 같은 prompt
+- **검증**: tsc + next build EXIT 0 (`/` 435→436kB, +1kB. C-2 단계는 NodeView 흡수로 추가 +0). 마이그레이션 **없음**. Yjs 협업: 신규 attr 옵셔널 default, 신규 노드 없음 → 호환. **단 다른 클라이언트는 새 빌드 받아야 함** (옛 빌드의 schema 와 mismatch 가능)
+- **동작 확인 안내**:
+  1) **마이그레이션 불필요** — FE 확장만
+  2) 편집 모드 → 툴바 🖼️ 클릭 → 새 통합 다이얼로그 열림
+  3) '이 페이지 첨부' 탭: 이미지 첨부만 그리드. 카드 클릭 시 즉시 본문에 삽입
+  4) '+ 새 이미지 업로드' → 파일 선택 → 업로드 완료 시 자동 삽입 + AttachmentList 도 동기화
+  5) '웹에서의 그림' 탭: URL 입력 → 미리보기 → '삽입' 또는 Enter
+  6) 삽입된 이미지 아래 figcaption(또는 placeholder) 클릭 → prompt 로 캡션 입력
+  7) 편집 모드 ImageCaptionButton(📝) 또는 ImageAltButton(🔤) 으로 분리 편집 가능
+  8) 발행 후 새로고침 — figure+figcaption 렌더링 그대로 보존
+  9) **회귀 확인**: 기존 caption 없는 image 들은 단순 img 그대로 (renderHTML 분기)
+  10) slash '이미지' 는 기존 prompt 방식 유지 — 통합 다이얼로그 진입은 toolbar 만(일관성 followup)
+- **남은 일**:
+  - slash '이미지' 도 ImageInsertDialog 호출하도록 일관화 (followup — 전역 다이얼로그 trigger 필요)
+  - 이미지 크기 조절 핸들 (TipTap 기본 미지원 — `@tiptap/extension-image` 외 별도 패키지 필요)
+  - inline figcaption 편집 (prompt 대신 contentEditable) — Yjs 충돌 주의 필요
+- **비고**: caption 을 **신규 노드(Figure)가 아닌 Image attr 확장**으로 처리한 이유 — 기존 image 노드와 schema 호환(Yjs migration 0). parseHTML 의 figure 매칭이 먼저, 그 다음 부모 img fallback 으로 paste 호환성. renderHTML 도 caption 유무로 분기해 역호환. ImageNodeView 의 figcaption 편집은 prompt 로 단순화 — Yjs `Y.Doc` 안의 caption attr 가 attribute transaction 으로 전파되어 다른 클라이언트 즉시 동기. **Cycle 54 완료**: D + A + B + F + C → 모두 종료. **Cycle 55(멘션)** 는 별도 메가 사이클(BE users 검색 + Mention extension + suggestion 통합 + 향후 알림 분기점).
