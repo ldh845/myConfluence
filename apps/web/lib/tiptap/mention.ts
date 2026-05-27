@@ -47,7 +47,14 @@ export const MentionNode = Node.create({
   },
 
   parseHTML() {
-    return [{ tag: "span.cf-mention[data-id]" }];
+    // Cycle 55 followup 4 — 매칭 너그럽게. tiptap-markdown/markdown-it 의
+    //   라운드트립에서 class/style 일부가 strip 되는 케이스 대응.
+    //   우선순위: data-type=mention(가장 명확) > class.cf-mention > data-id 단독.
+    return [
+      { tag: 'span[data-type="mention"]' },
+      { tag: "span.cf-mention[data-id]" },
+      { tag: "span[data-id]", priority: 40 },
+    ];
   },
 
   renderHTML({ HTMLAttributes, node }) {
