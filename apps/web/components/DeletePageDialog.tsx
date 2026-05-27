@@ -55,21 +55,15 @@ export default function DeletePageDialog({
               <div className="text-[#6b778c]">
                 {cascade
                   ? `이 페이지와 ${childCount}개의 하위 페이지가 모두 휴지통으로 이동합니다.`
-                  : `${childCount}개의 하위 페이지가 페이지 트리에 남습니다 (한 단계 위로 승격).`}
+                  : `${childCount}개의 하위 페이지가 페이지 트리에 남습니다.`}
               </div>
-              <label className="flex items-start gap-2 cursor-pointer select-none">
+              <label className="flex items-center gap-2 cursor-pointer select-none">
                 <input
                   type="checkbox"
                   checked={cascade}
                   onChange={(e) => setCascade(e.target.checked)}
-                  className="mt-0.5"
                 />
-                <span>
-                  <span className="font-medium">하위 페이지도 삭제</span>
-                  <span className="block text-[11px] text-[#6b778c]">
-                    {childCount}개의 직접 하위 페이지 + 그 아래 모든 자손
-                  </span>
-                </span>
+                <span className="font-medium">하위 페이지도 삭제</span>
               </label>
             </>
           )}
