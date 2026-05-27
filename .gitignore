@@ -37,3 +37,8 @@ ca-certs/*
 !.claude/skills/
 !.claude/skills/**
 SRS.md
+
+# Cycle 48 followup — 로컬 산출물·일회성 파일.
+# DB 마이그레이션 직전 백업 덤프(예: backup_before_cycle48.sql) + 발표자료(*.pptx).
+backup_*.sql
+*.pptx
