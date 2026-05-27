@@ -49,15 +49,25 @@ export class ActivitiesService {
   async list(opts: {
     spaceId?: string;
     type?: string;
+    // Cycle 50 — 다중 type IN 필터. types 가 있으면 단일 type 보다 우선.
+    //   /home UpdatesView 가 사용자 활동 5종(page.created/published/moved/
+    //   copied + comment.created)만 받기 위해 사용.
+    //   /activity 는 기존 단일 type 그대로 사용(고급 탐색 화면).
+    types?: string[];
     actorName?: string;
     limit?: number;
     offset?: number;
   }) {
     const limit = Math.min(Math.max(opts.limit ?? 20, 1), 100);
     const offset = Math.max(opts.offset ?? 0, 0);
+    const typesFilter = opts.types && opts.types.length > 0
+      ? { type: { in: opts.types } }
+      : opts.type
+        ? { type: opts.type }
+        : {};
     const where: Prisma.ActivityLogWhereInput = {
       ...(opts.spaceId ? { spaceId: opts.spaceId } : {}),
-      ...(opts.type ? { type: opts.type } : {}),
+      ...typesFilter,
       ...(opts.actorName
         ? { actorName: { contains: opts.actorName, mode: 'insensitive' } }
         : {}),
