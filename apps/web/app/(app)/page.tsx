@@ -10,6 +10,7 @@ import PageHeader from "@/components/PageHeader";
 import FullScreenEditor from "@/components/FullScreenEditor";
 import SpacePagesView from "@/components/SpacePagesView";
 import ProfileView from "@/components/ProfileView";
+import MentionEditPopover from "@/components/MentionEditPopover";
 import WelcomeBanner from "@/components/WelcomeBanner";
 import DiagramList from "@/components/DiagramList";
 import AttachmentList from "@/components/AttachmentList";
@@ -99,6 +100,17 @@ export default function HomePage() {
   // Cycle 53 — 본문 아래 인라인 댓글 리스트 표시 토글 (V 단축키 / 헤더 버튼).
   //   default true: 기존 동작(항상 표시) 유지 — 회귀 없음.
   const [showInlineComments, setShowInlineComments] = useState(true);
+  // Cycle 58 — 편집 모드에서 멘션 토큰 클릭 시 컨텍스트 팝업.
+  const [mentionPopover, setMentionPopover] = useState<
+    | {
+        x: number;
+        y: number;
+        userId: string;
+        label: string;
+        element: HTMLElement;
+      }
+    | null
+  >(null);
   // Cycle 10-2a 보강 — currentPage.draftContent 는 페이지 로드 시점 스냅샷이라
   // 자동저장 후엔 stale. 자동저장이 성공하면(saveStatus="saved") draft가
   // 존재한다고 보고 발행 버튼을 활성화한다. currentPage가 다시 로드되면
@@ -261,13 +273,25 @@ export default function HomePage() {
       const target = e.target as HTMLElement | null;
 
       // 멘션 클릭 분기 — link 핸들러보다 먼저 (멘션이 a 안에 들어갈 일 없음).
-      // Cycle 58 — personal space 라우팅(followup 1) → 사용자 프로파일 페이지
-      //   (/?profileId=X) 로 변경. 정보 + 활동 피드 보기.
-      const mention = target?.closest?.(".cf-mention");
+      // Cycle 58 — 조회 모드: /?profileId=X (사용자 프로파일).
+      //   편집 모드: 컨텍스트 popover (연결로 이동/편집/연결해제).
+      const mention = target?.closest?.(".cf-mention") as HTMLElement | null;
       if (mention) {
-        const userId = mention.getAttribute("data-id");
-        if (userId) {
-          e.preventDefault();
+        const userId = mention.getAttribute("data-id") ?? "";
+        if (!userId) return;
+        e.preventDefault();
+        if (isBodyEditable) {
+          const rect = mention.getBoundingClientRect();
+          // 노드 텍스트 '@홍길동' 에서 label 추출
+          const label = (mention.textContent ?? "").replace(/^@/, "");
+          setMentionPopover({
+            x: rect.left,
+            y: rect.bottom + 2,
+            userId,
+            label,
+            element: mention,
+          });
+        } else {
           router.push(`${pathname}?profileId=${userId}`);
         }
         return;
@@ -292,8 +316,8 @@ export default function HomePage() {
     document.addEventListener("click", handler);
     return () => document.removeEventListener("click", handler);
     // Cycle 55 followup — spaces 가 deps 에 들어가야 멘션 클릭이 최신 캐시
-    // 기반으로 동작.
-  }, [router, pathname, spaces]);
+    // 기반으로 동작. Cycle 58 — isBodyEditable 분기로 편집 모드 popover 처리.
+  }, [router, pathname, spaces, isBodyEditable]);
 
   // Cycle 10-2a — 발행 흐름.
   // Cycle 34 — note 동반(선택), 성공 시 편집 모드 탈출(버그 수정 핵심).
@@ -735,6 +759,45 @@ export default function HomePage() {
           onConfirm={(cascade) =>
             handleDeleteCurrentPage(currentPage.id, cascade)
           }
+        />
+      )}
+
+      {/* Cycle 58 — 편집 모드 멘션 클릭 컨텍스트 popover. */}
+      {mentionPopover && (
+        <MentionEditPopover
+          x={mentionPopover.x}
+          y={mentionPopover.y}
+          userId={mentionPopover.userId}
+          label={mentionPopover.label}
+          onNavigate={() =>
+            window.open(`/?profileId=${mentionPopover.userId}`, "_blank")
+          }
+          onEdit={() => {
+            // 편집 = 멘션 노드 삭제 후 같은 위치에 '@' 텍스트 → suggestion
+            //   자동 트리거 → 사용자가 새 멘션 선택.
+            if (!editor) return;
+            const pos = editor.view.posAtDOM(mentionPopover.element, 0);
+            if (pos == null || pos < 0) return;
+            editor
+              .chain()
+              .focus()
+              .setNodeSelection(pos)
+              .deleteSelection()
+              .insertContent("@")
+              .run();
+          }}
+          onUnlink={() => {
+            if (!editor) return;
+            const pos = editor.view.posAtDOM(mentionPopover.element, 0);
+            if (pos == null || pos < 0) return;
+            editor
+              .chain()
+              .focus()
+              .setNodeSelection(pos)
+              .deleteSelection()
+              .run();
+          }}
+          onClose={() => setMentionPopover(null)}
         />
       )}
     </>
