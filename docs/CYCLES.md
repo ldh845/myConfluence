@@ -1184,3 +1184,23 @@
   - WatchList 기반 알림 발송(현재는 토글만, 알림 SRS FR-100~ 와 연계 별도 사이클)
   - 인라인 댓글 default 정책(현재 `true` — 회귀 없음. Confluence 표준은 default 숨김인데 토글 의미 부여하려면 향후 `false` 검토)
 - **비고**: **결정 사항 6개 확정** — A1(InlineCommentsList show/hide) + B(SavedPage 서버 모델) + C1(사이드바/홈 즐겨찾기는 손대지 않음) + D(히스토리 더보기로 이동) + E(공유 링크 MoreMenu 에서 제거) + F(공유 메인 승격). **Windows DLL 잠금**(node 프로세스 10개가 `query_engine-windows.dll.node` 잡음 — CLAUDE.md 함정 그대로 재현) → `Get-Process node | Stop-Process -Force` 후 `prisma generate` 통과. **PageHeader 가 단축키 keydown 을 자체 등록하는 이유**: PageHeader 는 조회 모드에서만 마운트(편집 모드는 FullScreenEditor 가 화면 전체 차지)되므로 편집 모드 자연 가드 + 다른 라우트에서는 발화 X. **Save/Watch queryKey 에 user.id 포함** — 같은 브라우저에서 사용자 전환 시 stale 응답 노출 차단(보안 가드). **setQueryData 즉시 갱신** — invalidate 의 round-trip 없이 클릭 즉시 시각 반영(반응성). MoreMenu '공유 링크' 제거는 메인 '공유 (S)' 와 동일 SharePageDialog 호출 → 중복.
+
+---
+
+## Cycle 54-D — 2026-05-27 — ✅ Done (편집 툴바 '+ 더 많은 내용 삽입' 버튼)
+- **제목**: 편집 툴바에 '+ 더 많은 내용 삽입' 버튼 추가 — slash 명령 카탈로그 재활용
+- **카테고리**: UX / 편집 툴바 (Cycle 54 sub-cycle D — 메가 사이클 분할)
+- **커밋**: `e637d09`(54-D-1 FE), 본 CYCLES.md(54-D-2 Docs)
+- **변경 파일**:
+  - `apps/web/components/EditorToolbar.tsx` — G5(삽입 그룹) 끝에 InsertMoreButton 신규. `SLASH_ITEMS` / `filterItems` import. popup: 검색 input + 필터 리스트 + ArrowUp/Down/Enter/Esc + 외부 클릭. `item.command({editor, range: 빈 range})` — slash 와 동일 시그니처(빈 range 라 deleteRange 는 no-op, 안전)
+- **검증**: tsc EXIT 0 / next build EXIT 0. `/` 432→434kB (+2kB). 다른 라우트 무변동. Yjs 협업 호환 영향 없음 (신규 노드/확장 없음). 마이그레이션 **없음**
+- **동작 확인 안내**:
+  1) **마이그레이션 불필요** — FE 한 컴포넌트 추가
+  2) 편집 모드 진입 → 툴바 G5 끝(인라인 댓글 옆)에 ＋ 버튼 노출
+  3) ＋ 클릭 → 검색 input + SLASH_ITEMS 리스트 popup
+  4) 검색어 입력 시 title/searchTerms 매칭 필터 (한국어/영어 모두)
+  5) ArrowUp/Down + Enter 또는 클릭으로 항목 선택 → 해당 블록(제목/리스트/인용/코드/표/이미지/수식/구분선/링크) 삽입
+  6) Esc / 외부 클릭으로 popup 닫기
+  7) slash(`/`) 진입 흐름은 그대로 동작 (회귀 없음 — 카탈로그 공유라 항상 동기화)
+- **남은 일**: (54-D 영역 종결) — 다음 sub-cycle: 54-A (링크 다이얼로그 탭) → 54-B/C/F → Cycle 55 (멘션 별도)
+- **비고**: SlashMenu 컴포넌트 자체는 재활용 못 함 (suggestion render 가 키보드를 외부에 위임하는 forwardRef 구조라 + 버튼 용도엔 부적합). 카탈로그(`SLASH_ITEMS`)만 공유 → 두 진입점이 항상 동기화. Confluence 의 + 버튼이 검색 input 을 포함하는 패턴이라 slash 와 일관된 UX 유지. 사용자 결정: 멘션(E)은 Cycle 55 로 분리, Ctrl+K 는 편집 모드 한정(54-A 에서 구현).
