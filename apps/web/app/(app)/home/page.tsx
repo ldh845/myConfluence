@@ -147,15 +147,29 @@ export default function HomePage() {
   );
 }
 
+// Cycle 50 — /home '모든 변경사항' 은 사용자 활동 중심으로 압축. 시스템 이벤트
+// (삭제·복원·영구삭제, 그 외 현재 미존재 type들)는 표시에서 제외해 노이즈 감소.
+// page.published 는 "사용자가 편집한 결과를 발행한 행위" = '편집' 으로 재해석해 포함.
+// /activity 는 고급 탐색 화면이라 무수정(전체 노출 유지).
+// 데이터·새 type 추가는 일절 없음 — 표시 단계 필터링만(GET /activities?types=...).
+const HOME_ACTIVITY_TYPES = [
+  "page.created",
+  "page.published",
+  "page.moved",
+  "page.copied",
+  "comment.created",
+] as const;
+
 // ── 모든 변경사항 (default) ──────────────────────────────────────────────
 function UpdatesView() {
+  const typesParam = HOME_ACTIVITY_TYPES.join(",");
   const { data: activities } = useQuery<{
     items: ActivityItem[];
     total: number;
   }>({
-    queryKey: ["activities", { limit: 100 }],
+    queryKey: ["activities", { limit: 100, types: typesParam }],
     queryFn: async () => {
-      const r = await fetch("/api/activities?limit=100");
+      const r = await fetch(`/api/activities?limit=100&types=${typesParam}`);
       if (!r.ok) return { items: [], total: 0 };
       return (await r.json()) as { items: ActivityItem[]; total: number };
     },
