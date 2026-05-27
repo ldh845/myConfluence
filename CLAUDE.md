@@ -68,7 +68,7 @@ cd apps/api && npm run build                  # NestJS 컴파일 → dist/
 
 - **EOL CRLF/LF**: Windows에서 작업하면 `git diff` 에 가짜 변경 대거. 정공법은 `.gitattributes` 에 `* text=auto eol=lf` 박아 통일. (autocrlf 옵션은 분쟁 원인이므로 권장 안 함)
 - **Prisma engine 잠금** (Windows): 멈춘 `node` 프로세스가 `query_engine-windows.dll.node` 를 잡고 있어 `prisma generate` 가 EPERM. 죽은 nest watch 프로세스 정리 후 재시도.
-- **마크다운 직렬화 한계**: 색상 / 하이라이트 / 언더라인 / 인라인 댓글 마크 / 일반 문단 indent 속성은 새로고침 시 시각적으로 소실 (DB엔 보존). README "알려진 한계" 섹션.
+- **~~마크다운 직렬화 한계~~** (Cycle 57 해결): 자동저장/발행을 ProseMirror JSON 으로 전환. content 가 `{` 로 시작하면 JSON, 아니면 옛 markdown (자동 감지). 모든 노드/마크(멘션·이미지 캡션·인라인 댓글·색상·하이라이트 등) 100% 라운드트립. 옛 페이지는 다음 자동저장 시 자연 마이그레이션. MoreMenu '내보내기' 는 그대로 동작.
 - **draft 페이지 모델** (Cycle 35): `publishedAt=null` 페이지는 모든 read 엔드포인트(`findAll`, `recent`, `search`, `full-search`, `spaces.pages`)에서 숨김. 사이드바 트리에도 안 보임. 첫 발행 시점에 `publishedAt` 채워짐 → 그제서야 노출.
 - **다이어그램 동시 편집 미지원** (Excalidraw, last-write-wins).
 - **사이드바의 "홈" = `Space.homePageId`** (Cycle 33). 공간 생성 시 "Main Page" 자동 생성 + 지정. 트리에선 홈이 제외되고 홈의 직계 자식이 루트로 승격.

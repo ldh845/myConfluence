@@ -80,11 +80,19 @@
   - Cycle 55 — @user 멘션 도입 (SRS FR-072). TipTap MentionNode 자체 구현
     (extension-mention 패키지 peer 충돌로 우회), GET /users?q= 검색, popup
     아바타+name+department. Yjs 호환. 알림 트리거는 별도 사이클.
+  - Cycle 57 — content 저장 markdown → ProseMirror JSON 전환. 사용자 정의
+    노드/마크 라운드트립 한계(멘션/figcaption/inline 댓글/색상 등) 모두
+    해결. parseContent 가 '{' 감지로 옛 markdown 자동 호환.
+    CLAUDE.md '마크다운 직렬화 한계' 카테고리 종결.
+  - Cycle 58 — 사용자 프로파일 페이지 (/?profileId=X) + 편집 모드 멘션
+    클릭 popover (연결로 이동/편집/연결해제). GET /users/:id 신규,
+    activities.list actorId 필터 추가. 멘션 클릭 라우팅 personal space
+    → 프로파일로 변경.
 - **남은 일**: (현재 plat-level 큰 항목 없음 — 신규 기능은 Task G)
 - **닫힘 이력**: (v1 retro 미수행)
 - **차단 / 의존**: 없음
 - **Jira Epic**: 미등록
-- **관련 Cycle**: Cycle 1~41, 49, 50, 51, 52, 53, 54-D, 54-A, 54-B, 54-F, 54-C, 56, 55
+- **관련 Cycle**: Cycle 1~41, 49, 50, 51, 52, 53, 54-D, 54-A, 54-B, 54-F, 54-C, 56, 55, 57, 58
 
 ---
 
@@ -272,6 +280,8 @@
 | Cycle 54-C | A |
 | Cycle 56 | A |
 | Cycle 55 | A |
+| Cycle 57 | A |
+| Cycle 58 | A |
 
 ---
 

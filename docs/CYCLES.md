@@ -1374,3 +1374,73 @@
   - markdown 라운드트립 보강 (input rule 또는 raw HTML 통로)
   - 멘션 토큰 클릭 → 프로필/페이지 진입 (Notification UX 와 함께)
 - **비고**: **`@tiptap/extension-mention` 사용 불가**: `@tiptap/suggestion` 3.x vs `@tiptap/core` 2.x peer mismatch. extension-mention 2.x 도 같은 충돌. 자체 Node + Suggestion 직접 구현으로 우회 — `slash-command.ts` 와 정확히 같은 패턴 답습이라 유지보수 부담 ↓. clientRect 타입에 `undefined` 허용 필요(strict 모드 미세 차이). **알림 분기점**: MentionNode 의 Suggestion command 콜백에서 `props.id` 알 수 있으므로 POST /notifications 호출이 자연스러운 연결지점. 알림 모델(Notification) 도입은 별도 메가 사이클(권장 Cycle 57). **번호 메모**: Cycle 55 자리가 비어 있었음(56 이 시급 fix 로 먼저). 멘션 도입으로 55 자리 채움.
+
+---
+
+## Cycle 55 followup 1~5 — 2026-05-27 — 멘션 클릭 라우팅 + 라운드트립 시도들
+
+순차적 fix 시도 5 차례. 자세히는 commit 메시지(`d6df56c`, `e2e3264`, `59b8ad0`, `a6430eb`, `48ca1cf`):
+- **followup 1** (`d6df56c`): 멘션 클릭 → 그 사용자의 personal space 라우팅 (Cycle 49 활용). Cycle 58 에서 프로파일 페이지로 라우팅 변경됨
+- **followup 2** (`e2e3264`): markdown 라운드트립 시도 — `@[label](mention:id)` markup + inline ruler. 실패 (ruler 등록 안 됨)
+- **followup 3** (`59b8ad0`): raw HTML serialize + `Markdown.configure({html:true})`. 실패 + **편집 본문 누적 회귀**
+- **followup 4** (`a6430eb`): parseHTML 너그럽게(3-단계). 실패
+- **followup 5** (`48ca1cf`) **긴급 rollback**: html:true / raw HTML serialize 모두 되돌림. 데이터 손상 회피. 멘션 라운드트립은 일시 포기 → Cycle 57 에서 근본 해결.
+- **교훈**: `tiptap-markdown` 의 사용자 정의 노드/마크 라운드트립 한계는 부분 fix 로 안 됨. content 저장 방식 자체 전환(JSON) 필요 → Cycle 57.
+
+---
+
+## Cycle 57 — 2026-05-27 — ✅ Done (content 저장 markdown → ProseMirror JSON 전환)
+- **제목**: 사용자 정의 노드/마크 라운드트립 한계 근본 해결 — content 저장 방식을 markdown → ProseMirror JSON 으로 전환
+- **카테고리**: 편집기 / 데이터 저장 (CLAUDE.md '마크다운 직렬화 한계' 카테고리 해소)
+- **커밋**: `e11fdab`(57-1 FE), 본 CYCLES.md(57-2/3 Docs — 검증은 사용자 동작 확인으로 완료)
+- **방식**:
+  - 자동저장: `editor.storage.markdown.getMarkdown()` → `editor.getJSON()` + `JSON.stringify`
+  - 발행: FullScreenEditor 의 publish 도 같은 패턴
+  - 로드: `parseContent(raw)` — content 가 `{` 으로 시작하면 `JSON.parse`, 그 외엔 markdown 문자열 그대로
+  - tiptap-markdown 의 `MarkdownParser.parse(object)` 가 object 면 그대로 반환 → setContent 호출 시 ProseMirror 가 JSON 으로 직접 시드 (자연 우회)
+- **변경 파일**:
+  - `apps/web/components/CollaborativeEditor.tsx` — `parseContent` 헬퍼, useEditor 의 content prop, Yjs 시드, 자동저장 onUpdate (4 곳)
+  - `apps/web/components/FullScreenEditor.tsx` — publish 직전 markdown 추출 → JSON 직렬화
+  - `CLAUDE.md` — '마크다운 직렬화 한계' 항목을 Cycle 57 해결 표시(취소선)로 갱신
+- **검증**: tsc + next build EXIT 0 (`/` 437kB 유지). **사용자 동작 확인 완료** — 새 멘션 발행 후 새로고침 시 토큰 색박스 그대로 유지
+- **호환**:
+  - 옛 markdown 페이지: `parseContent` 가 `{` 아니라서 markdown 으로 처리 (기존 흐름). 다음 편집/자동저장 시 JSON 으로 자연 마이그레이션
+  - MoreMenu '내보내기': `editor.storage.markdown.getMarkdown()` 그대로 동작 → 일방향 markdown 변환 정상
+  - Markdown.configure html: false 유지
+- **동작 확인 안내**:
+  1) 마이그레이션 불필요 (스키마 무변경)
+  2) 새 페이지에서 `@` 멘션 → 발행 → 새로고침 → 토큰 그대로 (색박스)
+  3) 이미지 figcaption / 색상 / 하이라이트 등 다른 라운드트립도 함께 해결됨
+  4) 옛 markdown 페이지 → 정상 표시 (호환), 편집 시 JSON 으로 마이그레이션
+  5) MoreMenu Markdown 내보내기 동작 정상
+- **남은 일**: (없음) — CLAUDE.md '마크다운 직렬화 한계' 카테고리 종결
+- **비고**: **시도 이력**: Cycle 55 followup 1~4 의 markdown 기반 우회 모두 실패. followup 5 긴급 rollback 후 근본 접근. 사전 조사에서 tiptap-markdown 의 `Markdown.setContent` override 가 모든 string 을 markdown parse 로 가로채는 것 + `MarkdownParser.parse(object)` 는 그대로 반환되는 것 확인 → JSON 방식 채택. **부수효과**: Yjs 호환 영향 없음 (Yjs Y.Doc 이 source of truth, DB content 는 시드/발행 결과만). copy-paste 의 markdown clipboard 도 `MarkdownClipboard` extension 그대로 → 무영향. **sentinel(HTML) 방식 배제**: setContent 의 가로채기 우회가 복잡 + html:true 가 부수효과 (followup 3 의 누적 회귀).
+
+---
+
+## Cycle 58 — 2026-05-27 — ✅ Done (사용자 프로파일 페이지 + 편집 모드 멘션 popover)
+- **제목**: 멘션 클릭 라우팅 정식화 — 조회 모드는 사용자 프로파일 페이지(`?profileId=`), 편집 모드는 컨텍스트 popover(연결로 이동/편집/연결해제)
+- **카테고리**: UX / 사용자 / 활동 (Cycle 55 멘션 후속)
+- **커밋**: `9802ec6`(58-1 BE), `18dba5e`(58-2 BE spec), `a9906b8`(58-3 FE 프로파일), `fe0244a`(58-4 FE popover), 본 CYCLES.md(58-5 Docs)
+- **변경 파일**:
+  - `apps/api/src/users/users.service.ts` — `findOne(id)` 신규. id+username+name+department+role+createdAt 반환. legacy 차단(NotFound). passwordHash/keycloakId/email 미노출
+  - `apps/api/src/users/users.controller.ts` — `GET /users/:id` 추가 (JwtAuthGuard)
+  - `apps/api/src/activities/activities.service.ts` — `opts.actorId` 추가 (단일 actorId AND 필터). 프로파일 활동 피드용
+  - `apps/api/src/activities/activities.controller.ts` — `@Query('actorId')` 추가
+  - `apps/api/src/users/users.service.spec.ts` + `apps/api/src/activities/activities.service.spec.ts` — 8 케이스 신규 (UsersService.findOne 4 + ActivitiesService.list actorId 4)
+  - `apps/web/components/ProfileView.tsx` 신규 — 사용자 정보 카드(아바타 + name + department + role + @username + 가입일) + 활동 피드(GET /activities?actorId=&limit=50). `formatActivity` 재활용 + PageCard 재활용
+  - `apps/web/app/(app)/page.tsx` — `profileIdFromUrl` / `isProfileView` 분기 (view=pages 패턴 답습). selectedPageId 가드 + replace effect 가드. 멘션 클릭 라우팅 personal space → `/?profileId=X`. 편집 모드 본문 click handler 에 `isBodyEditable` 분기 → popover state
+  - `apps/web/components/MentionEditPopover.tsx` 신규 — floating menu (position: fixed). 3 항목: 🔗 연결로 이동 / ✏️ 편집 / ✕ 연결해제. 외부 click + Esc 로 닫기
+- **검증**: jest **11 suites · 80 tests** 통과(직전 72 + 신규 8). tsc + next build EXIT 0 (`/` 437kB 유지). 마이그레이션 **없음**
+- **동작 확인 안내**:
+  1) 마이그레이션 불필요
+  2) 조회 모드 → 멘션 토큰 클릭 → `/?profileId=X` → 정보 카드 + 활동 피드
+  3) 편집 모드 → 멘션 토큰 클릭 → popover 3 항목
+  4) '연결로 이동' → 새 창에서 프로파일 (편집 중 같은 창 이동 X)
+  5) '편집' → 멘션 노드 삭제 + `@` 텍스트 insert → suggestion 자동 트리거 → 사용자 재선택
+  6) '연결해제' → 멘션 노드만 삭제 (텍스트도 사라짐)
+  7) popover 외부 click 또는 Esc 로 닫기
+- **남은 일**:
+  - 알림(Notification) — 멘션 transaction hook → POST /notifications 별도 메가 사이클
+  - 자기 자신 멘션 시 self-profile 동작 (현재는 그대로 자기 프로파일)
+- **비고**: 라우트 옵션 A 채택(`/?profileId=X`) — `view=pages` 와 같은 (app)/page.tsx 분기 패턴, layout 변경 X. ProfileView 내부 fetch 2 개 (user + activities). 편집 모드 popover 는 fixed position + getBoundingClientRect — Yjs 협업 영향 없음. '편집' 동작은 단순 노드 삭제 + '@' 텍스트 insert → suggestion 자동 트리거 (인기 패턴). Cycle 58 종결 — 멘션 기능 완성.
