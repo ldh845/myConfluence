@@ -8,6 +8,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 // import ChatPanel from "@/components/ChatPanel";
 import PageHeader from "@/components/PageHeader";
 import FullScreenEditor from "@/components/FullScreenEditor";
+import SpacePagesView from "@/components/SpacePagesView";
 import WelcomeBanner from "@/components/WelcomeBanner";
 import DiagramList from "@/components/DiagramList";
 import AttachmentList from "@/components/AttachmentList";
@@ -50,6 +51,11 @@ export default function HomePage() {
   // Cycle 29 — SystemSidebar의 "내 공간" 카드는 /?spaceId=X로 진입한다.
   // pageId가 없으면 그 스페이스의 첫 페이지로 자동 이동.
   const spaceIdFromUrl = searchParams.get("spaceId");
+  // Cycle 51 — 스페이스 사이드바 "페이지" 메뉴는 /?spaceId=X&view=pages 로
+  // 진입한다. 그 경우엔 첫 페이지 자동 이동 없이 SpacePagesView(최근 업데이트
+  // 목록)를 그린다. 현재 값은 'pages' 만 지원.
+  const view = searchParams.get("view");
+  const isPagesListView = view === "pages" && !!spaceIdFromUrl;
 
   const queryClient = useQueryClient();
 
@@ -104,14 +110,23 @@ export default function HomePage() {
     return getSpaceHomePageId(spaces[0]);
   }, [spaces, spaceIdFromUrl]);
 
-  const selectedPageId = pageIdFromUrl ?? defaultPageId;
+  // Cycle 51 — view=pages 면 페이지 본문/편집기를 마운트하지 않는다.
+  // selectedPageId 를 null 로 두면 loadCurrentPage 가 호출되지 않고,
+  // 최근 방문 기록 같은 부작용도 발화하지 않아 SpacePagesView 만 깔끔히 표시.
+  const selectedPageId = isPagesListView ? null : (pageIdFromUrl ?? defaultPageId);
 
   // /?spaceId=X 로 진입한 경우 (페이지가 있을 때만) 첫 페이지 URL로 replace.
+  // Cycle 51 — view=pages 진입 시엔 자동 replace 차단(URL 가드).
   useEffect(() => {
-    if (!pageIdFromUrl && spaceIdFromUrl && defaultPageId) {
+    if (
+      !pageIdFromUrl &&
+      spaceIdFromUrl &&
+      defaultPageId &&
+      !isPagesListView
+    ) {
       router.replace(`/?pageId=${defaultPageId}`);
     }
-  }, [pageIdFromUrl, spaceIdFromUrl, defaultPageId, router]);
+  }, [pageIdFromUrl, spaceIdFromUrl, defaultPageId, router, isPagesListView]);
 
   const selectPage = useCallback(
     (id: string) => {
@@ -422,6 +437,18 @@ export default function HomePage() {
     )
       handleDeleteCurrentPage(currentPage.id);
   };
+
+  // Cycle 51 — view=pages 면 페이지 본문/편집기 트리 전체를 건너뛰고
+  // SpacePagesView 만 렌더. 위쪽 useEffect 들은 모두 실행되지만 selectedPageId
+  // 가 null 이라 페이지 본문 fetch / 최근 방문 기록 등 부작용은 발생하지 않음.
+  if (isPagesListView && spaceIdFromUrl) {
+    return (
+      <SpacePagesView
+        spaceId={spaceIdFromUrl}
+        spaceName={activeSpace?.name}
+      />
+    );
+  }
 
   // Cycle 36 follow-up — 편집 모드로 들어왔지만 새 페이지가 아직 로딩 중인
   // transition. 그냥 두면 view 모드 빈 상태("왼쪽에서 페이지를 선택...")가

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useMutation } from "@tanstack/react-query";
 import {
   DndContext,
@@ -269,6 +269,9 @@ export default function Sidebar({
 }: Props) {
   const router = useRouter();
   const pathname = usePathname();
+  // Cycle 51 — "페이지" 메뉴의 active 표시에 view 파라미터를 본다.
+  const searchParams = useSearchParams();
+  const view = searchParams.get("view");
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [activeId, setActiveId] = useState<string | null>(null);
   const [overId, setOverId] = useState<string | null>(null);
@@ -492,22 +495,16 @@ export default function Sidebar({
             else if (space) router.push(`/?spaceId=${space.id}`);
           }}
         />
-        {/* "페이지" — 이 공간의 페이지 트리 첫 항목으로. 트리가 비어 있으면(홈만
-            있는 새 공간) 홈 페이지로. router.push("/") 는 공간 컨텍스트를 잃어
-            spaces[0]로 fallback되므로 쓰지 않는다. */}
+        {/* Cycle 51 — "페이지" 메뉴 동작 변경: 첫 페이지 자동 이동 폐기.
+            이제는 그 공간의 최근 업데이트 페이지 목록 화면(SpacePagesView,
+            (app)/page.tsx 가 view=pages 분기) 으로 이동한다. 빈 스페이스도
+            동일 화면이 빈 상태 안내 + 만들기 버튼을 책임진다. */}
         <NavItem
           icon="📄"
           label="페이지"
-          active={
-            pathname !== "/home" &&
-            pathname !== "/activity" &&
-            (!mainPageId || selectedPageId !== mainPageId)
-          }
+          active={pathname === "/" && view === "pages"}
           onClick={() => {
-            const firstTreePage = visible[0]?.id;
-            if (firstTreePage) onSelect(firstTreePage);
-            else if (mainPageId) onSelect(mainPageId);
-            else if (space) router.push(`/?spaceId=${space.id}`);
+            if (space) router.push(`/?spaceId=${space.id}&view=pages`);
           }}
         />
         <NavItem icon="📅" label="캘린더" disabled />
