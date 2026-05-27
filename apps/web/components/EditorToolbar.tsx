@@ -914,7 +914,10 @@ function TableButton({ editor }: { editor: Editor }) {
     return () => document.removeEventListener("mousedown", onDown);
   }, [open]);
 
-  const MAX = 8;
+  // Cycle 54-B — Confluence 표준 그리드 크기에 맞춰 8 → 10 확장.
+  //   셀 폭은 22px 고정으로 두고 popup 너비는 콘텐츠가 결정(w-fit) — 셀이
+  //   비좁아지지 않도록. 직접 입력은 그대로 (한도 100x20).
+  const MAX = 10;
 
   const insert = (rows: number, cols: number) => {
     editor
@@ -932,7 +935,7 @@ function TableButton({ editor }: { editor: Editor }) {
         ▦
       </TB>
       {open && (
-        <div className="absolute left-0 top-full mt-1 bg-white border border-[#dfe1e6] rounded shadow-lg p-2 z-20 w-[210px]">
+        <div className="absolute left-0 top-full mt-1 bg-white border border-[#dfe1e6] rounded shadow-lg p-2 z-20 w-fit">
           <div className="text-[11px] text-[#6b778c] mb-1">
             {hover.r > 0
               ? `${hover.r} 행 × ${hover.c} 열`
@@ -940,7 +943,7 @@ function TableButton({ editor }: { editor: Editor }) {
           </div>
           <div
             className="grid bg-[#f4f5f7] p-1 rounded"
-            style={{ gridTemplateColumns: `repeat(${MAX}, 1fr)`, gap: 3 }}
+            style={{ gridTemplateColumns: `repeat(${MAX}, 22px)`, gap: 3 }}
             onMouseLeave={() => setHover({ r: 0, c: 0 })}
           >
             {Array.from({ length: MAX * MAX }).map((_, i) => {
