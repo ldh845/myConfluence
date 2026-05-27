@@ -9,6 +9,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import PageHeader from "@/components/PageHeader";
 import FullScreenEditor from "@/components/FullScreenEditor";
 import SpacePagesView from "@/components/SpacePagesView";
+import ProfileView from "@/components/ProfileView";
 import WelcomeBanner from "@/components/WelcomeBanner";
 import DiagramList from "@/components/DiagramList";
 import AttachmentList from "@/components/AttachmentList";
@@ -57,6 +58,10 @@ export default function HomePage() {
   // 목록)를 그린다. 현재 값은 'pages' 만 지원.
   const view = searchParams.get("view");
   const isPagesListView = view === "pages" && !!spaceIdFromUrl;
+  // Cycle 58 — /?profileId=X 진입 시 사용자 프로파일 화면 (정보 + 활동 피드).
+  //   멘션 토큰 클릭의 라우팅 타겟. 같은 (app)/page.tsx 안에서 view 분기로 처리.
+  const profileIdFromUrl = searchParams.get("profileId");
+  const isProfileView = !!profileIdFromUrl;
 
   const queryClient = useQueryClient();
 
@@ -117,20 +122,33 @@ export default function HomePage() {
   // Cycle 51 — view=pages 면 페이지 본문/편집기를 마운트하지 않는다.
   // selectedPageId 를 null 로 두면 loadCurrentPage 가 호출되지 않고,
   // 최근 방문 기록 같은 부작용도 발화하지 않아 SpacePagesView 만 깔끔히 표시.
-  const selectedPageId = isPagesListView ? null : (pageIdFromUrl ?? defaultPageId);
+  // Cycle 58 — profileId 진입도 동일 (ProfileView 만 표시, 본문 fetch 차단).
+  const selectedPageId =
+    isPagesListView || isProfileView
+      ? null
+      : (pageIdFromUrl ?? defaultPageId);
 
   // /?spaceId=X 로 진입한 경우 (페이지가 있을 때만) 첫 페이지 URL로 replace.
   // Cycle 51 — view=pages 진입 시엔 자동 replace 차단(URL 가드).
+  // Cycle 58 — profileId 진입 시에도 동일.
   useEffect(() => {
     if (
       !pageIdFromUrl &&
       spaceIdFromUrl &&
       defaultPageId &&
-      !isPagesListView
+      !isPagesListView &&
+      !isProfileView
     ) {
       router.replace(`/?pageId=${defaultPageId}`);
     }
-  }, [pageIdFromUrl, spaceIdFromUrl, defaultPageId, router, isPagesListView]);
+  }, [
+    pageIdFromUrl,
+    spaceIdFromUrl,
+    defaultPageId,
+    router,
+    isPagesListView,
+    isProfileView,
+  ]);
 
   const selectPage = useCallback(
     (id: string) => {
@@ -243,23 +261,14 @@ export default function HomePage() {
       const target = e.target as HTMLElement | null;
 
       // 멘션 클릭 분기 — link 핸들러보다 먼저 (멘션이 a 안에 들어갈 일 없음).
+      // Cycle 58 — personal space 라우팅(followup 1) → 사용자 프로파일 페이지
+      //   (/?profileId=X) 로 변경. 정보 + 활동 피드 보기.
       const mention = target?.closest?.(".cf-mention");
       if (mention) {
         const userId = mention.getAttribute("data-id");
         if (userId) {
           e.preventDefault();
-          // spaces 캐시에서 그 사용자의 personal space 찾기. 없으면 무반응
-          // (그 사용자가 personal space 없는 케이스 — 옛 사용자 등).
-          const personal = spaces.find(
-            (s) => s.type === "PERSONAL" && s.ownerId === userId,
-          );
-          if (personal) {
-            if (personal.homePageId) {
-              router.push(`${pathname}?pageId=${personal.homePageId}`);
-            } else {
-              router.push(`${pathname}?spaceId=${personal.id}`);
-            }
-          }
+          router.push(`${pathname}?profileId=${userId}`);
         }
         return;
       }
@@ -503,6 +512,12 @@ export default function HomePage() {
         spaceName={activeSpace?.name}
       />
     );
+  }
+
+  // Cycle 58 — profileId 진입 시 ProfileView 만 렌더 (사이드바는 직전 컨텍스트
+  //   유지). 동일하게 selectedPageId null 가드로 본문 fetch 차단.
+  if (isProfileView && profileIdFromUrl) {
+    return <ProfileView userId={profileIdFromUrl} />;
   }
 
   // Cycle 36 follow-up — 편집 모드로 들어왔지만 새 페이지가 아직 로딩 중인
