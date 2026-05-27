@@ -35,6 +35,11 @@ model User {
   name             String
   department       String
   role             Role          @default(DEVELOPER)
+  // Cycle 48 — Keycloak claim 캐시 (Admin 페이지 사용자 목록용).
+  // OIDC callback 의 findOrCreateOidcUser 가 매 로그인마다 동기화.
+  email            String?
+  emailVerified    Boolean       @default(false)
+  lastLoginAt      DateTime?
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
   authoredPages    Page[]        @relation("PageAuthor")
@@ -165,32 +170,32 @@ model PageShare {
 }
 
 model Comment {
-  id         String    @id @default(cuid())
+  id         String     @id @default(cuid())
   pageId     String
-  page       Page      @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  page       Page       @relation(fields: [pageId], references: [id], onDelete: Cascade)
   parentId   String?
-  parent     Comment?  @relation("CommentThread", fields: [parentId], references: [id], onDelete: Cascade)
-  replies    Comment[] @relation("CommentThread")
+  parent     Comment?   @relation("CommentThread", fields: [parentId], references: [id], onDelete: Cascade)
+  replies    Comment[]  @relation("CommentThread")
   // FR-001 / FR-070 (Cycle 27d) — 작성자 FK. user 삭제 시 SetNull → authorName fallback.
   authorId   String?
-  author     User?     @relation("CommentAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+  author     User?      @relation("CommentAuthor", fields: [authorId], references: [id], onDelete: SetNull)
   authorName String?
   body       String
   // FR-071 (Cycle 16-3a) — 인라인 댓글.
   // isInline=true면 anchorJson에 ProseMirror 위치(from/to)와 선택 텍스트를 JSON
   // 문자열로 저장. resolvedAt/resolvedBy는 해결 시각·해결자.
-  isInline   Boolean   @default(false)
+  isInline   Boolean    @default(false)
   anchorJson String?
   resolvedAt DateTime?
   resolvedBy String?
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+  reactions  Reaction[]
 
   @@index([pageId, createdAt])
   @@index([parentId])
   @@index([pageId, isInline, resolvedAt])
   @@index([authorId])
-  reactions  Reaction[]
 }
 
 // FR-073 (Cycle 25) — 이모지 반응. page 또는 comment 둘 중 하나에 연결.
@@ -255,4 +260,17 @@ model Diagram {
   updatedAt DateTime @updatedAt
 
   @@index([pageId])
+}
+
+// Cycle 48 — 시스템 설정 (single-row pattern, id="singleton").
+// Admin 페이지의 "일반 설정"이 읽고/쓰는 단일 레코드.
+// 신규 환경 마이그레이션은 singleton 행을 seed 한다(migration.sql 의 INSERT).
+model AppConfig {
+  id               String   @id @default("singleton")
+  siteName         String   @default("DocSpace")
+  // 단일 파일 최대 크기 (MB). NFR-P-007 100MB 기준. 운영 중 ADMIN 조정 가능.
+  uploadLimitMb    Int      @default(100)
+  // 세션(docspace_session) 만료 시간 (분). 기본 7d = 10080분.
+  sessionExpireMin Int      @default(10080)
+  updatedAt        DateTime @updatedAt
 }
