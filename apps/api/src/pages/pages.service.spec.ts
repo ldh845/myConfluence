@@ -4,6 +4,7 @@ import { PagesService } from './pages.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { AttachmentsService } from '../attachments/attachments.service';
 import { ActivitiesService } from '../activities/activities.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 // Cycle 51 — recent({ limit?, spaceId?, offset? }) 검증.
 //   - spaceId 지정 시 where 에 추가
@@ -29,6 +30,8 @@ describe('PagesService — recent', () => {
         // recent() 는 다른 서비스를 호출하지 않지만 DI 해소를 위해 빈 mock 제공.
         { provide: AttachmentsService, useValue: {} },
         { provide: ActivitiesService, useValue: {} },
+        // Cycle 59 — PagesService 가 NotificationsService 의존.
+        { provide: NotificationsService, useValue: { notifyMentions: jest.fn() } },
       ],
     }).compile();
     service = module.get<PagesService>(PagesService);
@@ -157,6 +160,11 @@ describe('PagesService — remove (Cycle 56 cascade option)', () => {
         { provide: PrismaService, useValue: prismaMock },
         { provide: AttachmentsService, useValue: {} },
         { provide: ActivitiesService, useValue: activitiesMock },
+        // Cycle 59 — PagesService 가 NotificationsService 의존.
+        {
+          provide: NotificationsService,
+          useValue: { notifyMentions: jest.fn() },
+        },
       ],
     }).compile();
     service = module.get<PagesService>(PagesService);
