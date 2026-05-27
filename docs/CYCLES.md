@@ -1106,3 +1106,27 @@
 - **검증**: tsc EXIT 0, next build EXIT 0 (`/home` 4.67kB, 직전 4.68→ -1B). 백엔드 무변경(`?types=` 다중 IN 필터는 그대로, 클라이언트가 보내는 목록만 축소). 빌드 산출물의 다른 라우트 크기 변동 없음
 - **남은 일**: 없음
 - **비고**: Cycle 50 본문의 "사용자 활동 5종" 표현은 followup 시점에 outdated — 본 entry 가 현재 시점의 노출 정책(2종) source of truth. /activity 무영향 (자체 단일 `?type=` 사용). 추가 type 가 향후 필요해지면 `HOME_ACTIVITY_TYPES` 한 줄로 확장 가능. Cycle 50 본 사이클의 5종 합의는 합의 과정의 발자국으로 본문에 그대로 보존(시간순 기록 컨벤션).
+
+---
+
+## Cycle 51 — 2026-05-27 — ✅ Done (스페이스 사이드바 '페이지' → 최근 업데이트 목록)
+- **제목**: 스페이스 사이드바 '페이지' 메뉴 클릭 동작 변경 — 첫 페이지 자동 이동 폐기, 그 공간의 최근 업데이트 페이지 목록 화면(SpacePagesView)으로 이동
+- **카테고리**: UX / 스페이스 네비게이션
+- **커밋**: `d996714`(51-1 BE), `81eb4ce`(51-2 BE spec), `af53f9c`(51-3 FE), 본 CYCLES.md(51-4 Docs)
+- **변경 파일**:
+  - `apps/api/src/pages/pages.service.ts` — `recent()` 시그니처 `(limit)` → `({ limit?, spaceId?, offset? })`. spaceId 옵셔널(있으면 where 에 추가), offset 0~ clamp, select 에 `author { id, name }` / `lastEditor { id, name }` 추가. 기존 /home 의 `?limit=N` 단일 호출과 100% 호환
+  - `apps/api/src/pages/pages.controller.ts` — `@Query('spaceId')`, `@Query('offset')` 추가. service 시그니처에 맞춰 객체 인자 전달
+  - `apps/api/src/pages/pages.service.spec.ts` 신규 — 10 케이스(spaceId 필터 / spaceId 미지정 호환 / opts 없이 호출 기본값 / limit 1~50 clamp / offset 음수→0 / orderBy updatedAt desc 고정 / select 필드 / spaceId+offset+limit 결합). draft·휴지통 제외 회귀 가드 포함
+  - `apps/web/components/SpacePagesView.tsx` 신규 — 카드 리스트(제목 / 마지막 수정 시각 / 편집자명), '더 보기' 버튼(LIMIT=10, offset += LIMIT), 빈 상태 안내 + '+ 새 페이지' 버튼(TopNav 만들기와 동일 draft 패턴). 페이지 카드 클릭 시 기존 `?pageId=X` 라우팅(PageCard 재사용)
+  - `apps/web/components/Sidebar.tsx` — '페이지' NavItem onClick 단순화(`router.push('/?spaceId=' + space.id + '&view=pages')` 한 줄). active 표시 정확화(`pathname === '/' && view === 'pages'`). `useSearchParams` import 추가
+  - `apps/web/app/(app)/page.tsx` — `view='pages' && spaceIdFromUrl` 분기 → `<SpacePagesView />` early return. **selectedPageId 도 view=pages 시 null 가드** → loadCurrentPage 호출 / 최근 방문 기록 등 부작용 차단. `/?spaceId=X` 자동 replace effect 에 `!isPagesListView` 가드 추가(URL 회귀 방지)
+- **검증**: jest 전체 **8 suites · 44 tests** 통과(기존 34 + 신규 10). nest build EXIT 0 / tsc EXIT 0 / next build EXIT 0 (`/` 432kB, +2kB. 다른 라우트 무변동). 마이그레이션 **없음** (Page/Space/ActivityLog 스키마 무변경)
+- **동작 확인 안내** (VM/dev 적용 시):
+  1) **마이그레이션 불필요** — 스키마 변경 없음
+  2) 스페이스 사이드바 '📄 페이지' 클릭 → URL 이 `/?spaceId=X&view=pages` 로 바뀌고 최근 업데이트 페이지 카드 리스트 표시
+  3) 페이지 없는 스페이스에서 클릭 → "이 공간에 아직 페이지가 없습니다" 빈 상태 + '+ 새 페이지' 버튼 (클릭 시 draft 생성·편집 모드 진입)
+  4) 페이지 카드 클릭 → `/?pageId=X` 로 이동 (기존 동작)
+  5) draft(publishedAt=null) 페이지는 목록에 보이지 않음 — 백엔드 recent() 의 `NOT: { publishedAt: null }` 가드
+  6) `/home` 의 "최근 작업" 카드 등 기존 `?limit=N` 단일 호출 회귀 없음
+- **남은 일**: 정렬 토글(updatedAt 외 옵션), 작성자/편집자 필터, 무한 스크롤, 페이지별 미리보기 — 모두 본 사이클 범위 외(요구사항 명시). 필요 시 별도 사이클
+- **비고**: **라우트 옵션 A 채택** (`/?spaceId=X&view=pages`) — 코드베이스가 dynamic `[id]` 폴더 없이 쿼리 베이스로 일관(Cycle 29 `/home?view=` 패턴 답습)이라 그 라인이 자연스러움. 옵션 B(`/spaces/:id/pages` dynamic route)는 활성 스페이스 컨텍스트 추적 코드 신규 + 컨벤션 깸으로 배제. **페이지네이션 패턴**: '더 보기' 버튼 + offset 누적 — 코드베이스에 무한 스크롤 선례 없고 활동 피드도 단발 limit. 가장 단순한 답습. **초기 limit 10** — 사용자 합의. draft/휴지통 제외는 백엔드가 보장 — CLAUDE.md "draft 페이지 모델" 정책 그대로. 빈 상태 만들기 버튼은 TopNav 만들기와 동일 draft 패턴(중복 추출은 비용 대비 효과 적어 인라인).
