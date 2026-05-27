@@ -7,6 +7,7 @@ import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AttachmentsService } from '../attachments/attachments.service';
 import { ActivitiesService } from '../activities/activities.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { promises as fs } from 'node:fs';
 import * as path from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -44,6 +45,8 @@ export class PagesService {
     private readonly prisma: PrismaService,
     private readonly attachments: AttachmentsService,
     private readonly activities: ActivitiesService,
+    // Cycle 59 — 발행 시 멘션 추출 후 알림 트리거.
+    private readonly notifications: NotificationsService,
   ) {}
 
   // FR-064 — 같은 트랜잭션 안에서 호출. 새 PageVersion이 막 추가된
@@ -576,6 +579,27 @@ export class PagesService {
       actorName: actor?.name ?? dto.authorName ?? null,
       payload: { title: published.title },
     });
+    // Cycle 59 — 발행 직후 멘션 추출 → 알림 트리거. best-effort: 실패해도 발행
+    //   본체에 영향 X. content 가 markdown(옛 데이터)이면 mention 노드 없음 →
+    //   자연 skip. notifyMentions 가 자기 자신 + 중복 dedupe 처리.
+    if (actor?.id) {
+      try {
+        const mentionedIds = extractMentionIds(published.content);
+        if (mentionedIds.length > 0) {
+          await this.notifications.notifyMentions({
+            actorId: actor.id,
+            pageId: published.id,
+            recipientUserIds: mentionedIds,
+            payload: {
+              pageTitle: published.title,
+              actorName: actor.name,
+            },
+          });
+        }
+      } catch {
+        // ignore — best-effort
+      }
+    }
     return published;
   }
 
@@ -1037,5 +1061,42 @@ export class PagesService {
     return this.prisma.diagram.create({
       data: { pageId, title, data },
     });
+  }
+}
+
+// Cycle 59 — 발행된 content (ProseMirror JSON) 안에서 mention 노드의 userId
+//   추출. content 가 JSON 이 아니면(옛 markdown) 빈 배열 반환 — 자연 skip.
+//   중복 제거는 호출 측(NotificationsService.notifyMentions) 이 처리.
+export function extractMentionIds(content: string | null | undefined): string[] {
+  if (!content) return [];
+  const trimmed = content.trimStart();
+  if (!trimmed.startsWith('{')) return [];
+  let doc: unknown;
+  try {
+    doc = JSON.parse(content);
+  } catch {
+    return [];
+  }
+  const ids: string[] = [];
+  walkNode(doc, (node) => {
+    if (
+      typeof node === 'object' &&
+      node !== null &&
+      (node as { type?: unknown }).type === 'mention'
+    ) {
+      const attrs = (node as { attrs?: { id?: unknown } }).attrs;
+      const id = attrs?.id;
+      if (typeof id === 'string' && id) ids.push(id);
+    }
+  });
+  return ids;
+}
+
+function walkNode(node: unknown, visit: (n: unknown) => void): void {
+  if (!node || typeof node !== 'object') return;
+  visit(node);
+  const content = (node as { content?: unknown[] }).content;
+  if (Array.isArray(content)) {
+    for (const child of content) walkNode(child, visit);
   }
 }

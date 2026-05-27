@@ -4,13 +4,20 @@ import { PagesService } from './pages.service';
 import { AttachmentsModule } from '../attachments/attachments.module';
 import { ActivitiesModule } from '../activities/activities.module';
 import { AuthModule } from '../auth/auth.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
   // FR-080 — PagesService.remove가 첨부 디스크 정리 시 AttachmentsService를
   // 호출하므로 AttachmentsModule을 import 한다.
   // FR-131 (Cycle 24) — 페이지 mutation에 activity log를 기록.
   // FR-001 (Cycle 27c) — JwtAuthGuard 적용. AuthModule이 JwtStrategy를 등록.
-  imports: [AttachmentsModule, ActivitiesModule, AuthModule],
+  // Cycle 59 — 발행 시 멘션된 사용자에게 알림 트리거 (notifyMentions).
+  imports: [
+    AttachmentsModule,
+    ActivitiesModule,
+    AuthModule,
+    NotificationsModule,
+  ],
   controllers: [PagesController],
   providers: [PagesService],
 })
