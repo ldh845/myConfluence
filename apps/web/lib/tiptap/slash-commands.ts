@@ -1,4 +1,5 @@
 import type { Editor, Range } from "@tiptap/core";
+import { promptForDate } from "@/lib/tiptap/date";
 
 // FR-037 — 슬래시 명령어 카탈로그.
 // 각 command는 슬래시 토큰("/...")을 먼저 지운 뒤(deleteRange) 해당 노드를
@@ -139,6 +140,23 @@ export const SLASH_ITEMS: SlashCommandItem[] = [
     searchTerms: ["hr", "divider", "separator", "구분선", "수평선"],
     command: ({ editor, range }) =>
       editor.chain().focus().deleteRange(range).setHorizontalRule().run(),
+  },
+  {
+    // Cycle 54-F — 날짜 inline atom. prompt 로 ISO 입력.
+    title: "날짜",
+    description: "YYYY-MM-DD 형식 날짜 토큰",
+    searchTerms: ["date", "day", "calendar", "날짜", "일자", "년월일"],
+    command: ({ editor, range }) => {
+      const iso = promptForDate();
+      // 취소 시 토큰만 제거하고 종료.
+      editor.chain().focus().deleteRange(range).run();
+      if (!iso) return;
+      editor
+        .chain()
+        .focus()
+        .insertContent({ type: "date", attrs: { date: iso } })
+        .run();
+    },
   },
   {
     title: "링크",

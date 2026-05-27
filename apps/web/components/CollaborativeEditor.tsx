@@ -31,6 +31,7 @@ import { InlineCommentMark } from "@/lib/tiptap/inline-comment-mark";
 import { MarkdownInputRules } from "@/lib/tiptap/markdown-input-rules";
 import { MathInline } from "@/lib/tiptap/math-inline";
 import { MathBlock } from "@/lib/tiptap/math-block";
+import { DateExtension } from "@/lib/tiptap/date";
 import {
   SlashCommand,
   slashCommandSuggestion,
@@ -366,6 +367,8 @@ export default function CollaborativeEditor({
         // FR-040 (Cycle 20) — LaTeX 수식 (인라인 + 블록).
         MathInline,
         MathBlock,
+        // Cycle 54-F — 날짜 inline atom. + / slash 카탈로그에서 진입.
+        DateExtension,
         // FR-036 (Cycle 13) — StarterKit 미커버 input rules (체크리스트/링크/이미지).
         MarkdownInputRules,
         SlashCommand.configure({ suggestion: slashCommandSuggestion }),
