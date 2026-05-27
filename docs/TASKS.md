@@ -71,11 +71,15 @@
     extension caption attr + figure NodeView. ImageInsertDialog 신규,
     ImageNodeView 신규, ImageAltButton 의미 분리 + ImageCaptionButton 추가.
     기존 image 노드 자연 호환(Yjs migration 0).
+  - Cycle 56 — 페이지 삭제 동작 분리 + 라우팅 fix. 기본은 자식 승격(단일),
+    cascade=true 만 자손 휴지통. window.confirm → DeletePageDialog(체크박스).
+    삭제 후 같은 공간 유지(부모/홈 fallback) — 사용자 보고 "다른 공간으로
+    이동" 버그 fix. BE remove() 시그니처 변경 + 9 케이스 spec.
 - **남은 일**: (현재 plat-level 큰 항목 없음 — 신규 기능은 Task G)
 - **닫힘 이력**: (v1 retro 미수행)
 - **차단 / 의존**: 없음
 - **Jira Epic**: 미등록
-- **관련 Cycle**: Cycle 1~41, 49, 50, 51, 52, 53, 54-D, 54-A, 54-B, 54-F, 54-C
+- **관련 Cycle**: Cycle 1~41, 49, 50, 51, 52, 53, 54-D, 54-A, 54-B, 54-F, 54-C, 56
 
 ---
 
@@ -261,6 +265,7 @@
 | Cycle 54-B | A |
 | Cycle 54-F | A |
 | Cycle 54-C | A |
+| Cycle 56 | A |
 
 ---
 

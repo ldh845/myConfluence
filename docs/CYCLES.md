@@ -1301,3 +1301,34 @@
   - 이미지 크기 조절 핸들 (TipTap 기본 미지원 — `@tiptap/extension-image` 외 별도 패키지 필요)
   - inline figcaption 편집 (prompt 대신 contentEditable) — Yjs 충돌 주의 필요
 - **비고**: caption 을 **신규 노드(Figure)가 아닌 Image attr 확장**으로 처리한 이유 — 기존 image 노드와 schema 호환(Yjs migration 0). parseHTML 의 figure 매칭이 먼저, 그 다음 부모 img fallback 으로 paste 호환성. renderHTML 도 caption 유무로 분기해 역호환. ImageNodeView 의 figcaption 편집은 prompt 로 단순화 — Yjs `Y.Doc` 안의 caption attr 가 attribute transaction 으로 전파되어 다른 클라이언트 즉시 동기. **Cycle 54 완료**: D + A + B + F + C → 모두 종료. **Cycle 55(멘션)** 는 별도 메가 사이클(BE users 검색 + Mention extension + suggestion 통합 + 향후 알림 분기점).
+
+---
+
+## Cycle 56 — 2026-05-27 — ✅ Done (페이지 삭제 cascade 옵션 + 라우팅 fix)
+- **제목**: 페이지 삭제 동작 분리 — 기본은 자식 승격(단일), `cascade=true` 만 자손 휴지통. window.confirm → DeletePageDialog(체크박스). 삭제 후 같은 공간 유지(라우팅 버그 fix)
+- **카테고리**: 코어 플랫폼 / UX 버그 fix (사용자 보고 — Cycle 55 자리 건너뛰고 시급 fix)
+- **커밋**: `d9e3bd1`(56-1 BE), `9cc6c21`(56-2 BE spec), `5e46dca`(56-3 FE), 본 CYCLES.md(56-4 Docs)
+- **사용자 보고 원인 분석**:
+  1) 사용자 의도("딱 페이지만 삭제")와 시스템 동작(cascade — Cycle 18-1a)이 불일치
+  2) `router.push('/')` 가 첫 스페이스 fallback 으로 가서 **다른 공간으로 이동**
+  3) "트리에서 하위만 사라짐" 보고는 cache invalidate timing 의심 (백엔드는 cascade 정상 동작)
+- **변경 파일**:
+  - `apps/api/src/pages/pages.service.ts` `remove(id, opts.cascade, actor)` — cascade=true → 자손 모두 휴지통(기존 Cycle 18-1a 동작). cascade=false(기본) → `$transaction(자식 parentId → 부모 parentId 승격, 부모만 deletedAt)`. 자식 없으면 옵션 무관. activity payload 에 `promotedChildren` / `descendants` 카운트 (서로 배타)
+  - `apps/api/src/pages/pages.controller.ts` `@Query('cascade')` 추가 (`?cascade=true` 만 cascade)
+  - `apps/api/src/pages/pages.service.spec.ts` — remove **9 케이스 신규** (자식 0/N · cascade on/off · parent root · opts 없이 · BadRequest/NotFound · actor=null · activity payload). PrismaService mock 확장
+  - `apps/web/components/DeletePageDialog.tsx` 신규 — 체크박스 다이얼로그(자식 N 일 때만 노출), 열릴 때마다 cascade 체크 초기화
+  - `apps/web/components/Sidebar.tsx` — × 버튼 `window.confirm` 제거. 단일 DeletePageDialog 마운트. Row 컴포넌트 prop `onDeletePage` → `onRequestDelete(item)` 의도 명확화. 활성 자식 카운트는 `pages.filter(p.parentId === item.id)`. `onDeletePage` (layout 전달) 시그니처 `(pageId, cascade)`
+  - `apps/web/app/(app)/layout.tsx` `handleDeletePage(pageId, cascade)` — fetch URL 에 `?cascade=true` 조건부 추가. **라우팅 fix**: 삭제 전 부모/홈 미리 결정 → fallback 우선순위 부모 → 홈 → 빈 공간 진입(`/?spaceId=X`) → `/` (다른 공간 fallback 차단)
+  - `apps/web/app/(app)/page.tsx` `handleDeleteCurrentPage(pageId, cascade)` — 같은 패턴. `confirmDeleteCurrent` 가 DeletePageDialog 트리거. `currentChildCount` useMemo
+- **검증**: jest **10 suites · 66 tests** 통과(직전 57 + 신규 9 = 66). nest build / tsc / next build 모두 EXIT 0 (`/` 436→435kB, -1kB — confirm 코드 제거 + 다이얼로그 추가 상쇄). 마이그레이션 **없음** (스키마 무변경)
+- **동작 확인 안내** (VM/dev 적용 시):
+  1) **마이그레이션 불필요** — Page 스키마 무변경
+  2) 하위 페이지가 있는 부모를 사이드바 × 또는 PageHeader ⋯ → '페이지 삭제'
+  3) **다이얼로그**: "{title}을(를) 삭제합니다. N개의 하위 페이지가 페이지 트리에 남습니다 (한 단계 위로 승격)" + 체크박스 "하위 페이지도 삭제"
+  4) **체크 해제(기본)** + 삭제 → 부모만 휴지통, 자식들 한 단계 위로 승격(페이지 트리에 그대로 남음)
+  5) 체크 + 삭제 → 자손 모두 휴지통 (기존 Cycle 18-1a 동작, ?cascade=true)
+  6) 자식 없는 페이지 삭제 → 체크박스 안 보임, 단순 안내
+  7) **삭제 후 같은 공간 유지** — 부모 → 홈 → 빈 공간 진입 순으로 fallback. **다른 공간으로 이동하지 않음** (사용자 보고 버그 fix 검증)
+  8) 휴지통(🗑️) 에서 cascade=true 였던 자손도 그대로 복구 가능 (Cycle 18-1a restore 로직 영향 없음)
+- **남은 일**: cascade=true 의 restore 가 자손도 일관되게 살아나는지 별도 검증 권장(현재 코드 그대로 동작 예상)
+- **비고**: **자식 승격 시 position 은 그대로 유지** — 같은 (spaceId, parentId) 그룹에 다른 형제와 중복 가능하나 정렬 안정. position 재부여는 Cycle 19a 의 reorder 기능 외부에서. **cascade=true 동작은 기존과 100% 호환** — Cycle 18-1a 의 자손 휴지통 보존(restore 호환). **라우팅 fix 메커니즘**: 삭제 전 `activeSpace.pages` 에서 부모 ID 추출(삭제 후엔 invalidate 로 사라짐). 부모 없으면 `homePageId` → 그것도 없으면 빈 공간 진입 → 최후 `/`. **Cycle 55(멘션)는 미시작** — 사용자 보고 시급 fix 가 우선이라 56 으로 번호 점프. 향후 멘션 사이클이 55 로 들어옴.
