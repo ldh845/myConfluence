@@ -19,6 +19,8 @@ import { CODE_BLOCK_LANGUAGES } from "@/lib/tiptap/code-block-lowlight";
 import EditorColorPicker from "@/components/EditorColorPicker";
 import InternalPageLinkDialog from "@/components/InternalPageLinkDialog";
 import InlineCommentDialog from "@/components/InlineCommentDialog";
+import ImageInsertDialog from "@/components/ImageInsertDialog";
+import { usePageStore } from "@/lib/stores/usePageStore";
 import { SLASH_ITEMS, filterItems } from "@/lib/tiptap/slash-commands";
 import type { SlashCommandItem } from "@/lib/tiptap/slash-commands";
 
@@ -816,20 +818,31 @@ function LinkButton({ editor }: { editor: Editor }) {
   );
 }
 
-// FR-033 (Cycle 12-2) — 외부 URL 이미지 삽입.
-// 드롭/붙여넣기로 들어오는 첨부 업로드 흐름은 CollaborativeEditor의
-// handleDrop/handlePaste(Cycle 12-1)에서 처리하므로 여기서는 외부 URL만.
+// Cycle 54-C — 단순 URL prompt → 통합 다이얼로그(ImageInsertDialog)로 교체.
+//   탭: '이 페이지 첨부' (기존 첨부 이미지 + 새 업로드) / '웹에서의 그림' (URL).
+//   드롭/붙여넣기 업로드 흐름은 CollaborativeEditor handleDrop/handlePaste(Cycle 12-1)
+//   에서 그대로 처리(회귀 없음). pageId 는 usePageStore 에서 가져옴 — TaskItemNodeView
+//   와 같은 패턴(NodeView 가 prop 못 받는 한계 회피용 store).
 function ImageButton({ editor }: { editor: Editor }) {
-  const insert = () => {
-    const url = window.prompt("이미지 URL");
-    if (!url) return;
-    const alt = window.prompt("이미지 캡션(alt 텍스트, 선택)", "") ?? "";
-    editor.chain().focus().setImage({ src: url, alt }).run();
+  const [open, setOpen] = useState(false);
+  const pageId = usePageStore((s) => s.pageId);
+  const insert = (src: string, alt?: string) => {
+    editor.chain().focus().setImage({ src, alt: alt ?? "" }).run();
   };
   return (
-    <TB title="이미지" onClick={insert}>
-      🖼️
-    </TB>
+    <>
+      <TB title="이미지" onClick={() => setOpen(true)}>
+        🖼️
+      </TB>
+      {pageId && (
+        <ImageInsertDialog
+          open={open}
+          onOpenChange={setOpen}
+          pageId={pageId}
+          onSelect={insert}
+        />
+      )}
+    </>
   );
 }
 
