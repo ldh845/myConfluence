@@ -1204,3 +1204,25 @@
   7) slash(`/`) 진입 흐름은 그대로 동작 (회귀 없음 — 카탈로그 공유라 항상 동기화)
 - **남은 일**: (54-D 영역 종결) — 다음 sub-cycle: 54-A (링크 다이얼로그 탭) → 54-B/C/F → Cycle 55 (멘션 별도)
 - **비고**: SlashMenu 컴포넌트 자체는 재활용 못 함 (suggestion render 가 키보드를 외부에 위임하는 forwardRef 구조라 + 버튼 용도엔 부적합). 카탈로그(`SLASH_ITEMS`)만 공유 → 두 진입점이 항상 동기화. Confluence 의 + 버튼이 검색 input 을 포함하는 패턴이라 slash 와 일관된 UX 유지. 사용자 결정: 멘션(E)은 Cycle 55 로 분리, Ctrl+K 는 편집 모드 한정(54-A 에서 구현).
+
+---
+
+## Cycle 54-A — 2026-05-27 — ✅ Done (링크 다이얼로그 탭 UI + Ctrl+K 단축키)
+- **제목**: 링크 다이얼로그를 Confluence 표준 탭 UI(연결 문구/웹 연결)로 재구성, 편집 모드 한정 Ctrl+K 단축키 추가
+- **카테고리**: UX / 편집 툴바 (Cycle 54 sub-cycle A)
+- **커밋**: `12d9616`(54-A-1 FE), 본 CYCLES.md(54-A-2 Docs)
+- **변경 파일**:
+  - `apps/web/components/InternalPageLinkDialog.tsx` (전체 재작성) — 탭 UI('연결 문구' / '웹 연결'). 기본 탭은 currentHref 가 http(s):// 면 '웹 연결', 그 외(빈 값/내부 경로) '연결 문구'. 외부 URL / 내부 페이지 검색 흐름 자체는 그대로 (회귀 없음). '파일' 탭은 54-C(파일/그림 통합 다이얼로그) 범위라 자리 안내 텍스트만 노출
+  - `apps/web/components/EditorToolbar.tsx` LinkButton — `useEffect` 로 Ctrl/Cmd+K keydown 등록(**capture phase + `stopPropagation`**). 가드: `editor.isEditable === true` 일 때만 발동. TopNav 의 글로벌 Ctrl+K(검색 오버레이) 와 분리 — 편집 모드에서만 우리가 먼저 가로채고, 조회 모드/외부 라우트에서는 TopNav 가 그대로 동작. TB title 도 "링크 (Ctrl+K)" 로 갱신
+- **검증**: tsc EXIT 0 / next build EXIT 0 (`/` 434kB 유지). Yjs 협업 영향 없음 (TipTap 확장 변경 없음). 마이그레이션 **없음**
+- **동작 확인 안내**:
+  1) **마이그레이션 불필요** — FE 한 컴포넌트 재작성 + 한 컴포넌트 keydown 추가
+  2) 편집 모드 진입 → 본문 안에서 Ctrl+K (또는 Cmd+K) → 링크 다이얼로그 열림
+  3) 다이얼로그 상단 탭 2개 — '연결 문구' (기본) / '웹 연결'
+  4) 외부 링크 수정 시(currentHref 가 http(s)://) → '웹 연결' 탭 기본 활성
+  5) 내부 페이지 검색 → 결과 클릭 시 `/?pageId=X` 마크 적용
+  6) 외부 URL Enter 또는 '적용' → 그 URL 로 마크 적용
+  7) **조회 모드 / 외부 라우트(/home, /admin)에서 Ctrl+K → TopNav 검색 오버레이 정상 동작** (회귀 없음)
+  8) '링크 제거' / '취소' 동작 그대로
+- **남은 일**: '파일' 탭(페이지 첨부 파일 연결) — 54-C 에서 통합 다이얼로그와 함께 추가
+- **비고**: **Ctrl+K 충돌 해결 전략** — capture phase + `stopPropagation` 으로 편집 모드의 LinkButton 핸들러가 먼저 가로채 TopNav bubble 핸들러 차단. `isEditable` 가드로 조회 모드 자연 분리. 향후 다른 편집 단축키(Ctrl+/, Ctrl+E 등)도 같은 패턴 적용 가능. 탭 UI 의 '파일' 자리 안내 텍스트는 사용자가 Cycle 54-C 적용 전까지 기능을 기다리지 않도록 명시. **Cycle 54 진행 상황**: D(완료) + A(완료) → 남은 sub-cycle: 54-B(표 그리드 8→10) + 54-C(파일/그림 통합 + figcaption) + 54-F(날짜 블록). 멘션(E)은 Cycle 55 메가 사이클로 분리.

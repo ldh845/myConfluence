@@ -59,11 +59,14 @@
     모델 신규 + 토글 API. 단축키 E/V/F/W/S 도입(입력 포커스·편집 모드 가드).
   - Cycle 54-D — 편집 툴바에 '+ 더 많은 내용 삽입' 버튼. slash 명령
     카탈로그 재활용해 검색 + 클릭으로 같은 블록 삽입 흐름 제공.
+  - Cycle 54-A — 링크 다이얼로그를 Confluence 표준 탭 UI
+    (연결 문구/웹 연결)로 재구성. 편집 모드 한정 Ctrl+K 단축키 추가
+    (TopNav 검색과 capture phase + stopPropagation 으로 분리).
 - **남은 일**: (현재 plat-level 큰 항목 없음 — 신규 기능은 Task G)
 - **닫힘 이력**: (v1 retro 미수행)
 - **차단 / 의존**: 없음
 - **Jira Epic**: 미등록
-- **관련 Cycle**: Cycle 1~41, 49, 50, 51, 52, 53, 54-D
+- **관련 Cycle**: Cycle 1~41, 49, 50, 51, 52, 53, 54-D, 54-A
 
 ---
 
@@ -245,6 +248,7 @@
 | Cycle 52 | A |
 | Cycle 53 | A |
 | Cycle 54-D | A |
+| Cycle 54-A | A |
 
 ---
 
