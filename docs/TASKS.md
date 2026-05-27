@@ -54,11 +54,14 @@
   - Cycle 52 — 페이지 조회 화면 본문 폭 제약 제거. max-w-[960px] mx-auto
     폐기로 main 영역 가로 꽉 차게. 편집 모드(Cycle 38 followup)와 동일한
     반응형 패딩 패턴으로 통일해 모드 전환 시 폭 jump 없음.
+  - Cycle 53 — 페이지 조회 상단 액션 Confluence 표준 5+1 재구성
+    (편집/인라인댓글/저장/지켜보기/공유 + ⋯). SavedPage / WatchList 서버
+    모델 신규 + 토글 API. 단축키 E/V/F/W/S 도입(입력 포커스·편집 모드 가드).
 - **남은 일**: (현재 plat-level 큰 항목 없음 — 신규 기능은 Task G)
 - **닫힘 이력**: (v1 retro 미수행)
 - **차단 / 의존**: 없음
 - **Jira Epic**: 미등록
-- **관련 Cycle**: Cycle 1~41, 49, 50, 51, 52
+- **관련 Cycle**: Cycle 1~41, 49, 50, 51, 52, 53
 
 ---
 
@@ -238,6 +241,7 @@
 | Cycle 50 | A |
 | Cycle 51 | A |
 | Cycle 52 | A |
+| Cycle 53 | A |
 
 ---
 

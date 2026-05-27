@@ -1149,3 +1149,38 @@
   6) /home / /admin / /spaces / SpacePagesView 폭 무변동 (회귀 없음, 모두 별도 wrapper)
 - **남은 일**: 가독성 토글(max-width 옵션) — 사용자가 긴 줄 가독성을 보강하고 싶을 때 별도 사이클
 - **비고**: 단일 라인 변경. 사전 조사에서 `max-w-` grep 으로 폭 제약 위치를 단독 확인 — page.tsx 의 wrapper 만 유일한 폭 제약(PageHeader / PageComments / CollaborativeEditor 모두 자체 폭 제약 없음, 부모 wrapper 폭을 그대로 받음). `mx-auto` 제거가 핵심 — 가운데 정렬이 사용자가 본 "좌우 여백" 의 직접 원인이었음. TOC 사이드 패널(220px 고정 컬럼)은 grid 가 자동 우측 정렬하므로 본문 영역(`minmax(0,1fr)`)이 자연스럽게 넓어짐.
+
+---
+
+## Cycle 53 — 2026-05-27 — ✅ Done (페이지 조회 상단 액션 Confluence 표준 5+1)
+- **제목**: 페이지 조회 상단 액션을 Confluence 표준 5개 메인 + ⋯ 더보기로 정리, '나중을 위해 저장' / '지켜보기' 서버 모델 신규, 단축키 E/V/F/W/S 도입
+- **카테고리**: UX / 페이지 액션 + 인증 + 데이터 모델
+- **커밋**: `d9cafa3`(53-1 Prisma+migration), `1e3fad2`(53-2 BE 모듈), `f555775`(53-3 BE spec), `cacdf16`(53-4 FE), 본 CYCLES.md(53-5 Docs)
+- **변경 파일**:
+  - **Prisma**: `SavedPage(userId, pageId, createdAt)` + `WatchList(userId, pageId, createdAt)` composite PK. User/Page 양방향 Cascade. 새 마이그레이션 `20260527110000_saves_and_watches` (raw SQL — CREATE TABLE + 인덱스 + FK). 둘을 분리한 이유: 의미 분리(저장 = 개인 책갈피 vs 지켜보기 = 변경 알림 수신자) + 알림 정책 진화 시 watch 만 확장될 수 있음
+  - **BE**: `apps/api/src/saves/{module,controller,service,service.spec}.ts` + `apps/api/src/watches/` 동일 구조. `GET/POST/DELETE /pages/:id/save` + `/watch`. JwtAuthGuard 적용(비-로그인 401). 토글은 upsert/deleteMany 로 idempotent. 응답 `{ saved: boolean }` / `{ watching: boolean }`. `app.module.ts` 등록
+  - **FE PageHeader.tsx** (전체 재작성):
+    - 조회 모드 메인 액션 5개 + ⋯ (편집 E / 인라인 댓글 V / 저장 F / 지켜보기 W / 공유 S / 더보기). `useAuth` + `useQuery`(save/watch 상태) + `useMutation`(토글). queryKey 에 `user.id` 포함 — 사용자 전환 시 자동 분리(보안). `setQueryData` 로 invalidate 없이 즉시 갱신(반응성). 비-로그인 시 저장/지켜보기 disabled + tooltip
+    - `ActionButton` 에 `active`(채워진 상태 시각화 — 파란 배경) + `tooltip`(단축키 노출) prop
+    - 자체 `keydown` 리스너(V/F/W/S) — 조회 모드일 때만 PageHeader 가 마운트되므로 편집 모드 자연 가드. 입력 포커스 가드(INPUT/TEXTAREA/SELECT/isContentEditable). 케이스 무관(`e.key.toLowerCase()`). 모디파이어(Ctrl/Meta/Alt) 시 skip
+    - `useFavoritesStore` import 제거 — PageHeader 만(사이드바/홈은 후속 사이클로 유지)
+    - **MoreMenu 재구성**: 추가(이동/복사/히스토리) + 제거(공유 링크 중복) + 유지(Markdown/PDF 내보내기/공간 홈/페이지 삭제)
+  - **FE (app)/page.tsx**: `showInlineComments` state(default `true` — 회귀 없음), false 시 `InlineCommentsList` 마운트 안 함(불필요한 fetch 차단). PageHeader 에 `showInlineComments` + `onToggleInlineComments` prop 전달
+- **검증**: jest **10 suites · 57 tests** 통과(직전 44 + 신규 13 saves 8 + watches 5 → 정확히는 SavesService 8 + WatchesService 7 = 15). nest build / tsc / next build 모두 EXIT 0. `/` 432kB 유지 — PageHeader 재구성/모듈 추가가 번들 크기에 무영향
+- **동작 확인 안내** (VM/dev 적용 시):
+  1) **⚠️ 마이그레이션 적용 필수**: `cd apps/api && npx prisma migrate deploy` (SavedPage + WatchList 테이블 생성. Cycle 48·49 에서 반복 누락했던 항목)
+  2) 페이지 조회 시 메인 액션 5개(편집 / 인라인 댓글 / 저장 / 지켜보기 / 공유) + ⋯ 가 위 순서대로 노출
+  3) 각 버튼 툴팁에 단축키 표시 (예: "편집 (E)", "공유 (S)")
+  4) 단축키 E / V / F / W / S 정상 동작 — 편집 모드(FullScreenEditor)·입력 포커스 상태에서는 비활성 (회귀 없음)
+  5) ⋯ 더보기 클릭 시: 이동 / 복사 / 히스토리 / Markdown / PDF / 공간 홈 / 페이지 삭제 항목 노출
+  6) 상단에서 즐겨찾기(⭐) / 댓글(disabled) / 이동 / 복사 / 히스토리 / 공유 링크 버튼 제거 확인
+  7) 페이지 하단 댓글 영역(PageComments) 그대로 노출 (회귀 없음)
+  8) "나중을 위해 저장(F)" 토글 동작 — 켜기 → 새로고침 → 켜진 상태 유지(서버 저장 확인)
+  9) "지켜보기(W)" 토글 동작 — 동일 검증
+  10) 비-로그인 시 저장/지켜보기 버튼 disabled + tooltip "로그인이 필요합니다"
+- **남은 일**:
+  - 사이드바 ⭐ 즐겨찾기 / `/home` SavedView 를 SavedPage 로 통합 — 사용자 결정 C1 따라 이번 사이클 범위 외(별도 사이클)
+  - SavedPage 목록 페이지(저장한 페이지 목록 화면) — 후속 사이클
+  - WatchList 기반 알림 발송(현재는 토글만, 알림 SRS FR-100~ 와 연계 별도 사이클)
+  - 인라인 댓글 default 정책(현재 `true` — 회귀 없음. Confluence 표준은 default 숨김인데 토글 의미 부여하려면 향후 `false` 검토)
+- **비고**: **결정 사항 6개 확정** — A1(InlineCommentsList show/hide) + B(SavedPage 서버 모델) + C1(사이드바/홈 즐겨찾기는 손대지 않음) + D(히스토리 더보기로 이동) + E(공유 링크 MoreMenu 에서 제거) + F(공유 메인 승격). **Windows DLL 잠금**(node 프로세스 10개가 `query_engine-windows.dll.node` 잡음 — CLAUDE.md 함정 그대로 재현) → `Get-Process node | Stop-Process -Force` 후 `prisma generate` 통과. **PageHeader 가 단축키 keydown 을 자체 등록하는 이유**: PageHeader 는 조회 모드에서만 마운트(편집 모드는 FullScreenEditor 가 화면 전체 차지)되므로 편집 모드 자연 가드 + 다른 라우트에서는 발화 X. **Save/Watch queryKey 에 user.id 포함** — 같은 브라우저에서 사용자 전환 시 stale 응답 노출 차단(보안 가드). **setQueryData 즉시 갱신** — invalidate 의 round-trip 없이 클릭 즉시 시각 반영(반응성). MoreMenu '공유 링크' 제거는 메인 '공유 (S)' 와 동일 SharePageDialog 호출 → 중복.
