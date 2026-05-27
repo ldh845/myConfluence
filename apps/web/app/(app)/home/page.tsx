@@ -147,16 +147,12 @@ export default function HomePage() {
   );
 }
 
-// Cycle 50 — /home '모든 변경사항' 은 사용자 활동 중심으로 압축. 시스템 이벤트
-// (삭제·복원·영구삭제, 그 외 현재 미존재 type들)는 표시에서 제외해 노이즈 감소.
-// page.published 는 "사용자가 편집한 결과를 발행한 행위" = '편집' 으로 재해석해 포함.
-// /activity 는 고급 탐색 화면이라 무수정(전체 노출 유지).
-// 데이터·새 type 추가는 일절 없음 — 표시 단계 필터링만(GET /activities?types=...).
+// Cycle 50 followup — 사용자 피드백 반영, 노출 범위를 사용자 생성 행위 2종으로
+// 더 좁힘. page.published(편집·발행) / page.moved / page.copied 는 organize·시스템
+// 성격 노이즈로 느껴진다는 피드백 → 제외. /activity 는 무수정(전체 노출 유지).
+// 데이터·새 type 추가 없이 표시 단계 필터링만(GET /activities?types=...).
 const HOME_ACTIVITY_TYPES = [
   "page.created",
-  "page.published",
-  "page.moved",
-  "page.copied",
   "comment.created",
 ] as const;
 
