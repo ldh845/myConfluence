@@ -132,6 +132,38 @@ describe('ActivitiesService', () => {
     });
   });
 
+  // Cycle 58 — actorId 단일 필터 (프로파일 활동 피드용).
+  describe('list — actorId 필터', () => {
+    it('actorId 지정 → where 에 actorId 추가', async () => {
+      await service.list({ actorId: 'u-1' });
+      expect(capturedWhere()).toEqual({ actorId: 'u-1' });
+    });
+
+    it('actorId + actorName 동시 → 둘 다 AND', async () => {
+      await service.list({ actorId: 'u-1', actorName: 'kim' });
+      expect(capturedWhere()).toEqual({
+        actorId: 'u-1',
+        actorName: { contains: 'kim', mode: 'insensitive' },
+      });
+    });
+
+    it('actorId + types 동시 → 둘 다 AND', async () => {
+      await service.list({
+        actorId: 'u-1',
+        types: ['page.created', 'comment.created'],
+      });
+      expect(capturedWhere()).toEqual({
+        actorId: 'u-1',
+        type: { in: ['page.created', 'comment.created'] },
+      });
+    });
+
+    it('actorId 미지정 → where 에 actorId 키 없음 (기존 호환)', async () => {
+      await service.list({});
+      expect(capturedWhere()).not.toHaveProperty('actorId');
+    });
+  });
+
   describe('log — best-effort', () => {
     it('정상 케이스: create 호출', async () => {
       await service.log({
