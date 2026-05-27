@@ -456,7 +456,12 @@ export default function CollaborativeEditor({
         TableHeader,
         TableCell,
         Markdown.configure({
-          html: false,
+          // Cycle 55 followup 3 — html: false → true. 멘션 노드를 raw HTML
+          //   (span.cf-mention) 으로 직렬화하고 다시 로드 시 markdown-it 가 HTML
+          //   태그를 그대로 파싱해야 ProseMirror parseHTML 매칭으로 노드 복원.
+          //   inline ruler 접근(followup 2)이 동작 안 한 우회. 사내 사용자만
+          //   본문 작성하므로 임의 HTML 보안 위험 낮음.
+          html: true,
           tightLists: true,
           transformCopiedText: true,
         }),
