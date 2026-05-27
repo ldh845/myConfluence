@@ -122,13 +122,32 @@ function AppShell({ children }: { children: React.ReactNode }) {
     router.push(`/?pageId=${page.id}`);
   };
 
-  const handleDeletePage = async (pageId: string) => {
-    const res = await fetch(`/api/pages/${pageId}`, {
+  // Cycle 56 — cascade 옵션 + 라우팅 fix (같은 공간 유지, 부모/홈으로 이동).
+  //   사용자 보고: 삭제 후 router.push('/') 가 첫 스페이스 fallback 으로 가
+  //   '다른 공간으로 들어가지는' 버그. 현재 activeSpace 의 페이지 트리에서
+  //   부모 → 홈 → 빈 공간 진입 순으로 fallback.
+  const handleDeletePage = async (pageId: string, cascade: boolean) => {
+    // 삭제 전에 부모/홈을 미리 결정 (삭제 후엔 activeSpace 캐시가 갱신되어 사라짐).
+    const pageInTree = activeSpace?.pages.find((p) => p.id === pageId);
+    const parentId = pageInTree?.parentId ?? null;
+    const homeId = getSpaceHomePageId(activeSpace);
+    const url = `/api/pages/${pageId}${cascade ? "?cascade=true" : ""}`;
+    const res = await fetch(url, {
       method: "DELETE",
       credentials: "include",
     });
     if (res.ok) {
-      if (selectedPageId === pageId) router.push("/");
+      if (selectedPageId === pageId) {
+        if (parentId) {
+          router.push(`/?pageId=${parentId}`);
+        } else if (homeId && homeId !== pageId) {
+          router.push(`/?pageId=${homeId}`);
+        } else if (activeSpace) {
+          router.push(`/?spaceId=${activeSpace.id}`);
+        } else {
+          router.push("/");
+        }
+      }
       // FR-130 — 휴지통 이동 시 최근 방문 기록에서도 제거.
       useRecentPagesStore.getState().remove(pageId);
       invalidateSpaces();

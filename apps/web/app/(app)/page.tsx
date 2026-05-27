@@ -19,6 +19,7 @@ import InlineCommentsList from "@/components/InlineCommentsList";
 import MovePageDialog from "@/components/MovePageDialog";
 import CopyPageDialog from "@/components/CopyPageDialog";
 import SharePageDialog from "@/components/SharePageDialog";
+import DeletePageDialog from "@/components/DeletePageDialog";
 import ReactionBar from "@/components/ReactionBar";
 import { getIdentity } from "@/lib/userIdentity";
 import { usePageStore } from "@/lib/stores/usePageStore";
@@ -417,13 +418,34 @@ export default function HomePage() {
     }
   };
 
-  const handleDeleteCurrentPage = async (pageId: string) => {
-    const res = await fetch(`/api/pages/${pageId}`, {
+  // Cycle 56 — cascade 옵션 + 같은 공간 유지 라우팅 (부모/홈 fallback).
+  const handleDeleteCurrentPage = async (
+    pageId: string,
+    cascade: boolean,
+  ) => {
+    // 삭제 전에 부모/홈 미리 결정 (삭제 후 activeSpace 캐시 갱신되면 사라짐).
+    const pageInTree = activeSpace?.pages.find((p) => p.id === pageId);
+    const parentId = pageInTree?.parentId ?? null;
+    const homeId = activeSpace
+      ? getSpaceHomePageId(activeSpace)
+      : null;
+    const url = `/api/pages/${pageId}${cascade ? "?cascade=true" : ""}`;
+    const res = await fetch(url, {
       method: "DELETE",
       credentials: "include",
     });
     if (res.ok) {
-      if (selectedPageId === pageId) clearPageSelection();
+      if (selectedPageId === pageId) {
+        if (parentId) {
+          router.push(`${pathname}?pageId=${parentId}`);
+        } else if (homeId && homeId !== pageId) {
+          router.push(`${pathname}?pageId=${homeId}`);
+        } else if (activeSpace) {
+          router.push(`${pathname}?spaceId=${activeSpace.id}`);
+        } else {
+          clearPageSelection();
+        }
+      }
       useRecentPagesStore.getState().remove(pageId);
       invalidateSpaces();
     } else if (res.status === 401) {
@@ -431,14 +453,17 @@ export default function HomePage() {
     }
   };
 
+  // Cycle 56 — window.confirm → DeletePageDialog. 자식 카운트 + cascade 체크박스.
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const currentChildCount = useMemo(() => {
+    if (!currentPage || !activeSpace) return 0;
+    return activeSpace.pages.filter(
+      (p) => p.parentId === currentPage.id,
+    ).length;
+  }, [currentPage, activeSpace]);
   const confirmDeleteCurrent = () => {
     if (!currentPage) return;
-    if (
-      confirm(
-        `"${currentPage.title}" 페이지를 삭제할까요? 하위 페이지도 함께 삭제됩니다.`,
-      )
-    )
-      handleDeleteCurrentPage(currentPage.id);
+    setDeleteDialogOpen(true);
   };
 
   // Cycle 51 — view=pages 면 페이지 본문/편집기 트리 전체를 건너뛰고
@@ -656,6 +681,18 @@ export default function HomePage() {
           open={shareOpen}
           onOpenChange={setShareOpen}
           page={{ id: currentPage.id, title: currentPage.title }}
+        />
+      )}
+      {/* Cycle 56 — 페이지 삭제 다이얼로그 (자식 카운트 + cascade 체크박스). */}
+      {currentPage && (
+        <DeletePageDialog
+          open={deleteDialogOpen}
+          onOpenChange={setDeleteDialogOpen}
+          pageTitle={currentPage.title}
+          childCount={currentChildCount}
+          onConfirm={(cascade) =>
+            handleDeleteCurrentPage(currentPage.id, cascade)
+          }
         />
       )}
     </>

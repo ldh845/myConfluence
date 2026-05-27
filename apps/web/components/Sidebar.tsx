@@ -25,13 +25,15 @@ import { CSS } from "@dnd-kit/utilities";
 import type { PageNode, SpaceWithPages } from "@/lib/types";
 import { useFavoritesStore } from "@/lib/stores/useFavoritesStore";
 import SpaceStarButton from "@/components/SpaceStarButton";
+import DeletePageDialog from "@/components/DeletePageDialog";
 
 type Props = {
   space: SpaceWithPages | null;
   selectedPageId: string | null;
   onSelect: (pageId: string) => void;
   onCreatePage: (spaceId: string, parentId: string | null) => void;
-  onDeletePage: (pageId: string) => void;
+  // Cycle 56 — cascade 옵션. true 면 자손 모두 휴지통, false 면 자식 승격 후 단일.
+  onDeletePage: (pageId: string, cascade: boolean) => void;
   onOpenTrash?: () => void;
   onReorder?: () => void;
 };
@@ -153,7 +155,7 @@ function SortableTreeRow({
   toggleCollapsed,
   onSelect,
   onCreatePage,
-  onDeletePage,
+  onRequestDelete,
   dropHint,
   isOverTarget,
 }: {
@@ -163,7 +165,8 @@ function SortableTreeRow({
   toggleCollapsed: (id: string) => void;
   onSelect: (id: string) => void;
   onCreatePage: (spaceId: string, parentId: string | null) => void;
-  onDeletePage: (id: string) => void;
+  // Cycle 56 — confirm 제거. 부모(Sidebar)가 다이얼로그를 띄움.
+  onRequestDelete: (item: FlatItem) => void;
   dropHint: DropHint;
   isOverTarget: boolean;
 }) {
@@ -243,12 +246,9 @@ function SortableTreeRow({
         className="opacity-0 group-hover:opacity-100 text-[#6b778c] hover:text-[#de350b] px-1"
         onClick={(e) => {
           stop(e);
-          if (
-            confirm(
-              `"${item.title}" 페이지를 삭제할까요? 하위 페이지도 함께 삭제됩니다.`,
-            )
-          )
-            onDeletePage(item.id);
+          // Cycle 56 — window.confirm 제거. 부모가 DeletePageDialog 띄움
+          // (자식 카운트 + cascade 체크박스).
+          onRequestDelete(item);
         }}
         onPointerDown={stop}
       >
@@ -273,6 +273,11 @@ export default function Sidebar({
   const searchParams = useSearchParams();
   const view = searchParams.get("view");
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  // Cycle 56 — 페이지 삭제 다이얼로그(자식 카운트 + cascade 체크박스) 마운트 후보.
+  const [deleteReq, setDeleteReq] = useState<
+    | { id: string; title: string; childCount: number }
+    | null
+  >(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [overId, setOverId] = useState<string | null>(null);
   const [dropHint, setDropHint] = useState<DropHint>(null);
@@ -579,7 +584,18 @@ export default function Sidebar({
                 toggleCollapsed={toggleCollapsed}
                 onSelect={onSelect}
                 onCreatePage={onCreatePage}
-                onDeletePage={onDeletePage}
+                onRequestDelete={(item) => {
+                  // Cycle 56 — 직접 활성 자식 카운트(휴지통 제외). pages 는
+                  // 이미 활성만(remove 후 invalidate 로 갱신).
+                  const cc = pages.filter(
+                    (p) => p.parentId === item.id,
+                  ).length;
+                  setDeleteReq({
+                    id: item.id,
+                    title: item.title,
+                    childCount: cc,
+                  });
+                }}
                 dropHint={overId === v.id ? dropHint : null}
                 isOverTarget={overId === v.id}
               />
@@ -610,6 +626,22 @@ export default function Sidebar({
           <span>⚙️</span> 공간 도구
         </button>
       </div>
+
+      {/* Cycle 56 — 페이지 삭제 다이얼로그 (자식 카운트 + cascade 체크박스) */}
+      {deleteReq && (
+        <DeletePageDialog
+          open={true}
+          onOpenChange={(v) => {
+            if (!v) setDeleteReq(null);
+          }}
+          pageTitle={deleteReq.title}
+          childCount={deleteReq.childCount}
+          onConfirm={(cascade) => {
+            onDeletePage(deleteReq.id, cascade);
+            setDeleteReq(null);
+          }}
+        />
+      )}
     </aside>
   );
 }
