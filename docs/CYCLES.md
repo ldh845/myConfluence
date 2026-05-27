@@ -1332,3 +1332,15 @@
   8) 휴지통(🗑️) 에서 cascade=true 였던 자손도 그대로 복구 가능 (Cycle 18-1a restore 로직 영향 없음)
 - **남은 일**: cascade=true 의 restore 가 자손도 일관되게 살아나는지 별도 검증 권장(현재 코드 그대로 동작 예상)
 - **비고**: **자식 승격 시 position 은 그대로 유지** — 같은 (spaceId, parentId) 그룹에 다른 형제와 중복 가능하나 정렬 안정. position 재부여는 Cycle 19a 의 reorder 기능 외부에서. **cascade=true 동작은 기존과 100% 호환** — Cycle 18-1a 의 자손 휴지통 보존(restore 호환). **라우팅 fix 메커니즘**: 삭제 전 `activeSpace.pages` 에서 부모 ID 추출(삭제 후엔 invalidate 로 사라짐). 부모 없으면 `homePageId` → 그것도 없으면 빈 공간 진입 → 최후 `/`. **Cycle 55(멘션)는 미시작** — 사용자 보고 시급 fix 가 우선이라 56 으로 번호 점프. 향후 멘션 사이클이 55 로 들어옴.
+
+---
+
+## Cycle 56 followup — 2026-05-27 — ✅ Done (DeletePageDialog 문구 간소화)
+- **제목**: 사용자 피드백 — 다이얼로그 부연 설명 제거(간결화)
+- **카테고리**: UX / 페이지 삭제 (Cycle 56 후속)
+- **커밋**: `f7391ad`(core FE), 본 CYCLES.md(Docs)
+- **변경 파일**:
+  - `apps/web/components/DeletePageDialog.tsx` — "(한 단계 위로 승격)" 제거 → `${N}개의 하위 페이지가 페이지 트리에 남습니다.` 만 노출. 체크박스 부연 설명("직접 하위 페이지 + 그 아래 모든 자손") span 제거. 라벨만 '하위 페이지도 삭제'. 정렬도 items-start → items-center
+- **검증**: tsc EXIT 0. **동작 변경 없음** — 메시지만 갱신
+- **남은 일**: 없음
+- **비고**: 사용자가 동작 확인 후 "군더더기 문구 제거" 요청 — 다이얼로그 의미가 이미 cascade 체크박스로 전달되므로 부연 설명 불필요. 단순화로 인지 부담 ↓.

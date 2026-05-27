@@ -75,6 +75,8 @@
     cascade=true 만 자손 휴지통. window.confirm → DeletePageDialog(체크박스).
     삭제 후 같은 공간 유지(부모/홈 fallback) — 사용자 보고 "다른 공간으로
     이동" 버그 fix. BE remove() 시그니처 변경 + 9 케이스 spec.
+  - Cycle 56 followup — DeletePageDialog 안내 문구 간소화 (사용자 피드백).
+    동작 변경 없음.
 - **남은 일**: (현재 plat-level 큰 항목 없음 — 신규 기능은 Task G)
 - **닫힘 이력**: (v1 retro 미수행)
 - **차단 / 의존**: 없음
