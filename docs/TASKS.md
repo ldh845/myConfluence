@@ -177,6 +177,26 @@
 
 ---
 
+## Task H — 관리자 페이지
+
+- **범위**: ADMIN 권한 사용자가 시스템 설정과 사용자 현황을 보는 운영 화면.
+- **상태**: 🟡 Maintenance (Phase 1 완료, Phase 2 SMTP 백로그)
+- **진척**:
+  - Cycle 48 — **Phase 1**: 톱니바퀴(ADMIN 한정 노출, DOM 미생성) + `/admin`
+    페이지(일반 설정·사용자 관리). ADMIN 권한 source 를 Keycloak realm role
+    로 전환(매 로그인 동기화), Keycloak claim 캐시(email/emailVerified/
+    lastLoginAt). 이중 가드(프런트 useAuth + 백엔드 RolesGuard).
+- **남은 일**:
+  - **Phase 2**: SMTP 설정 + 이메일 발송 인프라(알림·비밀번호 재설정 등)
+  - 추가 운영 도구(감사 로그·세션 관리 등) — 필요 시점
+  - 본 Task 의 Jira Epic 신규 등록
+- **닫힘 이력**: (해당 없음)
+- **차단 / 의존**: 없음
+- **Jira Epic**: 미등록
+- **관련 Cycle**: Cycle 48
+
+---
+
 ## 부록 — 옛 Task 1~5 ↔ 새 Task A~G 매핑 (역추적용)
 
 | 옛 | 새 | 비고 |
@@ -198,6 +218,7 @@
 | Cycle 45 | D |
 | Cycle 46 + followup | E |
 | Cycle 47 | (TASKS 재구조화 자체) |
+| Cycle 48 | H |
 
 ---
 

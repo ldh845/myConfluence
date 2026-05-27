@@ -1025,3 +1025,23 @@
 - **검증**: 새 7 Task 골격 렌더 / 닫힘 항목 누락 0 (git log 로 옛 TASKS.md 변경 5건 교차 확인, silently 제거된 4건 모두 Task D ×3 + Task B ×1 닫힘 이력에 명시) / 헤더 갱신 규칙·스킬 규칙 4 새 모델 반영 / CLAUDE.md grep 결과 Task 키워드 1건(docs/ 폴더 설명)뿐이라 추상 수준 무변경
 - **남은 일**: 없음 — 본 사이클은 구조 자체. 다음 사이클부터 새 갱신 규칙 적용. 옵션 b(Cycle 1~41 retro-fit) 는 별도 사이클 후보
 - **비고**: Task A 마일스톤은 사용자와 협의해 6→7로 분리 — `Cycle 10-1/2` (draft/publish 메커니즘: `Page.draftContent`) 와 `Cycle 35` (draft 노출 규칙: `Page.publishedAt`)는 도입 시점·컨셉이 다른 별도 milestone(CLAUDE.md "알려진 함정"이 가리키는 게 정확히 후자)이라 둘 다 표기. 프론트 도메인 항목("편집기 update 버튼 race")은 v2 미이관 — 동료 트래커 영역.
+
+---
+
+## Cycle 48 — 2026-05-27 — ✅ Done (관리자 페이지 Phase 1)
+- **제목**: 관리자 페이지 Phase 1 — 톱니바퀴(ADMIN 한정) + `/admin` (일반 설정 + 사용자 관리) + Keycloak realm role 동기화
+- **카테고리**: 인증/권한 + 운영/관리 (신규 영역 — Task H emerge)
+- **커밋**: `b831b73`(48-1 schema+migration), `ad40b6b`(48-2 OIDC role 동기화), `944b9b0`(48-3 RolesGuard+Admin BE+spec), `d60c0c9`(48-4 프런트), 본 CYCLES.md(48-5 Docs)
+- **변경 파일**:
+  - **Prisma** — `User` 확장(email/emailVerified/lastLoginAt), 신규 `AppConfig` single-row(siteName/uploadLimitMb/sessionExpireMin), 마이그레이션 `20260527090000_admin_phase1` (ALTER + CREATE + singleton seed ON CONFLICT)
+  - **OIDC** — `handleCallback` 이 `realm_access.roles` + `email_verified` 추출 (옵셔널, scope 누락 안전). `findOrCreateOidcUser` 가 매 로그인마다 `role(admin→ADMIN/else DEVELOPER)` + `email/emailVerified/lastLoginAt` 동기화. **첫 사용자 자동 ADMIN seed 제거** — Keycloak 이 명시적으로 admin realm role 부여해야 함
+  - **Auth 가드** — `auth/roles.decorator.ts` (`@Roles('ADMIN',...)` SetMetadata), `auth/roles.guard.ts` (Reflector 기반, JwtAuthGuard 뒤 배치, 실패 시 403)
+  - **Admin module** — `admin/admin.{module,controller,service}.ts` + `dto/update-config.dto.ts` (class-validator). 3 라우트(`GET /admin/config`/`PUT /admin/config`/`GET /admin/users`) 모두 `@UseGuards(JwtAuthGuard, RolesGuard) @Roles('ADMIN')`. 사용자 목록은 Keycloak claim 캐시 포함, `passwordHash`/`keycloakId` 미노출, legacy 제외. `app.module.ts` 에 AdminModule 등록
+  - **프런트** — `TopNav.AdminGearButton`(`user.role!=='ADMIN'`→`null` DOM 미생성, 클릭 `/admin`). `app/(app)/admin/page.tsx` 클라이언트 가드(비-ADMIN 즉시 `/home` replace) + 좌측 탭. `AdminGeneralSettings.tsx`(폼+SMTP "Phase 2 예정" 비활성 카드). `AdminUsers.tsx`(읽기 전용 테이블 + Keycloak Admin 콘솔 안내·링크 + 역할 변경 안내)
+  - **env** — `apps/web/.env.example` 에 `NEXT_PUBLIC_KC_ADMIN_URL`
+  - **테스트** — `roles.guard.spec.ts`(5), `admin.service.spec.ts`(3)
+- **검증**: `nest build` EXIT 0 (커밋 단계마다), `jest` 8/8 통과(RolesGuard 5 + AdminService 3), `tsc --noEmit` EXIT 0, `next build` `/admin` 5.82kB 라우트 생성. **실 DB 적용**(마이그레이션 `npx prisma migrate deploy`)과 **Keycloak realm role 'admin' 부여/회수 흐름**은 VM/dev 에서 동훈님 확인 — DB `User.role` 토글, ADMIN 사용자 톱니바퀴 노출 + `/admin` 접근, 비-ADMIN 톱니바퀴 미노출 + `/admin` 진입 시 `/home` redirect, 백엔드 API 403
+- **남은 일 (Phase 2)**:
+  - SMTP 설정 (이메일 발송 — 알림·비밀번호 재설정 등)
+  - 추가 운영 도구 (감사 로그·세션 관리 등) — 필요 시점
+- **비고**: ADMIN 권한 **source of truth = Keycloak realm role 'admin'**. 매 로그인 동기화 — Keycloak 회수 시 즉시 아닌 다음 로그인부터 반영(쿠키 만료까지 격차 있음, 7d 기본). 이중 가드(프런트 useAuth + 백엔드 RolesGuard) — middleware 는 JWT secret 미접근 원칙 유지. Keycloak admin realm role 부여 절차: 콘솔 → realm `docspace` → Realm roles → Create role `admin` → 해당 사용자 → Role mappings → Assign `admin`. 새 주제(관리자 영역)이 emerge 해 TASKS.md 에 Task H 신규 추가.
