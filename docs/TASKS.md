@@ -64,11 +64,14 @@
     (TopNav 검색과 capture phase + stopPropagation 으로 분리).
   - Cycle 54-B — 표 삽입 그리드 8x8 → 10x10 (Confluence 표준).
     셀 폭 22px 고정으로 비좁아짐 방지, '직접 입력'(한도 100x20) 그대로.
+  - Cycle 54-F — 날짜 inline atom 노드 신규 (TipTap DateExtension).
+    slash/＋ 카탈로그에 '날짜' 항목, 색박스(date lozenge) NodeView,
+    클릭 시 prompt 재입력. markdown 직렬화는 텍스트만(라운드트립 시 시각화 손실).
 - **남은 일**: (현재 plat-level 큰 항목 없음 — 신규 기능은 Task G)
 - **닫힘 이력**: (v1 retro 미수행)
 - **차단 / 의존**: 없음
 - **Jira Epic**: 미등록
-- **관련 Cycle**: Cycle 1~41, 49, 50, 51, 52, 53, 54-D, 54-A, 54-B
+- **관련 Cycle**: Cycle 1~41, 49, 50, 51, 52, 53, 54-D, 54-A, 54-B, 54-F
 
 ---
 
@@ -252,6 +255,7 @@
 | Cycle 54-D | A |
 | Cycle 54-A | A |
 | Cycle 54-B | A |
+| Cycle 54-F | A |
 
 ---
 

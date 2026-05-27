@@ -1244,3 +1244,28 @@
   5) 기존 작은 표 삽입(예: 3x3) 동작 그대로
 - **남은 일**: (54-B 영역 종결) — 다음 sub-cycle: 54-F(날짜 블록) / 54-C(파일/그림+캡션)
 - **비고**: 1행 변경(MAX 상수) + 2 CSS 클래스 변경. 셀 폭을 1fr→22px 고정으로 바꾼 이유: 1fr 유지 시 popup 너비가 그대로면 10셀이 비좁아 hover 정확도 저하. popup 너비도 w-fit 으로 둬서 8→10 확장이 자연스럽게 표시됨. **Cycle 54 진행 상황**: D + A + B(완료) → 남은 sub-cycle: 54-C(파일/그림+figcaption) + 54-F(날짜 블록). Cycle 55(멘션) 별도.
+
+---
+
+## Cycle 54-F — 2026-05-27 — ✅ Done (날짜 inline atom 노드)
+- **제목**: 날짜 inline atom 노드 신규 + slash/＋ 카탈로그에 '날짜' 항목
+- **카테고리**: 편집기 / TipTap 확장 (Cycle 54 sub-cycle F)
+- **커밋**: `e4dc902`(54-F-1 FE), 본 CYCLES.md(54-F-2 Docs)
+- **변경 파일**:
+  - `apps/web/lib/tiptap/date.ts` (신규) — DateExtension (`Node.create`). `group: 'inline'`, atom, selectable. attrs.date(ISO `YYYY-MM-DD`). renderHTML `<time datetime data-type='date' class='cf-date-lozenge'>`. parseHTML time[datetime] / time[data-type='date']. NodeView 로 inline 색박스(#deebff/#0747a6) — 클릭 시 prompt 재입력. `promptForDate` 헬퍼 export (형식 검증 + 기본값 오늘). markdown 직렬화는 텍스트만 (`state.write(node.attrs.date)`) — `html: false` 정책상 raw HTML 라운드트립 불가
+  - `apps/web/components/CollaborativeEditor.tsx` — extensions 배열에 DateExtension 등록 (MathBlock 다음, 같은 inline atom 카테고리)
+  - `apps/web/lib/tiptap/slash-commands.ts` — '날짜' 항목 추가 (구분선 다음). promptForDate → insertContent({ type: 'date', attrs })
+- **검증**: tsc + next build EXIT 0 (`/` 434→435kB, +1kB). 마이그레이션 **없음**. Yjs 호환: 신규 노드만 추가 → 안전 (다른 클라이언트도 같은 빌드 받아야 동시 편집)
+- **동작 확인 안내**:
+  1) **마이그레이션 불필요** — FE 확장만
+  2) 편집 모드 → `/` 입력 → '날짜' 항목, 또는 ＋ 버튼 → '날짜' 클릭
+  3) prompt 에 ISO 입력(기본값 오늘) → 본문에 색박스 토큰 삽입
+  4) 토큰 클릭 → prompt 재입력 → 같은 위치에 갱신
+  5) 잘못된 형식(YYYY-MM-DD 아님) 입력 시 alert + 삽입 취소
+  6) 다른 사용자(공동 편집) 화면에도 같은 토큰 동기화 (Yjs 호환)
+  7) 발행 후 새로고침 시 토큰 시각은 일반 텍스트(`YYYY-MM-DD`)로 보임 — CLAUDE.md "마크다운 직렬화 한계" 동일 범주, 데이터는 보존
+- **남은 일**:
+  - markdown 라운드트립 보강 (input rule 으로 자동 인식 또는 raw HTML 통로 활성) — followup
+  - HTML `<input type="date">` 기반 인라인 picker (현재는 prompt 단순화) — followup
+  - locale 표시 (한국어 "2026년 5월 27일" 등) — followup
+- **비고**: TipTap inline atom 패턴은 MathInline (Cycle 20) 답습. NodeView 는 React 없이 vanilla dom — 단순한 클릭 핸들러라 ReactNodeViewRenderer 비용 회피. 색박스는 Confluence date lozenge 시각화 모방. 새 type enum / DB 컬럼 없음. **Cycle 54 진행 상황**: D + A + B + F(완료) → 남은 sub-cycle: **54-C** (파일/그림 통합 + figcaption). Cycle 55(멘션) 별도.
