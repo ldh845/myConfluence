@@ -17,6 +17,8 @@ import { AuthModule } from './auth/auth.module';
 import { OidcModule } from './auth/oidc.module';
 import { AdminModule } from './admin/admin.module';
 import { UsersModule } from './users/users.module';
+import { SavesModule } from './saves/saves.module';
+import { WatchesModule } from './watches/watches.module';
 
 @Module({
   imports: [
@@ -36,6 +38,9 @@ import { UsersModule } from './users/users.module';
     OidcModule,
     AdminModule,
     UsersModule,
+    // Cycle 53 — '나중을 위해 저장' / '지켜보기' 토글 API.
+    SavesModule,
+    WatchesModule,
   ],
   controllers: [AppController, HealthController],
   providers: [AppService],
