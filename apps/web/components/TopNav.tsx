@@ -3,10 +3,11 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { SpaceWithPages } from "@/lib/types";
 import { useAuth } from "@/lib/auth/useAuth";
 import { useRecentSpacesStore } from "@/lib/stores/useRecentSpacesStore";
+import { getSpaceHomePageId } from "@/lib/spaceHome";
 import SearchOverlay from "@/components/SearchOverlay";
 
 type Props = {
@@ -184,10 +185,23 @@ function AdminGearButton() {
 }
 
 // FR-001 (Cycle 27b) — 로그인한 사용자 메뉴. 미로그인 시 "로그인" 링크.
+// Cycle 49 — '내 개인 공간' 진입 항목 추가(정보 블록 다음·로그아웃 위).
 function UserMenu() {
   const { user, isLoading } = useAuth();
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+
+  // ['spaces'] 캐시 공유 — 다른 곳에서 이미 호출 중이라 추가 fetch 없음(보통).
+  const { data: spacesData } = useQuery<SpaceWithPages[]>({
+    queryKey: ["spaces"],
+    queryFn: async () => {
+      const r = await fetch("/api/spaces");
+      if (!r.ok) return [];
+      return (await r.json()) as SpaceWithPages[];
+    },
+    enabled: !!user,
+  });
 
   useEffect(() => {
     if (!open) return;
@@ -205,6 +219,37 @@ function UserMenu() {
   // 쿠키를 클리어하고 Keycloak 으로 redirect → SSO 세션 종료 후 /login 으로 복귀.
   const handleLogout = () => {
     window.location.href = "/api/auth/oidc/logout";
+  };
+
+  // Cycle 49 — '내 개인 공간' 진입. spacesData 캐시에서 본인 personal space 찾고,
+  // 없으면 GET /api/spaces/personal 로 lazy 보장(OIDC callback 자동 생성 직후라
+  // 보통 캐시에 있음 — 이건 안전망).
+  const handleGoPersonal = async () => {
+    setOpen(false);
+    if (!user) return;
+    const fromCache = spacesData?.find(
+      (s) => s.type === "PERSONAL" && s.ownerId === user.id,
+    );
+    const enter = (sp: SpaceWithPages) => {
+      const homeId = getSpaceHomePageId(sp);
+      router.push(homeId ? `/?pageId=${homeId}` : `/?spaceId=${sp.id}`);
+    };
+    if (fromCache) {
+      enter(fromCache);
+      return;
+    }
+    try {
+      const r = await fetch("/api/spaces/personal", {
+        credentials: "include",
+      });
+      if (!r.ok) {
+        window.alert("개인 공간을 준비하지 못했습니다.");
+        return;
+      }
+      enter((await r.json()) as SpaceWithPages);
+    } catch {
+      window.alert("개인 공간을 준비하지 못했습니다.");
+    }
   };
 
   if (isLoading) {
@@ -255,13 +300,23 @@ function UserMenu() {
               @{user.username}
             </div>
           </div>
+          {/* Cycle 49 — '내 개인 공간' 진입 (사이드바 토글 상태와 무관). */}
+          <button
+            type="button"
+            onClick={() => {
+              void handleGoPersonal();
+            }}
+            className="w-full text-left px-3 py-2 text-[13px] text-[#172b4d] hover:bg-[#f4f5f7]"
+          >
+            내 개인 공간
+          </button>
           <button
             type="button"
             onClick={() => {
               setOpen(false);
               handleLogout();
             }}
-            className="w-full text-left px-3 py-2 text-[13px] text-[#de350b] hover:bg-[#ffebe6]"
+            className="w-full text-left px-3 py-2 text-[13px] text-[#de350b] hover:bg-[#ffebe6] border-t border-[#dfe1e6]"
           >
             로그아웃
           </button>

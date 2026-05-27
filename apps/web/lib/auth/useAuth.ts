@@ -13,6 +13,9 @@ export type AuthUser = {
   department: string;
   role: "ADMIN" | "PART_LEADER" | "DEVELOPER" | "DESIGNER" | "PM";
   createdAt: string;
+  // Cycle 49 — 사용자별 환경설정. SystemSidebar '내 공간' 토글의 상태.
+  // PATCH /api/auth/me/prefs 로 갱신 후 invalidate(['me']) 로 즉시 반영.
+  showPersonalSpaceInSidebar: boolean;
 };
 
 export function useAuth() {

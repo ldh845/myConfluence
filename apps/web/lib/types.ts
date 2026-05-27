@@ -19,6 +19,10 @@ export type SpaceWithPages = {
   pages: PageNode[];
   // Cycle 33 — 공간의 명시적 홈(메인) 페이지. 없으면(백필 누락/페이지 없음) null.
   homePageId?: string | null;
+  // Cycle 32/49 — 공간 유형. PERSONAL 은 백엔드 가드로 ownerId 소유자에게만 노출.
+  // SystemSidebar/UserMenu 가 본인 personal space 식별에 사용.
+  type?: "SITE" | "PERSONAL";
+  ownerId?: string | null;
 };
 
 // FR-001 (Cycle 27c) — 페이지 작성자/마지막 편집자 요약.
