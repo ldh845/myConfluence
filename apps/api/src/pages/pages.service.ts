@@ -617,31 +617,79 @@ export class PagesService {
     });
   }
 
-  // FR-024 (Cycle 18-1a) — 휴지통(soft delete). 자식까지 재귀 cascade.
-  // 영구 삭제는 permanentDelete. 디스크 첨부 파일 정리는 permanentDelete 시점에만.
-  async remove(id: string, actor?: { id: string; name: string } | null) {
+  // FR-024 (Cycle 18-1a) — 휴지통(soft delete). 영구 삭제는 permanentDelete.
+  // 디스크 첨부 파일 정리는 permanentDelete 시점에만.
+  // Cycle 56 — opts.cascade 추가:
+  //   - cascade=true  → 기존 동작 (자손 모두 휴지통)
+  //   - cascade=false → 직접 자식의 parentId 를 부모의 parentId 로 승격 + 부모만 휴지통
+  //   - 자식 없으면 cascade 옵션 무관 (단일 삭제)
+  //   기본값 false — 사용자 의도("딱 페이지만") 에 맞춤. cascade 는 옵션 선택.
+  async remove(
+    id: string,
+    opts: { cascade?: boolean } = {},
+    actor?: { id: string; name: string } | null,
+  ) {
     const page = await this.prisma.page.findUnique({
       where: { id },
-      select: { id: true, title: true, spaceId: true, deletedAt: true },
+      select: {
+        id: true,
+        title: true,
+        spaceId: true,
+        parentId: true,
+        deletedAt: true,
+      },
     });
     if (!page) throw new NotFoundException({ error: 'page not found' });
     if (page.deletedAt) {
       throw new BadRequestException({ error: 'already in trash' });
     }
-    const targetIds = await this.collectDescendantIds(id);
-    await this.prisma.page.updateMany({
-      where: { id: { in: targetIds } },
-      data: { deletedAt: new Date() },
+
+    // 직접 자식(활성)만 카운트 — 승격 대상.
+    const childCount = await this.prisma.page.count({
+      where: { parentId: id, deletedAt: null },
     });
+
+    let promotedChildren = 0;
+    let descendantsTrashed = 0;
+
+    if (opts.cascade || childCount === 0) {
+      // cascade 또는 자식 없음 → 기존 동작 (자손 모두 휴지통).
+      const targetIds = await this.collectDescendantIds(id);
+      await this.prisma.page.updateMany({
+        where: { id: { in: targetIds } },
+        data: { deletedAt: new Date() },
+      });
+      descendantsTrashed = targetIds.length - 1;
+    } else {
+      // 단일 삭제 + 직접 자식 승격. 트랜잭션으로 일관성 보장.
+      //   page.parentId 가 null 이면 자식들도 root 가 됨 (parentId=null).
+      //   position 은 그대로 유지 — 같은 그룹 내 중복 가능하지만 정렬 안정.
+      await this.prisma.$transaction([
+        this.prisma.page.updateMany({
+          where: { parentId: id, deletedAt: null },
+          data: { parentId: page.parentId },
+        }),
+        this.prisma.page.update({
+          where: { id },
+          data: { deletedAt: new Date() },
+        }),
+      ]);
+      promotedChildren = childCount;
+    }
+
     await this.activities.log({
       type: 'page.soft_deleted',
       spaceId: page.spaceId,
       pageId: page.id,
       actorId: actor?.id ?? null,
       actorName: actor?.name ?? null,
-      payload: { title: page.title, descendants: targetIds.length - 1 },
+      payload: {
+        title: page.title,
+        ...(descendantsTrashed > 0 ? { descendants: descendantsTrashed } : {}),
+        ...(promotedChildren > 0 ? { promotedChildren } : {}),
+      },
     });
-    return { ok: true };
+    return { ok: true, promotedChildren, descendantsTrashed };
   }
 
   // FR-024 (Cycle 18-1a) — 휴지통 복구. 휴지통에 있는 자식까지 함께 복구.

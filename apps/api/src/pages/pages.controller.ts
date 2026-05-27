@@ -154,10 +154,20 @@ export class PagesController {
     return this.pages.publish(id, dto, actorFromReq(req));
   }
 
+  // Cycle 56 — ?cascade=true 면 자손 모두 휴지통, 그 외(기본)는 직접 자식 승격
+  // 후 부모만 휴지통. 사용자 의도("딱 페이지만") 가 기본.
   @Delete(':id')
   @UseGuards(JwtAuthGuard)
-  remove(@Param('id') id: string, @Req() req: Request) {
-    return this.pages.remove(id, actorFromReq(req));
+  remove(
+    @Param('id') id: string,
+    @Query('cascade') cascade: string | undefined,
+    @Req() req: Request,
+  ) {
+    return this.pages.remove(
+      id,
+      { cascade: cascade === 'true' },
+      actorFromReq(req),
+    );
   }
 
   // FR-024 (Cycle 18-1a) — 휴지통 복구.
