@@ -19,6 +19,8 @@ import { CODE_BLOCK_LANGUAGES } from "@/lib/tiptap/code-block-lowlight";
 import EditorColorPicker from "@/components/EditorColorPicker";
 import InternalPageLinkDialog from "@/components/InternalPageLinkDialog";
 import InlineCommentDialog from "@/components/InlineCommentDialog";
+import { SLASH_ITEMS, filterItems } from "@/lib/tiptap/slash-commands";
+import type { SlashCommandItem } from "@/lib/tiptap/slash-commands";
 
 type Props = { editor: Editor | null };
 
@@ -154,7 +156,7 @@ export default function EditorToolbar({ editor }: Props) {
       </BtnGroup>
       <Divider />
 
-      {/* G5: 삽입 — 링크 / 표 / 이미지 / 수평선 / 인라인 댓글 */}
+      {/* G5: 삽입 — 링크 / 표 / 이미지 / 수평선 / 인라인 댓글 / + 더 많은 내용 */}
       <BtnGroup>
         <LinkButton editor={editor} />
         <TableButton editor={editor} />
@@ -168,6 +170,9 @@ export default function EditorToolbar({ editor }: Props) {
           ―
         </TB>
         <InlineCommentButton editor={editor} />
+        {/* Cycle 54-D — '+ 더 많은 내용 삽입' 버튼. slash 명령 카탈로그
+            (SLASH_ITEMS) 를 재활용해 검색 + 클릭만으로 같은 블록 삽입 흐름 제공. */}
+        <InsertMoreButton editor={editor} />
       </BtnGroup>
 
       {/* 컨텍스트별 보조 도구 */}
@@ -955,6 +960,131 @@ function TableButton({ editor }: { editor: Editor }) {
             >
               직접 입력
             </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Cycle 54-D — '+ 더 많은 내용 삽입'. SlashMenu 와 동일한 카탈로그
+//   (SLASH_ITEMS) 를 키보드/마우스로 탐색해 같은 .command() 흐름으로 위임.
+//   buttontrigger 라 slash 토큰이 없으므로 range 는 현재 커서 위치 (빈 range).
+//   slash command 들은 deleteRange 부터 호출하지만 빈 range 에서는 no-op.
+function InsertMoreButton({ editor }: { editor: Editor }) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [selected, setSelected] = useState(0);
+  const ref = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+
+  const items = filterItems(query);
+
+  // popup 외부 클릭 시 닫기.
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [open]);
+
+  // 열릴 때 검색 input 포커스 + 상태 초기화.
+  useEffect(() => {
+    if (open) {
+      setQuery("");
+      setSelected(0);
+      requestAnimationFrame(() => inputRef.current?.focus());
+    }
+  }, [open]);
+
+  // 항목 셋이 바뀌면 선택 reset.
+  useEffect(() => setSelected(0), [query]);
+
+  // 선택된 항목이 항상 보이도록 스크롤 동기화.
+  useEffect(() => {
+    const el = listRef.current?.querySelector<HTMLElement>(
+      `[data-idx="${selected}"]`,
+    );
+    el?.scrollIntoView({ block: "nearest" });
+  }, [selected]);
+
+  const runItem = (item: SlashCommandItem | undefined) => {
+    if (!item) return;
+    const pos = editor.state.selection.from;
+    // slash 와 같은 시그니처. 빈 range 라 deleteRange 는 no-op.
+    item.command({ editor, range: { from: pos, to: pos } });
+    setOpen(false);
+  };
+
+  const handleKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setSelected((s) => (items.length === 0 ? 0 : (s + 1) % items.length));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setSelected((s) =>
+        items.length === 0 ? 0 : (s - 1 + items.length) % items.length,
+      );
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      runItem(items[selected]);
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      setOpen(false);
+    }
+  };
+
+  return (
+    <div className="relative" ref={ref}>
+      <TB title="더 많은 내용 삽입" onClick={() => setOpen((v) => !v)}>
+        ＋
+      </TB>
+      {open && (
+        <div className="absolute left-0 top-full mt-1 bg-white border border-[#dfe1e6] rounded-md shadow-lg z-20 w-[260px]">
+          <div className="p-2 border-b border-[#dfe1e6]">
+            <input
+              ref={inputRef}
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={handleKey}
+              placeholder="삽입할 항목 검색..."
+              className="w-full px-2 py-1 text-[13px] border border-[#dfe1e6] rounded focus:outline-none focus:border-[#0052cc]"
+            />
+          </div>
+          <div ref={listRef} className="max-h-[260px] overflow-y-auto py-1">
+            {items.length === 0 ? (
+              <div className="px-3 py-2 text-[12px] text-[#6b778c]">
+                결과 없음
+              </div>
+            ) : (
+              items.map((item, i) => {
+                const active = i === selected;
+                return (
+                  <button
+                    key={item.title}
+                    data-idx={i}
+                    type="button"
+                    onMouseEnter={() => setSelected(i)}
+                    onClick={() => runItem(item)}
+                    className={`w-full text-left px-3 py-1.5 text-[13px] flex flex-col ${
+                      active
+                        ? "bg-[#deebff] text-[#0052cc]"
+                        : "text-[#172b4d] hover:bg-[#ebecf0]"
+                    }`}
+                  >
+                    <span className="font-medium">{item.title}</span>
+                    <span className="text-[11px] text-[#6b778c]">
+                      {item.description}
+                    </span>
+                  </button>
+                );
+              })
+            )}
           </div>
         </div>
       )}
