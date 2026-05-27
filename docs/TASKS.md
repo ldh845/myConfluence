@@ -77,11 +77,14 @@
     이동" 버그 fix. BE remove() 시그니처 변경 + 9 케이스 spec.
   - Cycle 56 followup — DeletePageDialog 안내 문구 간소화 (사용자 피드백).
     동작 변경 없음.
+  - Cycle 55 — @user 멘션 도입 (SRS FR-072). TipTap MentionNode 자체 구현
+    (extension-mention 패키지 peer 충돌로 우회), GET /users?q= 검색, popup
+    아바타+name+department. Yjs 호환. 알림 트리거는 별도 사이클.
 - **남은 일**: (현재 plat-level 큰 항목 없음 — 신규 기능은 Task G)
 - **닫힘 이력**: (v1 retro 미수행)
 - **차단 / 의존**: 없음
 - **Jira Epic**: 미등록
-- **관련 Cycle**: Cycle 1~41, 49, 50, 51, 52, 53, 54-D, 54-A, 54-B, 54-F, 54-C, 56
+- **관련 Cycle**: Cycle 1~41, 49, 50, 51, 52, 53, 54-D, 54-A, 54-B, 54-F, 54-C, 56, 55
 
 ---
 
@@ -268,6 +271,7 @@
 | Cycle 54-F | A |
 | Cycle 54-C | A |
 | Cycle 56 | A |
+| Cycle 55 | A |
 
 ---
 

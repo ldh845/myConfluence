@@ -1344,3 +1344,33 @@
 - **검증**: tsc EXIT 0. **동작 변경 없음** — 메시지만 갱신
 - **남은 일**: 없음
 - **비고**: 사용자가 동작 확인 후 "군더더기 문구 제거" 요청 — 다이얼로그 의미가 이미 cascade 체크박스로 전달되므로 부연 설명 불필요. 단순화로 인지 부담 ↓.
+
+---
+
+## Cycle 55 — 2026-05-27 — ✅ Done (@user 멘션 도입)
+- **제목**: TipTap @user 멘션 노드 신규 + GET /users 검색 필터 + suggestion popup
+- **카테고리**: 편집기 / 협업 (SRS FR-072 멘션 — 알림 발송은 별도 사이클)
+- **커밋**: `bc10c8d`(55-1 BE users 검색), `d50c497`(55-2 BE spec), `fb01ce3`(55-3 FE mention), 본 CYCLES.md(55-4 Docs)
+- **변경 파일**:
+  - `apps/api/src/users/users.service.ts` — `findAll({ q? })` OR(name, username) insensitive contains. trim 후 빈 값 무시. 기존 호출(q 미지정) 100% 호환
+  - `apps/api/src/users/users.controller.ts` — `@Query('q')` 추가
+  - `apps/api/src/users/users.service.spec.ts` 신규 — 6 케이스 (q 없음/있음/빈 문자열/whitespace/양옆 공백 trim/select 보안 가드 — passwordHash·keycloakId·email 미노출 회귀 가드)
+  - `apps/web/lib/tiptap/mention.ts` 신규 — MentionNode (Node.create, inline atom, attrs.id/label) + Suggestion plugin (char '@', GET /api/users?q= fetch, tippy popup). **`@tiptap/extension-mention` 패키지 충돌**(peer mismatch — core 2.x vs suggestion 3.x)로 자체 구현 — `slash-command.ts` 와 동일 패턴이라 유지보수 부담 ↓
+  - `apps/web/components/MentionSuggestionPopup.tsx` 신규 — SlashMenu 패턴 forwardRef + useImperativeHandle. 아바타(이름 첫글자) + name + department 표시. ArrowUp/Down + Enter 키보드 nav
+  - `apps/web/components/CollaborativeEditor.tsx` — extensions 에 MentionNode 등록 (DateExtension 다음, 같은 inline atom 카테고리)
+- **검증**: jest **11 suites · 72 tests** 통과(직전 66 + 신규 6). nest build / tsc / next build EXIT 0 (`/` 435→437kB, +2kB Mention + popup). 마이그레이션 **없음**. Yjs 호환: 신규 노드만 추가 → 안전 (배포 후 모든 클라이언트 새 빌드 받아야 동시 편집)
+- **동작 확인 안내**:
+  1) **마이그레이션 불필요**
+  2) 편집 모드 → 본문에서 `@` 입력 → suggestion popup 자동 표시 (전체 사용자)
+  3) 이름 일부 타이핑(예: `@홍`) → `/api/users?q=홍` fetch → 일치 사용자 리스트
+  4) ArrowUp/Down + Enter 또는 마우스 클릭 → **멘션 토큰(@name) 삽입 + 공백 자동**
+  5) 토큰은 파란 색박스 inline (`#deebff` / `#0747a6`) — Confluence mention lozenge 스타일
+  6) Esc / 외부 클릭 / 빈 결과 popup → '일치하는 사용자가 없습니다'
+  7) 다른 사용자(공동 편집) 화면에도 같은 토큰 동기화 (Yjs 호환)
+  8) 발행 후 새로고침 시 토큰 그대로 (parseHTML `span.cf-mention[data-id]` 매칭)
+  9) markdown 직렬화는 `@name` 텍스트만 (Markdown export 시 노드 시각화 손실 — CLAUDE.md 한계 동일 범주)
+- **남은 일**:
+  - **알림(Notification) 발송** — 멘션 transaction hook → POST /notifications (별도 메가 사이클, FR-100 ~ FR-102 연계)
+  - markdown 라운드트립 보강 (input rule 또는 raw HTML 통로)
+  - 멘션 토큰 클릭 → 프로필/페이지 진입 (Notification UX 와 함께)
+- **비고**: **`@tiptap/extension-mention` 사용 불가**: `@tiptap/suggestion` 3.x vs `@tiptap/core` 2.x peer mismatch. extension-mention 2.x 도 같은 충돌. 자체 Node + Suggestion 직접 구현으로 우회 — `slash-command.ts` 와 정확히 같은 패턴 답습이라 유지보수 부담 ↓. clientRect 타입에 `undefined` 허용 필요(strict 모드 미세 차이). **알림 분기점**: MentionNode 의 Suggestion command 콜백에서 `props.id` 알 수 있으므로 POST /notifications 호출이 자연스러운 연결지점. 알림 모델(Notification) 도입은 별도 메가 사이클(권장 Cycle 57). **번호 메모**: Cycle 55 자리가 비어 있었음(56 이 시급 fix 로 먼저). 멘션 도입으로 55 자리 채움.
