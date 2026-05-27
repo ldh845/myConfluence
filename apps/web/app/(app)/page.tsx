@@ -234,11 +234,36 @@ export default function HomePage() {
   // Cycle 31 — Ctrl/Cmd+K 글로벌 단축키는 TopNav 의 SearchOverlay 로 이관됨.
 
   // Cycle 11-2 / FR-034 — 본문 안의 내부 페이지 링크(/?pageId=<id>)를 SPA로.
+  // Cycle 55 followup — .cf-mention 클릭 → 해당 사용자의 개인 공간으로 이동
+  //   (Cycle 49 personal space 활용). data-id 는 멘션 노드 attrs.id.
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (e.defaultPrevented || e.button !== 0) return;
       if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
       const target = e.target as HTMLElement | null;
+
+      // 멘션 클릭 분기 — link 핸들러보다 먼저 (멘션이 a 안에 들어갈 일 없음).
+      const mention = target?.closest?.(".cf-mention");
+      if (mention) {
+        const userId = mention.getAttribute("data-id");
+        if (userId) {
+          e.preventDefault();
+          // spaces 캐시에서 그 사용자의 personal space 찾기. 없으면 무반응
+          // (그 사용자가 personal space 없는 케이스 — 옛 사용자 등).
+          const personal = spaces.find(
+            (s) => s.type === "PERSONAL" && s.ownerId === userId,
+          );
+          if (personal) {
+            if (personal.homePageId) {
+              router.push(`${pathname}?pageId=${personal.homePageId}`);
+            } else {
+              router.push(`${pathname}?spaceId=${personal.id}`);
+            }
+          }
+        }
+        return;
+      }
+
       const anchor = target?.closest?.("a");
       if (!anchor) return;
       const href = anchor.getAttribute("href");
@@ -257,7 +282,9 @@ export default function HomePage() {
     };
     document.addEventListener("click", handler);
     return () => document.removeEventListener("click", handler);
-  }, [router, pathname]);
+    // Cycle 55 followup — spaces 가 deps 에 들어가야 멘션 클릭이 최신 캐시
+    // 기반으로 동작.
+  }, [router, pathname, spaces]);
 
   // Cycle 10-2a — 발행 흐름.
   // Cycle 34 — note 동반(선택), 성공 시 편집 모드 탈출(버그 수정 핵심).

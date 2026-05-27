@@ -57,9 +57,10 @@ export const MentionNode = Node.create({
       mergeAttributes(HTMLAttributes, {
         class: "cf-mention",
         // 시각화는 NodeView 없이 inline style 로도 즉시 적용 (cf-mention 클래스
-        // 가 globals.css 에 없어도).
+        // 가 globals.css 에 없어도). cursor:pointer 는 조회 모드에서 클릭 액션
+        // (Cycle 55 followup) 힌트.
         style:
-          "display:inline-block;padding:0 4px;border-radius:3px;background:#deebff;color:#0747a6;font-size:0.95em;",
+          "display:inline-block;padding:0 4px;border-radius:3px;background:#deebff;color:#0747a6;font-size:0.95em;cursor:pointer;",
       }),
       `@${label}`,
     ];
