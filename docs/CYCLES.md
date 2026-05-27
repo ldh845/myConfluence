@@ -1444,3 +1444,33 @@
   - 알림(Notification) — 멘션 transaction hook → POST /notifications 별도 메가 사이클
   - 자기 자신 멘션 시 self-profile 동작 (현재는 그대로 자기 프로파일)
 - **비고**: 라우트 옵션 A 채택(`/?profileId=X`) — `view=pages` 와 같은 (app)/page.tsx 분기 패턴, layout 변경 X. ProfileView 내부 fetch 2 개 (user + activities). 편집 모드 popover 는 fixed position + getBoundingClientRect — Yjs 협업 영향 없음. '편집' 동작은 단순 노드 삭제 + '@' 텍스트 insert → suggestion 자동 트리거 (인기 패턴). Cycle 58 종결 — 멘션 기능 완성.
+
+---
+
+## Cycle 59 — 2026-05-27 — ✅ Done (멘션 알림 — Notification 모델 + 종 아이콘)
+- **제목**: 멘션 시 수신자에게 알림 트리거 + TopNav 종 아이콘 + dropdown 패널
+- **카테고리**: 코어 플랫폼 / 알림 인프라 (SRS FR-100~, Cycle 55/58 멘션 후속)
+- **커밋**: `28e2ff7`(59-1 Prisma+migration), `616177c`(59-2 BE service+controller), `1eb4acb`(59-3 publish 트리거), `c017826`(59-4 BE spec), `33bf3dd`(59-5 FE), 본 CYCLES.md(59-6 Docs)
+- **변경 파일**:
+  - **Prisma**: `Notification(id, recipientId, actorId, type, pageId, payload, readAt, createdAt)`. `@@unique([recipientId, actorId, pageId, type])` dedupe. 인덱스 `(recipientId, readAt)` 미읽 조회. recipient Cascade / actor SetNull / page SetNull (사용자·페이지 삭제 후에도 알림 보존). 신규 마이그레이션 `20260527120000_notifications`
+  - **BE**: `apps/api/src/notifications/{module,service,controller}.ts` 신규. `notifyMentions({actorId, pageId, recipientUserIds, payload})` — 자기 자신 + 중복 dedupe + upsert (재발행 시 noop, 스팸 방지) + best-effort try/catch. `listForUser(userId, {limit})` — 최근 limit + unreadCount. `markRead` / `markAllRead` — updateMany 본인 가드 idempotent. 모든 라우트 JwtAuthGuard. app.module 등록
+  - **BE 트리거**: `apps/api/src/pages/pages.service.ts` publish() 직후 `extractMentionIds(published.content)` → `notifications.notifyMentions(...)`. PagesModule 에 NotificationsModule import. best-effort (try/catch). extractMentionIds 헬퍼는 export — ProseMirror JSON 안 mention 노드 traverse, 옛 markdown 은 빈 배열 (자연 skip)
+  - **BE spec**: `notifications.service.spec.ts` 12 케이스 + `extract-mention-ids.spec.ts` 9 케이스. pages.service.spec 의 두 module 빌더에 NotificationsService mock 추가 (회귀 fix)
+  - **FE**: `apps/web/components/NotificationBellButton.tsx` 신규 — AdminGearButton 패턴 답습(useRef + mousedown + Esc). 비-로그인 시 DOM 미생성. `useQuery (['notifications', user.id])` staleTime 30s + `refetchInterval 60_000` polling. unreadCount badge (빨강, 99+ clamp). dropdown 패널: 알림 리스트(미읽 dot + actor + page) + '모두 읽음'. 알림 클릭 → 읽음 mark + 페이지(`?pageId=`) 또는 actor 프로파일(`?profileId=`) 라우팅. 페이지 deletedAt 면 프로파일 fallback. TopNav 의 AdminGearButton 앞에 삽입
+- **검증**: jest **13 suites · 97 tests** 통과(직전 80 + 신규 17). nest build / tsc / next build 모두 EXIT 0. 마이그레이션 동반 — `Notification` 테이블 신규
+- **동작 확인 안내**:
+  1) **⚠️ 마이그레이션 적용 필수**: `cd apps/api && npx prisma migrate deploy` (`Notification` 테이블 생성, 인덱스 4 개 포함)
+  2) 사용자 A 가 편집 모드에서 사용자 B `@홍길동` 멘션 → 발행 → 사용자 B 의 TopNav 종 아이콘에 빨간 badge "1"
+  3) 종 클릭 → dropdown "A님이 '제목'에서 회원님을 언급했습니다 · n분 전"
+  4) 알림 클릭 → 그 페이지 진입 + 자동 읽음 처리(badge -1)
+  5) "모두 읽음" 클릭 → badge 사라짐
+  6) **dedupe**: 같은 페이지에 사용자 B 를 여러 번 멘션해도 알림 1개
+  7) **자기 자신 멘션** → 알림 X (skip)
+  8) 페이지 삭제(soft delete) 후 알림 클릭 → 그 사용자 프로파일로 fallback
+  9) 옛 markdown 페이지 발행 — 멘션 노드 없으니 알림 트리거 X (자연 skip)
+  10) 비-로그인 화면(/login 등) — TopNav 종 아이콘 DOM 미생성
+- **남은 일**:
+  - 알림 종류 확장 (comment.reply, page.commented, watch 변경 등) — 별도 사이클. type enum 그대로 확장
+  - 이메일 알림 (SMTP, FR-102) — Cycle 48 Phase 2 영역
+  - WebSocket / SSE 실시간 push (현재 60초 polling — 작은 팀 규모 충분)
+- **비고**: **dedupe 키**: `@@unique([recipientId, actorId, pageId, type])` — 한 발행에 같은 사용자 여러 번 멘션해도 알림 1개. 재발행 시에도 upsert noop → 같은 멘션이 계속 새 알림으로 spam 안 됨 (의도). 재알림 원하면 `update: { readAt: null, createdAt: new Date() }` 로 변경 가능. **publish best-effort**: 알림 실패가 발행 본체 깨뜨리지 않음. extractMentionIds 가 '{' 시작 아니면 빈 배열 → 옛 markdown 안전 skip. **polling 60초**: WebSocket/SSE 도입은 별도 사이클 (사내 규모면 polling 충분). **테이블 인덱스**: dedupe unique 외에 (recipientId, readAt) + (recipientId, createdAt) — 미읽 조회와 최근순 조회 모두 가속.

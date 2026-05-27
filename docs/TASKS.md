@@ -88,11 +88,15 @@
     클릭 popover (연결로 이동/편집/연결해제). GET /users/:id 신규,
     activities.list actorId 필터 추가. 멘션 클릭 라우팅 personal space
     → 프로파일로 변경.
+  - Cycle 59 — 멘션 알림. Notification 모델 신규 + 발행 시점 멘션 추출 →
+    수신자에게 알림 트리거 (dedupe + 자기 자신 skip + best-effort).
+    TopNav 종 아이콘 + dropdown 패널 (60초 polling, unread badge).
+    SRS FR-100~ 알림 인프라 1단계.
 - **남은 일**: (현재 plat-level 큰 항목 없음 — 신규 기능은 Task G)
 - **닫힘 이력**: (v1 retro 미수행)
 - **차단 / 의존**: 없음
 - **Jira Epic**: 미등록
-- **관련 Cycle**: Cycle 1~41, 49, 50, 51, 52, 53, 54-D, 54-A, 54-B, 54-F, 54-C, 56, 55, 57, 58
+- **관련 Cycle**: Cycle 1~41, 49, 50, 51, 52, 53, 54-D, 54-A, 54-B, 54-F, 54-C, 56, 55, 57, 58, 59
 
 ---
 
@@ -282,6 +286,7 @@
 | Cycle 55 | A |
 | Cycle 57 | A |
 | Cycle 58 | A |
+| Cycle 59 | A |
 
 ---
 
