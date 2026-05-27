@@ -19,6 +19,7 @@ import { AdminModule } from './admin/admin.module';
 import { UsersModule } from './users/users.module';
 import { SavesModule } from './saves/saves.module';
 import { WatchesModule } from './watches/watches.module';
+import { NotificationsModule } from './notifications/notifications.module';
 
 @Module({
   imports: [
@@ -41,6 +42,8 @@ import { WatchesModule } from './watches/watches.module';
     // Cycle 53 — '나중을 위해 저장' / '지켜보기' 토글 API.
     SavesModule,
     WatchesModule,
+    // Cycle 59 — 알림.
+    NotificationsModule,
   ],
   controllers: [AppController, HealthController],
   providers: [AppService],
