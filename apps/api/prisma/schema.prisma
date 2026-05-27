@@ -58,6 +58,10 @@ model User {
   reactions                  Reaction[]    @relation("UserReaction")
   // Cycle 32 — 사용자가 소유한 개인 공간.
   ownedSpaces                Space[]       @relation("SpaceOwner")
+  // Cycle 53 — 사용자별 '나중을 위해 저장' / '지켜보기' 페이지 목록.
+  // 본인 데이터라 user 삭제 시 Cascade.
+  savedPages                 SavedPage[]   @relation("UserSaved")
+  watchedPages               WatchList[]   @relation("UserWatching")
 }
 
 model Space {
@@ -116,6 +120,9 @@ model Page {
   // 사이드바 페이지 트리에서 숨긴다. 첫 publish 시 now()로 채우고 이후엔 그대로.
   // 기존 페이지는 마이그레이션에서 createdAt으로 백필.
   publishedAt  DateTime?
+  // Cycle 53 — '나중을 위해 저장' / '지켜보기' back-relation. 페이지 삭제 시 Cascade.
+  savedBy      SavedPage[]   @relation("PageSaved")
+  watchers     WatchList[]   @relation("PageWatching")
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
 
@@ -277,4 +284,35 @@ model AppConfig {
   // 세션(docspace_session) 만료 시간 (분). 기본 7d = 10080분.
   sessionExpireMin Int      @default(10080)
   updatedAt        DateTime @updatedAt
+}
+
+// Cycle 53 — '나중을 위해 저장' (Confluence Save for later).
+// 사용자 한 명이 같은 페이지를 한 번만 저장(@@id composite). 토글은 idempotent
+// upsert/deleteMany. 페이지 / 사용자 삭제 시 함께 정리(Cascade — 본인 데이터).
+model SavedPage {
+  userId    String
+  user      User     @relation("UserSaved", fields: [userId], references: [id], onDelete: Cascade)
+  pageId    String
+  page      Page     @relation("PageSaved", fields: [pageId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@id([userId, pageId])
+  @@index([userId])
+  @@index([pageId])
+}
+
+// Cycle 53 — '지켜보기' (Watch). 향후 알림 발송의 기반. 이번 사이클은 토글만,
+// 알림은 별도 사이클(미구현). 구조는 SavedPage 와 동일 — 둘을 합치지 않은 것은
+// 의미 분리(저장 = 개인 책갈피, 지켜보기 = 변경 알림 수신자) + 향후 알림 정책
+// 진화 시 watch 만 확장될 수 있어서.
+model WatchList {
+  userId    String
+  user      User     @relation("UserWatching", fields: [userId], references: [id], onDelete: Cascade)
+  pageId    String
+  page      Page     @relation("PageWatching", fields: [pageId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@id([userId, pageId])
+  @@index([userId])
+  @@index([pageId])
 }
