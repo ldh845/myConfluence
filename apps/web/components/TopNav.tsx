@@ -107,20 +107,79 @@ export default function TopNav({
 // Cycle 48 — 톱니바퀴(관리자 페이지 진입). ADMIN role 사용자만 노출 — DOM 미생성.
 // 권한 source: useAuth().user.role 은 OIDC callback 에서 Keycloak realm role 로
 // 매 로그인마다 동기화된다. 백엔드도 동일 가드(RolesGuard) 적용 — 이중 가드.
+// Cycle 48 followup — 단순 진입 버튼에서 드롭다운 트리거로 변경. UserMenu 패턴
+// 답습(useRef + mousedown 외부 클릭 닫기, Esc keydown 닫기). 항목 클릭 시 /admin
+// 으로 ?tab 쿼리와 함께 이동 — /admin 페이지가 useSearchParams 로 초기 탭 결정.
 function AdminGearButton() {
   const router = useRouter();
   const { user } = useAuth();
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
   if (user?.role !== "ADMIN") return null;
+
+  const go = (tab: "general" | "users") => {
+    setOpen(false);
+    router.push(`/admin?tab=${tab}`);
+  };
+
   return (
-    <button
-      type="button"
-      onClick={() => router.push("/admin")}
-      aria-label="관리자 페이지"
-      title="관리자 페이지"
-      className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-[#ebecf0] text-[#42526e]"
-    >
-      ⚙️
-    </button>
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-label="관리자 메뉴"
+        title="관리자 메뉴"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        className={`w-8 h-8 flex items-center justify-center rounded-full text-[#42526e] ${
+          open ? "bg-[#ebecf0]" : "hover:bg-[#ebecf0]"
+        }`}
+      >
+        ⚙️
+      </button>
+      {open && (
+        <div
+          role="menu"
+          className="absolute right-0 top-full mt-1 w-44 bg-white border border-[#dfe1e6] rounded shadow-lg z-30 py-1"
+        >
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => go("general")}
+            className="w-full text-left px-3 py-2 text-[13px] text-[#172b4d] hover:bg-[#f4f5f7]"
+          >
+            일반 설정
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => go("users")}
+            className="w-full text-left px-3 py-2 text-[13px] text-[#172b4d] hover:bg-[#f4f5f7]"
+          >
+            사용자 관리
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
 
