@@ -126,6 +126,8 @@ export default function PageHeader({
         ["save", page.id, user?.id ?? null],
         data,
       );
+      // 홈 '나중을 위해 저장' 목록이 즉시 반영되도록 무효화.
+      queryClient.invalidateQueries({ queryKey: ["my-saves"] });
     },
   });
   const toggleSaved = () => {
@@ -337,10 +339,15 @@ export default function PageHeader({
             <>
               {/* (3) 나중을 위해 저장 (F) — SavedPage 토글 */}
               <ActionButton
-                icon={isSaved ? "🔖" : "💾"}
-                label={isSaved ? "저장됨" : "나중을 위해 저장"}
+                icon={
+                  <AppIcon
+                    name={isSaved ? "star" : "starOutline"}
+                    size={14}
+                    alt="나중을 위해 저장"
+                  />
+                }
+                label="나중을 위해 저장"
                 tooltip={user ? `나중을 위해 저장 (F)` : notLoggedInTitle}
-                active={isSaved}
                 disabled={!user || saveMutation.isPending}
                 onClick={toggleSaved}
               />

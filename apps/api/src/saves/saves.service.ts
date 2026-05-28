@@ -31,4 +31,31 @@ export class SavesService {
     });
     return row !== null;
   }
+
+  // Cycle 69 — 내 저장 페이지 목록(홈 '나중을 위해 저장' 뷰용). 삭제(휴지통)·
+  // 미발행(draft) 페이지는 제외해 조회 엔드포인트 정책과 일치. 최근 저장 순.
+  async listSaved(userId: string) {
+    const rows = await this.prisma.savedPage.findMany({
+      where: {
+        userId,
+        page: { deletedAt: null, publishedAt: { not: null } },
+      },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        page: {
+          select: {
+            id: true,
+            title: true,
+            space: { select: { id: true, name: true } },
+          },
+        },
+      },
+    });
+    return rows.map((r) => ({
+      id: r.page.id,
+      title: r.page.title,
+      spaceId: r.page.space.id,
+      spaceName: r.page.space.name,
+    }));
+  }
 }

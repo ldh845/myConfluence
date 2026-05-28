@@ -4,7 +4,6 @@ import { Suspense, useMemo } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { useFavoritesStore } from "@/lib/stores/useFavoritesStore";
 import { useRecentPagesStore } from "@/lib/stores/useRecentPagesStore";
 import PageCard from "@/components/PageCard";
 import type { SpaceWithPages, PageNode } from "@/lib/types";
@@ -352,41 +351,31 @@ function VisitedView() {
   );
 }
 
-// ── 나중을 위해 저장 (페이지 즐겨찾기) ─────────────────────────────────
-function SavedView() {
-  const favIds = useFavoritesStore((s) => s.ids);
+// ── 나중을 위해 저장 (저장한 페이지 목록) ─────────────────────────────
+// Cycle 69 — 서버 SavedPage 가 단일 출처. 페이지 상단 ☆ 버튼이 토글하고
+// 여기선 GET /api/saves 로 내 저장 목록을 읽는다(다른 기기에서도 유지).
+type SavedPageItem = {
+  id: string;
+  title: string;
+  spaceId: string;
+  spaceName: string;
+};
 
-  const { data: spaces } = useQuery<SpaceWithPages[]>({
-    queryKey: ["spaces"],
+function SavedView() {
+  const { data } = useQuery<SavedPageItem[]>({
+    queryKey: ["my-saves"],
     queryFn: async () => {
-      const r = await fetch("/api/spaces");
+      const r = await fetch("/api/saves", { credentials: "include" });
       if (!r.ok) return [];
-      return (await r.json()) as SpaceWithPages[];
+      return (await r.json()) as SavedPageItem[];
     },
   });
-
-  const pageLookup = useMemo(() => {
-    const map = new Map<string, { page: PageNode; space: SpaceWithPages }>();
-    for (const sp of spaces ?? []) {
-      for (const p of sp.pages) map.set(p.id, { page: p, space: sp });
-    }
-    return map;
-  }, [spaces]);
-
-  const favorites = useMemo(() => {
-    return favIds
-      .map((id) => {
-        const m = pageLookup.get(id);
-        if (!m) return null;
-        return { id: m.page.id, title: m.page.title, spaceName: m.space.name };
-      })
-      .filter((x): x is NonNullable<typeof x> => !!x);
-  }, [favIds, pageLookup]);
+  const favorites = data ?? [];
 
   if (favorites.length === 0) {
     return (
       <div className="text-[13px] text-[#6b778c] border border-dashed border-[#dfe1e6] rounded p-4">
-        별 표시한 페이지가 없습니다. 페이지 우측 ☆을 클릭해 추가하세요.
+        저장한 페이지가 없습니다. 페이지 상단의 ☆ 버튼을 눌러 추가하세요.
       </div>
     );
   }
