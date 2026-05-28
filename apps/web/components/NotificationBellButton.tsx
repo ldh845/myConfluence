@@ -47,7 +47,12 @@ function relativeTime(iso: string): string {
   return `${d}일 전`;
 }
 
-function describeMention(item: NotificationItem): string {
+// Cycle 60 — type 별 문구/아이콘 분기.
+//   mention: 멘션 / comment.created: 내 페이지에 댓글 / comment.reply: 내 댓글에 답글
+function describeNotification(item: NotificationItem): {
+  icon: string;
+  text: string;
+} {
   const actorName =
     item.actor?.name ??
     (typeof item.payload?.actorName === "string"
@@ -58,7 +63,24 @@ function describeMention(item: NotificationItem): string {
     (typeof item.payload?.pageTitle === "string"
       ? item.payload.pageTitle
       : "(페이지)");
-  return `${actorName}님이 '${pageTitle}'에서 회원님을 언급했습니다`;
+  switch (item.type) {
+    case "comment.created":
+      return {
+        icon: "💬",
+        text: `${actorName}님이 '${pageTitle}'에 댓글을 달았습니다`,
+      };
+    case "comment.reply":
+      return {
+        icon: "↩️",
+        text: `${actorName}님이 회원님 댓글에 답글을 달았습니다 ('${pageTitle}')`,
+      };
+    case "mention":
+    default:
+      return {
+        icon: "🔔",
+        text: `${actorName}님이 '${pageTitle}'에서 회원님을 언급했습니다`,
+      };
+  }
 }
 
 export default function NotificationBellButton() {
@@ -182,6 +204,7 @@ export default function NotificationBellButton() {
             ) : (
               items.map((item) => {
                 const unread = !item.readAt;
+                const { icon, text } = describeNotification(item);
                 return (
                   <button
                     key={item.id}
@@ -191,13 +214,16 @@ export default function NotificationBellButton() {
                       unread ? "bg-[#f4f8ff]" : ""
                     }`}
                   >
-                    {unread && (
+                    {unread ? (
                       <span className="mt-1.5 w-2 h-2 rounded-full bg-[#0052cc] shrink-0" />
+                    ) : (
+                      <span className="mt-1.5 w-2 h-2 shrink-0" />
                     )}
+                    <span className="text-[14px] leading-none mt-0.5">
+                      {icon}
+                    </span>
                     <div className="flex-1 min-w-0">
-                      <div className="text-[#172b4d]">
-                        {describeMention(item)}
-                      </div>
+                      <div className="text-[#172b4d]">{text}</div>
                       <div className="text-[11px] text-[#6b778c] mt-0.5">
                         {relativeTime(item.createdAt)}
                       </div>
