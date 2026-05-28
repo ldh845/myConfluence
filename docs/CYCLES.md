@@ -1578,4 +1578,25 @@
   6) 🔗 연결 → URL 입력 → 조회 모드에서 이미지 클릭 시 새 창 이동
   7) 발행 후 새로고침 → 크기/테두리/정렬/연결 유지 (JSON 라운드트립)
 - **남은 일**: 8방향 핸들·% 단위·이미지 정렬 시 캡션 폭 동기화 등 고도화는 필요 시점
-- **비고**: TipTap 2.x 기본 미지원이라 **자체 NodeView 로 구현** (외부 패키지 peer 충돌 회피 — Cycle 55 멘션 교훈). 드래그는 로컬 previewWidth 후 mouseup 1회 commit(Yjs transaction 폭주 방지). **"옆 텍스트" 는 inline node 전환 대신 float** — schema 변경 없이 기존 block 이미지 100% 호환. attr 4종(width/border/align/link) 모두 JSON 저장으로 라운드트립, markdown export 만 미반영(수용). **Cycle 54 편집 툴바 정비 영역 사실상 완성** (54-D/A/B/F/C + 62 + 63).
+- **비고**: TipTap 2.x 기본 미지원이라 **자체 NodeView 로 구현** (외부 패키지 peer 충돌 회피 — Cycle 55 멘션 교훈). 드래그는 로컬 previewWidth 후 mouseup 1회 commit(Yjs transaction 폭주 방지). attr 4종(width/border/align/link) 모두 JSON 저장으로 라운드트립, markdown export 만 미반영(수용). **Cycle 54 편집 툴바 정비 영역 사실상 완성** (54-D/A/B/F/C + 62 + 63). **followup 3차**: 캡션 prompt→textarea + 정렬 좌/가운데/우(float 제거, 블록, 에디터 상단 툴바로 통합) + 검정 테두리 + 커서 1개.
+
+---
+
+## Cycle 64 — 2026-05-27 — ✅ Done (본문 다이어그램 노드 — ＋/slash 에서 Excalidraw 생성)
+- **제목**: 편집기 ＋/slash 에서 Excalidraw 다이어그램 생성 + 본문 노드로 삽입
+- **카테고리**: 편집기 / 다이어그램
+- **커밋**: `fac1696`(64-1 노드+NodeView), `f9561be`(64-2 slash), 본 CYCLES.md(64-3 Docs)
+- **변경 파일**:
+  - `apps/web/lib/tiptap/diagram.ts` 신규 — DiagramNode(block atom, attrs.diagramId). 본문엔 id 만(content 가벼움). markdown serialize 는 '[다이어그램]' placeholder
+  - `apps/web/components/DiagramNodeView.tsx` 신규 — diagramId → GET /api/diagrams/:id preview 표시. 편집 모드 클릭 → DiagramEditorModal(ExcalidrawEditor) → PATCH 저장 → preview 갱신
+  - `apps/web/components/CollaborativeEditor.tsx` — extensions 에 DiagramNode 등록
+  - `apps/web/lib/tiptap/slash-commands.ts` — '다이어그램' 항목 (usePageStore.pageId → POST /diagrams → diagramId 노드 삽입). ＋ popup 도 같은 카탈로그
+- **검증**: tsc + next build EXIT 0. 마이그레이션 **없음** (기존 Diagram 엔티티 재활용)
+- **동작 확인 안내**:
+  1) **마이그레이션 불필요**
+  2) 편집 모드 → `/다이어그램` 또는 ＋ → '다이어그램' → 본문에 다이어그램 노드 삽입
+  3) 노드 클릭 → Excalidraw 모달 → 그리기 → 저장 → preview 갱신
+  4) 조회 모드 → preview 표시 (편집 불가)
+  5) 발행 후 새로고침 → 노드(diagramId) 유지 (JSON 라운드트립)
+- **남은 일**: 본문 다이어그램 노드 삭제 시 Diagram 엔티티 orphan 정리(현재 엔티티 잔존) — 필요 시점
+- **비고**: **draw.io 미채택** — Confluence draw.io 앱은 유료 + `embed.diagrams.net` 외부 임베드는 사내망/Skyhigh 프록시 차단 리스크(운영 환경 편집 불가 위험). 기존 무료 내장 Excalidraw 유지(사용자 결정). 본문엔 diagramId 만 저장, data/preview 는 기존 diagrams API(POST/GET/PATCH/DELETE) 재활용. **DiagramList 별도 섹션은 조회에서 제거됨(직전 followup) → 본문 노드가 이제 다이어그램의 주 진입점**. DiagramList/DiagramCard 파일은 보존(향후 재활용 가능).

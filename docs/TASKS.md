@@ -104,13 +104,17 @@
     다이얼로그 일관화(전역 store), 링크 다이얼로그 '파일' 탭, 날짜 native
     date picker + 한국어 locale. 이미지 크기 조절은 별도 사이클.
   - Cycle 63 — 이미지 리사이즈 + 컨트롤 (Cycle 54-C 후속 대형). 드래그
-    핸들 크기 조절 + toolbar(px/원본/테두리/정렬/연결). 정렬 float 로
-    이미지 옆 텍스트. 조회 시 연결 클릭 이동. 자체 NodeView(peer 충돌 회피).
+    핸들 크기 조절 + toolbar(px/원본/테두리/연결) + 캡션 textarea. 정렬은
+    에디터 상단 툴바 좌/가운데/우(블록). 조회 시 연결 클릭 이동.
+    자체 NodeView(peer 충돌 회피).
+  - Cycle 64 — 편집기 ＋/slash 에서 Excalidraw 다이어그램 생성 + 본문 노드
+    삽입. DiagramNode(diagramId 참조) + NodeView(preview/클릭 편집). 기존
+    diagrams API + ExcalidrawEditor 재활용. draw.io 는 유료/외부 의존이라 미채택.
 - **남은 일**: (현재 plat-level 큰 항목 없음 — 신규 기능은 Task G)
 - **닫힘 이력**: (v1 retro 미수행)
 - **차단 / 의존**: 없음
 - **Jira Epic**: 미등록
-- **관련 Cycle**: Cycle 1~41, 49, 50, 51, 52, 53, 54-D, 54-A, 54-B, 54-F, 54-C, 56, 55, 57, 58, 59, 60, 61, 62, 63
+- **관련 Cycle**: Cycle 1~41, 49, 50, 51, 52, 53, 54-D, 54-A, 54-B, 54-F, 54-C, 56, 55, 57, 58, 59, 60, 61, 62, 63, 64
 
 ---
 
@@ -305,6 +309,7 @@
 | Cycle 61 | A |
 | Cycle 62 | A |
 | Cycle 63 | A |
+| Cycle 64 | A |
 
 ---
 
