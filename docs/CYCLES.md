@@ -1523,3 +1523,33 @@
   6) 알림 클릭 → 그 페이지 진입 + 자동 읽음
 - **남은 일**: SMTP 이메일 알림(FR-102) / WebSocket·SSE 실시간 push (현재 60초 polling)
 - **비고**: **refresh=true 가 watch 알림의 핵심** — 변경 추적이라 매 발행마다 다시 알려야 함(mention/comment 는 refresh=false, 한 번만). dedupe key 동일 `(recipient, actor, page, type)` 이라 같은 actor 의 반복 발행은 알림 1행을 refresh (새 행 안 쌓임 — 깔끔). WatchList 조회 실패도 best-effort 라 발행 본체 안 깨짐. **지켜보기 기능 완성**: Cycle 53(토글) → Cycle 61(알림) 으로 watch 의 실효성 확보.
+
+---
+
+## Cycle 61 followup — 2026-05-27 — ✅ Done (지켜보기 버튼 비활성화)
+- **제목**: 사용자 결정 — 지켜보기는 나중으로. PageHeader 버튼 비활성 + '아직 개발 중' 툴팁. BE 알림 인프라(Cycle 61)는 코드로 유지
+- **커밋**: `96cd8db`(core FE)
+- **변경**: `PageHeader.tsx` — 지켜보기 ActionButton disabled + tooltip '지켜보기 — 아직 개발 중인 기능입니다'. W 단축키 주석처리. watchQuery/watchMutation/toggleWatching + BE notifyWatchers 는 유지 (재활성화 시 disabled/onClick/단축키 3곳만 복구)
+- **검증**: tsc + next build EXIT 0
+- **비고**: watcher 가 안 생기니 notifyWatchers 도 자연히 알림 0 — BE 무해. 향후 재활성화 1분 작업.
+
+---
+
+## Cycle 62 — 2026-05-27 — ✅ Done (편집기 마무리 — slash 이미지/링크 파일탭/날짜 picker)
+- **제목**: Cycle 54 편집 툴바 후속 마무리 3종 — slash '/이미지' 통합 다이얼로그 일관화, 링크 다이얼로그 '파일' 탭, 날짜 native date picker + 한국어 locale
+- **카테고리**: 편집기 / UX (Cycle 54 후속)
+- **커밋**: `eb6a6f8`(62-1 slash 이미지), `a28a43c`(62-2 링크 파일탭), `01f1ab1`(62-3 날짜 picker), 본 CYCLES.md(62-4 Docs)
+- **변경 파일**:
+  - **62-1**: `apps/web/lib/stores/useEditorUiStore.ts` 신규 — 전역 `imageDialogOpen` 신호. `EditorToolbar` ImageButton 이 store 구독(로컬 state 제거), slash '/이미지' 가 `getState().openImageDialog()` (prompt 제거). slash·버튼 둘 다 같은 통합 다이얼로그(첨부/웹 URL 탭). slash 가 React 다이얼로그 직접 못 띄우는 한계를 store 신호로 우회
+  - **62-2**: `apps/web/components/InternalPageLinkDialog.tsx` — '파일' 탭 추가. 현재 페이지 첨부 목록(GET /pages/:id/attachments) → 클릭 시 `onSelect('/api/attachments/:id')`. pageId 는 usePageStore. 54-A 자리 안내 텍스트 제거. formatBytes 로 크기 표시
+  - **62-3**: `apps/web/lib/tiptap/date.ts` 재작성 — `promptForDate` → `pickDate(initial, onPick)` 네이티브 `input[type=date]` picker (showPicker + focus/click fallback, hidden input). `formatKoreanDate` ('2026년 5월 27일'). NodeView 클릭/slash '날짜' 둘 다 picker. attrs.date 는 ISO 보존, 표시만 한국어. slash-commands 의 '날짜' 도 pickDate 사용
+- **검증**: tsc + next build EXIT 0. 마이그레이션 **없음**
+- **동작 확인 안내**:
+  1) **마이그레이션 불필요**
+  2) 편집 모드 → `/이미지` 입력 → toolbar 🖼️ 와 동일한 통합 다이얼로그(이 페이지 첨부 / 웹에서의 그림)
+  3) 편집 모드 → 🔗 링크 (또는 Ctrl+K) → '파일' 탭 → 첨부 클릭 → 링크 적용
+  4) `/날짜` 또는 기존 날짜 토큰 클릭 → 달력 picker 팝업 → 선택 시 "2026년 5월 27일" 표시
+  5) 날짜 발행 후 새로고침 → 그대로 유지 (Cycle 57 JSON 라운드트립)
+  6) slash `/` 다른 항목들 회귀 없음
+- **남은 일**: 이미지 크기 조절 핸들 — 별도 Cycle (TipTap 2.x 기본 미지원, 외부 패키지 peer 충돌/자체 NodeView 대형)
+- **비고**: slash command(.ts, React 밖)가 다이얼로그를 직접 마운트 못 하는 한계 → zustand store 신호(getState)로 우회. 날짜 picker 는 브라우저 native UI(input[type=date].showPicker) 라 라이브러리 0 + peer 충돌 회피. 한국어 표시는 NodeView/renderHTML 둘 다 적용, attrs.date 는 ISO 보존(정렬·파싱 안전). 라운드트립은 Cycle 57 JSON 저장이 보장하므로 markdown serialize 는 표시용 텍스트만.

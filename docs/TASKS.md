@@ -99,11 +99,15 @@
   - Cycle 61 — 지켜보는 페이지 발행 알림 (page.updated). WatchList(Cycle 53)
     + Notification 결합 — 지켜보기 기능 완성. notifyWatchers + notifyOne
     refresh 옵션(매 발행마다 재알림). 종 아이콘 👁️. 마이그레이션 없음.
+    (followup: 지켜보기 버튼은 '개발 중'으로 비활성화 — BE 인프라는 유지)
+  - Cycle 62 — 편집기 마무리 3종 (Cycle 54 후속): slash '/이미지' 통합
+    다이얼로그 일관화(전역 store), 링크 다이얼로그 '파일' 탭, 날짜 native
+    date picker + 한국어 locale. 이미지 크기 조절은 별도 사이클.
 - **남은 일**: (현재 plat-level 큰 항목 없음 — 신규 기능은 Task G)
 - **닫힘 이력**: (v1 retro 미수행)
 - **차단 / 의존**: 없음
 - **Jira Epic**: 미등록
-- **관련 Cycle**: Cycle 1~41, 49, 50, 51, 52, 53, 54-D, 54-A, 54-B, 54-F, 54-C, 56, 55, 57, 58, 59, 60, 61
+- **관련 Cycle**: Cycle 1~41, 49, 50, 51, 52, 53, 54-D, 54-A, 54-B, 54-F, 54-C, 56, 55, 57, 58, 59, 60, 61, 62
 
 ---
 
@@ -296,6 +300,7 @@
 | Cycle 59 | A |
 | Cycle 60 | A |
 | Cycle 61 | A |
+| Cycle 62 | A |
 
 ---
 
