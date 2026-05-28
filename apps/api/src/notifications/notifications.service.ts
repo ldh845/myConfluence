@@ -2,9 +2,13 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
-// Cycle 59 — 알림 (Notification). 현재 type = 'mention' 만. 향후 확장.
+// Cycle 59 — 알림 (Notification). 현재 type = 'mention' / 'comment.created' /
+// 'comment.reply'. Cycle 60 에서 댓글 종류 확장.
 
-export type NotificationType = 'mention';
+export type NotificationType =
+  | 'mention'
+  | 'comment.created'
+  | 'comment.reply';
 
 @Injectable()
 export class NotificationsService {
@@ -58,6 +62,43 @@ export class NotificationsService {
         }
       }),
     );
+  }
+
+  // Cycle 60 — 단일 recipient 에 일반 알림 생성. 자기 자신 skip + best-effort.
+  //   notifyMentions 와 같은 upsert dedupe (recipient, actor, page, type) 패턴.
+  async notifyOne(params: {
+    recipientId: string | null | undefined;
+    actorId: string;
+    pageId: string;
+    type: NotificationType;
+    payload?: Record<string, unknown>;
+  }): Promise<void> {
+    const recipient = params.recipientId;
+    if (!recipient || recipient === params.actorId) return;
+    try {
+      await this.prisma.notification.upsert({
+        where: {
+          Notification_dedupe_key: {
+            recipientId: recipient,
+            actorId: params.actorId,
+            pageId: params.pageId,
+            type: params.type,
+          },
+        },
+        update: {},
+        create: {
+          recipientId: recipient,
+          actorId: params.actorId,
+          pageId: params.pageId,
+          type: params.type,
+          payload: (params.payload ?? Prisma.JsonNull) as Prisma.InputJsonValue,
+        },
+      });
+    } catch (err) {
+      this.logger.warn(
+        `notify ${params.type} failed (recipient=${recipient}): ${String(err)}`,
+      );
+    }
   }
 
   // 본인 알림 목록 (최근 limit, 미읽 우선 정렬은 클라이언트가).

@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ActivitiesService } from '../activities/activities.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { CreateCommentDto } from './dto/create-comment.dto';
 import { UpdateCommentDto } from './dto/update-comment.dto';
 
@@ -26,6 +27,8 @@ export class CommentsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly activities: ActivitiesService,
+    // Cycle 60 — 댓글 작성 시 페이지 작성자 / 부모 댓글 작성자에게 알림.
+    private readonly notifications: NotificationsService,
   ) {}
 
   async create(
@@ -37,17 +40,19 @@ export class CommentsService {
     if (!body) throw new BadRequestException({ error: 'body required' });
     const page = await this.prisma.page.findUnique({
       where: { id: pageId },
-      select: { id: true, title: true, spaceId: true },
+      select: { id: true, title: true, spaceId: true, authorId: true },
     });
     if (!page) throw new NotFoundException({ error: 'page not found' });
+    let parentAuthorId: string | null = null;
     if (dto.parentId) {
       const parent = await this.prisma.comment.findUnique({
         where: { id: dto.parentId },
-        select: { id: true, pageId: true },
+        select: { id: true, pageId: true, authorId: true },
       });
       if (!parent || parent.pageId !== pageId) {
         throw new BadRequestException({ error: 'invalid parent' });
       }
+      parentAuthorId = parent.authorId;
     }
     const created = await this.prisma.comment.create({
       data: {
@@ -74,6 +79,32 @@ export class CommentsService {
         isInline: !!dto.isInline,
       },
     });
+    // Cycle 60 — 알림 트리거 (best-effort, notifyOne 안에서 자기 자신 skip).
+    //   답글이면 부모 댓글 작성자, 신규 댓글이면 페이지 작성자.
+    if (actor?.id) {
+      const payload = {
+        pageTitle: page.title,
+        actorName: actor.name,
+        preview: body.slice(0, 80),
+      };
+      if (dto.parentId) {
+        await this.notifications.notifyOne({
+          recipientId: parentAuthorId,
+          actorId: actor.id,
+          pageId: page.id,
+          type: 'comment.reply',
+          payload,
+        });
+      } else {
+        await this.notifications.notifyOne({
+          recipientId: page.authorId,
+          actorId: actor.id,
+          pageId: page.id,
+          type: 'comment.created',
+          payload,
+        });
+      }
+    }
     return created;
   }
 
