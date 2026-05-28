@@ -18,6 +18,7 @@ import TableOfContents from "@/components/TableOfContents";
 import PageVersionHistory from "@/components/PageVersionHistory";
 import PageComments from "@/components/PageComments";
 import InlineCommentsList from "@/components/InlineCommentsList";
+import { useAuth } from "@/lib/auth/useAuth";
 import MovePageDialog from "@/components/MovePageDialog";
 import CopyPageDialog from "@/components/CopyPageDialog";
 import SharePageDialog from "@/components/SharePageDialog";
@@ -50,6 +51,8 @@ export default function HomePage() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
+  // Fix — 댓글 작성은 본문 편집 모드와 무관하게 로그인 사용자면 가능.
+  const { user } = useAuth();
   const pageIdFromUrl = searchParams.get("pageId");
   // Cycle 29 — SystemSidebar의 "내 공간" 카드는 /?spaceId=X로 진입한다.
   // pageId가 없으면 그 스페이스의 첫 페이지로 자동 이동.
@@ -670,9 +673,12 @@ export default function HomePage() {
                     editable={isBodyEditable}
                   />
                 )}
+                {/* Fix — 댓글은 조회 모드에서도 로그인 사용자면 작성 가능
+                    (Confluence 표준). 기존 editable={isBodyEditable} 은 편집
+                    모드에서만 작성 가능해 댓글 창이 비활성으로 보였음. */}
                 <PageComments
                   pageId={currentPage.id}
-                  editable={isBodyEditable}
+                  editable={!!user}
                 />
               </div>
               <aside className="hidden lg:block sticky top-4 h-fit max-h-[calc(100vh-2rem)] overflow-y-auto pl-4 border-l border-[#dfe1e6]">
@@ -688,17 +694,8 @@ export default function HomePage() {
                 🏷️ 레이블 없음
               </div>
             </div>
-
-            <div className="mt-6 flex items-start gap-3">
-              <div className="w-8 h-8 rounded-full bg-[#0052cc] text-white flex items-center justify-center text-xs font-semibold shrink-0">
-                U
-              </div>
-              <input
-                placeholder="댓글 작성..."
-                disabled
-                className="flex-1 px-3 py-2 text-sm bg-[#f4f5f7] border border-[#dfe1e6] rounded cursor-not-allowed"
-              />
-            </div>
+            {/* Fix — 비활성 더미 '댓글 작성...' input 제거 (Cycle 16 이전
+                placeholder). 실제 댓글 작성은 위 PageComments 가 담당. */}
           </>
         )}
       </div>
