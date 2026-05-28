@@ -1681,3 +1681,25 @@
   4) 일반 페이지 댓글(`PageComments`)·반응 바는 그대로 동작
 - **남은 일**: **백엔드 댓글 API 의 `isInline`/anchor/`resolve` 경로는 잔존**(호출 FE 없음, 무해) — 완전 정리는 별도 사이클. **엣지 케이스**: 과거 인라인 댓글 단 페이지를 *편집 모드*로 열 때 그 브라우저 IndexedDB(Yjs)에 마크가 남아 있으면 깨질 수 있음(발행본은 안전) → 사이트 데이터 삭제로 해소. **브라우저 시각 확인 미수행**
 - **비고**: FR-071(Cycle 16-3b-1/2)의 FE 부분 롤백. 백엔드/DB(Comment.isInline, anchorJson) 스키마는 보존 — 향후 재도입 시 작성/표시 UI 만 다시 붙이면 됨.
+
+---
+
+## Cycle 69 — 2026-05-29 — ✅ Done ('나중을 위해 저장' 별표 아이콘 + 홈 저장목록 서버 연동)
+- **제목**: 조회 화면 저장 버튼을 별표 아이콘으로 바꾸고, 저장한 페이지가 홈 '나중을 위해 저장' 뷰에 실제로 표시되도록 서버 SavedPage 단일 출처로 연결
+- **카테고리**: FE + BE / 기능 (저장 페이지 surface)
+- **커밋**: `5c06f80`(69-1 코드), 본 CYCLES.md(69-2 Docs)
+- **배경**: ① 저장 버튼이 이모지(🔖/💾)라 별표 요청. ② 홈 SavedView 는 `useFavoritesStore`(localStorage)를 읽는데 그 store 의 `toggle` 을 호출하는 UI 가 어디에도 없어 **항상 비어 있던 고아 기능**이었음. 반면 PageHeader 저장 버튼은 백엔드 `SavedPage` 에 잘 저장되지만 어떤 목록에도 안 떴음 → 서버를 단일 출처로 통합(사용자 선택)
+- **변경 파일**:
+  - `apps/web/components/PageHeader.tsx` — 저장 버튼 아이콘 이모지 → `AppIcon` `star`/`starOutline`(저장됨=채운 별). 라벨 상태 무관 '나중을 위해 저장' 고정(기존 '저장됨' 토글 제거). `active` 파란 배경(`bg-[#deebff]`) 제거 — 아이콘 변화만으로 상태 표시. 저장 토글 성공 시 `["my-saves"]` invalidate
+  - `apps/web/app/(app)/home/page.tsx` — `SavedView` 가 favorites store 대신 `GET /api/saves` 조회로 재작성. 빈 상태 문구 갱신. 미사용된 `useFavoritesStore` import 제거
+  - `apps/api/src/saves/saved-list.controller.ts` **신규** — `GET /api/saves`(JWT). `pages/:id/save`(SavesController)와 prefix 달라 별도 컨트롤러
+  - `apps/api/src/saves/saves.service.ts` — `listSaved(userId)`: 내 SavedPage 최근 저장순, **삭제·미발행 페이지 제외**, `{id,title,spaceId,spaceName}` 반환
+  - `apps/api/src/saves/saves.module.ts` — `SavedListController` 등록
+- **검증**: web/api `tsc --noEmit` 둘 다 EXIT 0. 마이그레이션 **없음**(스키마 무변경)
+- **동작 확인 안내**:
+  1) **마이그레이션 불필요**
+  2) 페이지 조회 상단 '나중을 위해 저장' — 빈 별/채운 별 토글, 클릭해도 파란 배경 없음, 라벨 항상 동일
+  3) 저장 후 홈 `/home?view=saved` → 해당 페이지가 목록에 표시(다른 기기/브라우저에서도 유지)
+  4) 저장 해제 시 목록에서 사라짐
+- **남은 일**: **Sidebar '즐겨찾기' 섹션**은 여전히 토글 UI 없는 `useFavoritesStore` 를 읽어 비어 있음 — 이번 범위 밖. 필요 시 별도 사이클에서 백엔드 saves 로 통합. `listSaved` 단위 테스트 미추가. **브라우저 시각 확인 미수행**
+- **비고**: 서버(JWT별 SavedPage)를 단일 출처로 채택 — favorites store 의 "user id 기반 모델 마이그레이션 예정"(FR-025 주석) 방향과 일치. `useFavoritesStore` 파일 자체는 Sidebar 가 아직 참조해 보존.
