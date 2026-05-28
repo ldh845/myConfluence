@@ -20,6 +20,7 @@ import EditorColorPicker from "@/components/EditorColorPicker";
 import InternalPageLinkDialog from "@/components/InternalPageLinkDialog";
 import InlineCommentDialog from "@/components/InlineCommentDialog";
 import ImageInsertDialog from "@/components/ImageInsertDialog";
+import AppIcon from "@/components/AppIcon";
 import { usePageStore } from "@/lib/stores/usePageStore";
 import { useEditorUiStore } from "@/lib/stores/useEditorUiStore";
 import { SLASH_ITEMS, filterItems } from "@/lib/tiptap/slash-commands";
@@ -123,14 +124,14 @@ export default function EditorToolbar({ editor }: Props) {
           active={isActive("bulletList")}
           onClick={run(() => editor.chain().focus().toggleBulletList().run())}
         >
-          •
+          <AppIcon name="bulletList" size={16} alt="단추형 목록" />
         </TB>
         <TB
           title="번호형 목록 (Ctrl+Shift+N)"
           active={isActive("orderedList")}
           onClick={run(() => editor.chain().focus().toggleOrderedList().run())}
         >
-          1.
+          <AppIcon name="numberList" size={16} alt="번호형 목록" />
         </TB>
         <TB
           title="작업 목록"
@@ -272,7 +273,7 @@ export default function EditorToolbar({ editor }: Props) {
               title="표 삭제"
               onClick={run(() => editor.chain().focus().deleteTable().run())}
             >
-              🗑️
+              <AppIcon name="trash" size={16} alt="표 삭제" />
             </TB>
           </BtnGroup>
         </>
@@ -823,7 +824,7 @@ function LinkButton({ editor }: { editor: Editor }) {
         active={editor.isActive("link")}
         onClick={() => setOpen(true)}
       >
-        🔗
+        <AppIcon name="link" size={16} alt="링크" />
       </TB>
       <InternalPageLinkDialog
         open={open}
@@ -947,7 +948,7 @@ function InlineCommentButton({ editor }: { editor: Editor }) {
   return (
     <>
       <TB title="인라인 댓글 (텍스트 선택 후)" onClick={handleOpen}>
-        💬
+        <AppIcon name="comment" size={16} alt="인라인 댓글" />
       </TB>
       <InlineCommentDialog
         open={open}
@@ -1125,7 +1126,7 @@ function InsertMoreButton({ editor }: { editor: Editor }) {
   return (
     <div className="relative" ref={ref}>
       <TB title="더 많은 내용 삽입" onClick={() => setOpen((v) => !v)}>
-        ＋
+        <AppIcon name="plus" size={16} alt="더 많은 내용 삽입" />
       </TB>
       {open && (
         <div className="absolute left-0 top-full mt-1 bg-white border border-[#dfe1e6] rounded-md shadow-lg z-20 w-[260px]">

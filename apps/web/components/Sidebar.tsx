@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useMutation } from "@tanstack/react-query";
 import {
@@ -26,6 +26,7 @@ import type { PageNode, SpaceWithPages } from "@/lib/types";
 import { useFavoritesStore } from "@/lib/stores/useFavoritesStore";
 import SpaceStarButton from "@/components/SpaceStarButton";
 import DeletePageDialog from "@/components/DeletePageDialog";
+import AppIcon from "@/components/AppIcon";
 
 type Props = {
   space: SpaceWithPages | null;
@@ -123,7 +124,7 @@ function NavItem({
   disabled,
   onClick,
 }: {
-  icon: string;
+  icon: ReactNode;
   label: string;
   active?: boolean;
   disabled?: boolean;
@@ -142,7 +143,9 @@ function NavItem({
           : "text-[#172b4d] hover:bg-[#ebecf0]"
       }`}
     >
-      <span className="w-4 text-center">{icon}</span>
+      <span className="w-4 inline-flex items-center justify-center text-center">
+        {icon}
+      </span>
       <span>{label}</span>
     </button>
   );
@@ -488,7 +491,7 @@ export default function Sidebar({
       <div className="px-2 py-2 space-y-0.5">
         {/* 홈 — 이 공간의 메인 페이지(첫 루트 페이지)로 이동. */}
         <NavItem
-          icon="🏠"
+          icon={<AppIcon name="home" size={15} alt="" />}
           label="홈"
           active={
             pathname === "/" &&
@@ -505,21 +508,25 @@ export default function Sidebar({
             (app)/page.tsx 가 view=pages 분기) 으로 이동한다. 빈 스페이스도
             동일 화면이 빈 상태 안내 + 만들기 버튼을 책임진다. */}
         <NavItem
-          icon="📄"
+          icon={<AppIcon name="page" size={15} alt="" />}
           label="페이지"
           active={pathname === "/" && view === "pages"}
           onClick={() => {
             if (space) router.push(`/?spaceId=${space.id}&view=pages`);
           }}
         />
-        <NavItem icon="📅" label="캘린더" disabled />
+        <NavItem
+          icon={<AppIcon name="calendar" size={15} alt="" />}
+          label="캘린더"
+          disabled
+        />
       </div>
 
       {favPages.length > 0 && (
         <>
           <div className="border-t border-[#dfe1e6] mx-2" />
-          <div className="px-4 pt-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-[#6b778c]">
-            ⭐ 즐겨찾기
+          <div className="px-4 pt-3 pb-1 flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-[#6b778c]">
+            <AppIcon name="star" size={12} alt="" /> 즐겨찾기
           </div>
           <ul className="px-2 pb-1 space-y-0.5">
             {favPages.map((p) => (
@@ -617,7 +624,7 @@ export default function Sidebar({
           onClick={() => onOpenTrash?.()}
           className="flex items-center gap-2 text-sm text-[#172b4d] hover:text-[#0052cc]"
         >
-          <span>🗑️</span> 휴지통
+          <AppIcon name="trash" size={15} alt="" /> 휴지통
         </button>
         <button
           type="button"

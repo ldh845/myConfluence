@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { PageFull, PageNode, SpaceWithPages } from "@/lib/types";
 import type {
@@ -11,6 +11,7 @@ import type {
 import { downloadPageMarkdown } from "@/lib/export/markdown";
 import { openPrintDialog } from "@/lib/export/print";
 import { useAuth } from "@/lib/auth/useAuth";
+import AppIcon from "@/components/AppIcon";
 
 function relativeTime(iso: string): string {
   const diffSec = Math.max(
@@ -318,7 +319,11 @@ export default function PageHeader({
                 : "text-[#42526e] hover:bg-[#ebecf0]"
             }`}
           >
-            <span>{isBodyEditable ? "✓" : "✏️"}</span>
+            {isBodyEditable ? (
+              <span>✓</span>
+            ) : (
+              <AppIcon name="edit" size={14} alt="편집" />
+            )}
             <span>{isBodyEditable ? "완료 (E)" : "편집 (E)"}</span>
           </button>
           {isBodyEditable && (
@@ -342,7 +347,7 @@ export default function PageHeader({
             <>
               {/* (2) 인라인 댓글 보기 (V) — 본문 아래 InlineCommentsList show/hide */}
               <ActionButton
-                icon="💬"
+                icon={<AppIcon name="comment" size={14} alt="댓글" />}
                 label="인라인 댓글 보기"
                 tooltip={`인라인 댓글 보기 (V)`}
                 active={!!showInlineComments}
@@ -361,14 +366,14 @@ export default function PageHeader({
                   WatchList 토글 + 알림 인프라(Cycle 53/61)는 코드로 유지,
                   재활성화 시 disabled/onClick/단축키만 복구. */}
               <ActionButton
-                icon="👁"
+                icon={<AppIcon name="watch" size={14} alt="지켜보기" />}
                 label="지켜보기"
                 tooltip="지켜보기 — 아직 개발 중인 기능입니다"
                 disabled
               />
               {/* (5) 공유 (S) — SharePageDialog */}
               <ActionButton
-                icon="🔗"
+                icon={<AppIcon name="share" size={14} alt="공유" />}
                 label="공유"
                 tooltip={`공유 (S)`}
                 onClick={onShareClick}
@@ -505,7 +510,7 @@ function ActionButton({
   active,
   tooltip,
 }: {
-  icon: string;
+  icon: ReactNode;
   label: string;
   onClick?: () => void;
   disabled?: boolean;
@@ -637,7 +642,10 @@ function MoreMenu({
                 });
               }}
             >
-              📄 Markdown으로 내보내기
+              <span className="inline-flex items-center gap-2">
+                <AppIcon name="page" size={14} alt="" />
+                Markdown으로 내보내기
+              </span>
             </button>
             <button
               className={itemCls}
@@ -656,7 +664,10 @@ function MoreMenu({
               </div>
             ) : (
               <button className={itemCls} onClick={setAsSpaceHome}>
-                🏠 공간 홈으로 지정
+                <span className="inline-flex items-center gap-2">
+                  <AppIcon name="home" size={14} alt="" />
+                  공간 홈으로 지정
+                </span>
               </button>
             )}
             <div className="my-1 border-t border-[#dfe1e6]" />
@@ -667,7 +678,10 @@ function MoreMenu({
                 onDelete();
               }}
             >
-              페이지 삭제
+              <span className="inline-flex items-center gap-2">
+                <AppIcon name="trash" size={14} alt="" />
+                페이지 삭제
+              </span>
             </button>
           </div>
         </>
