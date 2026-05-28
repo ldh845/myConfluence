@@ -23,6 +23,7 @@ export default function ImageNodeView({
   node,
   updateAttributes,
   editor,
+  selected,
 }: NodeViewProps) {
   const attrs = node.attrs as ImageAttrs;
   const src = attrs.src;
@@ -84,6 +85,55 @@ export default function ImageNodeView({
       style={figureStyle}
     >
       <div className="relative inline-block w-full">
+        {/* Cycle 63-2 — 선택 시 floating toolbar. px/원본/테두리/정렬. */}
+        {editable && selected && (
+          <div className="absolute -top-10 left-0 z-20 flex items-center gap-1 bg-white border border-[#dfe1e6] rounded-md shadow-lg px-1.5 py-1 text-[12px] whitespace-nowrap">
+            <input
+              type="number"
+              min={60}
+              value={attrs.width ?? ""}
+              onChange={(e) => {
+                const v = e.target.value;
+                updateAttributes({ width: v ? Number(v) : null });
+              }}
+              placeholder="px"
+              className="w-16 px-1.5 py-0.5 border border-[#dfe1e6] rounded text-[12px] focus:outline-none focus:border-[#0052cc]"
+              title="가로 크기(px)"
+            />
+            <ToolBtn onClick={() => updateAttributes({ width: null })}>
+              원본
+            </ToolBtn>
+            <span className="w-px h-4 bg-[#dfe1e6]" />
+            <ToolBtn
+              active={!!attrs.border}
+              onClick={() => updateAttributes({ border: !attrs.border })}
+            >
+              테두리
+            </ToolBtn>
+            <span className="w-px h-4 bg-[#dfe1e6]" />
+            <ToolBtn
+              active={attrs.align === "left"}
+              onClick={() => updateAttributes({ align: "left" })}
+              title="왼쪽 (텍스트가 오른쪽으로 흐름)"
+            >
+              ⬅
+            </ToolBtn>
+            <ToolBtn
+              active={!attrs.align || attrs.align === "center"}
+              onClick={() => updateAttributes({ align: "center" })}
+              title="가운데"
+            >
+              ☰
+            </ToolBtn>
+            <ToolBtn
+              active={attrs.align === "right"}
+              onClick={() => updateAttributes({ align: "right" })}
+              title="오른쪽 (텍스트가 왼쪽으로 흐름)"
+            >
+              ➡
+            </ToolBtn>
+          </div>
+        )}
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           ref={imgRef}
@@ -94,6 +144,7 @@ export default function ImageNodeView({
           style={{
             border: attrs.border ? "1px solid #dfe1e6" : undefined,
             borderRadius: attrs.border ? 4 : undefined,
+            outline: selected && editable ? "2px solid #0052cc" : undefined,
           }}
         />
         {/* Cycle 63 — 우하단 리사이즈 핸들 (편집 모드만). */}
@@ -126,5 +177,33 @@ export default function ImageNodeView({
         </figcaption>
       ) : null}
     </NodeViewWrapper>
+  );
+}
+
+// Cycle 63-2 — 이미지 toolbar 버튼. active 시 파란 배경.
+function ToolBtn({
+  children,
+  onClick,
+  active,
+  title,
+}: {
+  children: React.ReactNode;
+  onClick: () => void;
+  active?: boolean;
+  title?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      className={`px-1.5 py-0.5 rounded text-[12px] ${
+        active
+          ? "bg-[#deebff] text-[#0052cc] font-semibold"
+          : "text-[#42526e] hover:bg-[#ebecf0]"
+      }`}
+    >
+      {children}
+    </button>
   );
 }
