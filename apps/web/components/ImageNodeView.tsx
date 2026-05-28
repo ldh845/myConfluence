@@ -1,12 +1,14 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { NodeViewWrapper, type NodeViewProps } from "@tiptap/react";
 
 // Cycle 54-C — Image NodeView (figure + figcaption).
-// Cycle 63 — 크기 조절(width) + 테두리(border) + 정렬(align float) + 리사이즈
-//   핸들(드래그). toolbar/연결은 63-2/63-3.
-//   attr 은 Image extension(.extend) 에서 정의. 화면 렌더는 여기서 inline style.
+// Cycle 63 — 크기 조절(width) + 테두리(border) + 정렬(align float) + 연결(link)
+//   + 리사이즈 핸들 + floating toolbar.
+// Cycle 63 followup — 캡션은 선택 시 이미지 아래 textarea(다이얼로그 패널)로
+//   편집(prompt 제거). 정렬은 좌/우만(가운데 제거). float 시 block 으로 전환해
+//   다음 문단 텍스트가 이미지 옆으로 흐르게.
 
 type ImageAttrs = {
   src: string;
@@ -32,16 +34,14 @@ export default function ImageNodeView({
   const editable = editor.isEditable;
 
   const imgRef = useRef<HTMLImageElement>(null);
-  // Cycle 63 — 드래그 중에는 로컬 미리보기 width. mouseup 에 한 번만 commit
-  //   (매 mousemove updateAttributes 면 Yjs transaction 폭주).
   const [previewWidth, setPreviewWidth] = useState<number | null>(null);
   const displayWidth = previewWidth ?? attrs.width ?? null;
 
-  const onEditCaption = () => {
-    const next = window.prompt("그림 캡션", caption);
-    if (next === null) return;
-    updateAttributes({ caption: next.trim() });
-  };
+  // Cycle 63 followup — 캡션 로컬 draft. blur 에 commit (매 키 transaction 방지).
+  const [captionDraft, setCaptionDraft] = useState(attrs.caption ?? "");
+  useEffect(() => {
+    setCaptionDraft(attrs.caption ?? "");
+  }, [attrs.caption]);
 
   const onResizeDown = (e: React.MouseEvent) => {
     if (!editable) return;
@@ -65,27 +65,32 @@ export default function ImageNodeView({
     document.addEventListener("mouseup", onUp);
   };
 
-  // figure 정렬 — float(좌/우) 또는 가운데. 텍스트가 이미지 옆으로 흐른다.
+  // 정렬 — 좌/우만. float 시 다음 문단이 이미지 옆으로 흐른다.
+  //   align null(기본)은 block 좌측.
   const figureStyle: React.CSSProperties = {
     width: displayWidth ? `${displayWidth}px` : undefined,
     maxWidth: "100%",
     ...(attrs.align === "left"
-      ? { float: "left", marginRight: 16 }
+      ? { float: "left", marginRight: 16, marginTop: 4 }
       : attrs.align === "right"
-        ? { float: "right", marginLeft: 16 }
-        : attrs.align === "center"
-          ? { marginLeft: "auto", marginRight: "auto" }
-          : {}),
+        ? { float: "right", marginLeft: 16, marginTop: 4 }
+        : {}),
+  };
+
+  const imgStyle: React.CSSProperties = {
+    border: attrs.border ? "1px solid #dfe1e6" : undefined,
+    borderRadius: attrs.border ? 4 : undefined,
+    outline: selected && editable ? "2px solid #0052cc" : undefined,
   };
 
   return (
     <NodeViewWrapper
       as="figure"
-      className="cf-image-figure my-3 inline-block relative"
+      className="cf-image-figure my-3 relative"
       style={figureStyle}
     >
       <div className="relative inline-block w-full">
-        {/* Cycle 63-2 — 선택 시 floating toolbar. px/원본/테두리/정렬. */}
+        {/* Cycle 63 — 선택 시 floating toolbar. px/원본/테두리/정렬(좌우)/연결. */}
         {editable && selected && (
           <div className="absolute -top-10 left-0 z-20 flex items-center gap-1 bg-white border border-[#dfe1e6] rounded-md shadow-lg px-1.5 py-1 text-[12px] whitespace-nowrap">
             <input
@@ -111,29 +116,30 @@ export default function ImageNodeView({
               테두리
             </ToolBtn>
             <span className="w-px h-4 bg-[#dfe1e6]" />
+            {/* 정렬 좌/우 — 토글(다시 누르면 해제). 가운데 제거(사용자 요청). */}
             <ToolBtn
               active={attrs.align === "left"}
-              onClick={() => updateAttributes({ align: "left" })}
+              onClick={() =>
+                updateAttributes({
+                  align: attrs.align === "left" ? null : "left",
+                })
+              }
               title="왼쪽 (텍스트가 오른쪽으로 흐름)"
             >
               ⬅
             </ToolBtn>
             <ToolBtn
-              active={!attrs.align || attrs.align === "center"}
-              onClick={() => updateAttributes({ align: "center" })}
-              title="가운데"
-            >
-              ☰
-            </ToolBtn>
-            <ToolBtn
               active={attrs.align === "right"}
-              onClick={() => updateAttributes({ align: "right" })}
+              onClick={() =>
+                updateAttributes({
+                  align: attrs.align === "right" ? null : "right",
+                })
+              }
               title="오른쪽 (텍스트가 왼쪽으로 흐름)"
             >
               ➡
             </ToolBtn>
             <span className="w-px h-4 bg-[#dfe1e6]" />
-            {/* Cycle 63-3 — 연결(link). prompt 로 URL 입력. 빈 값이면 해제. */}
             <ToolBtn
               active={!!attrs.link}
               onClick={() => {
@@ -150,8 +156,8 @@ export default function ImageNodeView({
             </ToolBtn>
           </div>
         )}
-        {/* Cycle 63-3 — 조회 모드 + link 면 a 로 감싸 클릭 이동. 편집 모드는
-            selection/resize 를 위해 a 없이 img 직접. */}
+
+        {/* Cycle 63-3 — 조회 모드 + link 면 a 로 감싸 클릭 이동. */}
         {!editable && attrs.link ? (
           <a
             href={attrs.link}
@@ -166,10 +172,7 @@ export default function ImageNodeView({
               alt={alt}
               className="cf-image block w-full h-auto"
               draggable={false}
-              style={{
-                border: attrs.border ? "1px solid #dfe1e6" : undefined,
-                borderRadius: attrs.border ? 4 : undefined,
-              }}
+              style={imgStyle}
             />
           </a>
         ) : (
@@ -180,13 +183,10 @@ export default function ImageNodeView({
             alt={alt}
             className="cf-image block w-full h-auto"
             draggable={false}
-            style={{
-              border: attrs.border ? "1px solid #dfe1e6" : undefined,
-              borderRadius: attrs.border ? 4 : undefined,
-              outline: selected && editable ? "2px solid #0052cc" : undefined,
-            }}
+            style={imgStyle}
           />
         )}
+
         {/* Cycle 63 — 우하단 리사이즈 핸들 (편집 모드만). */}
         {editable && (
           <span
@@ -197,23 +197,21 @@ export default function ImageNodeView({
           />
         )}
       </div>
-      {caption ? (
-        <figcaption
-          className={`cf-image-caption text-[12px] text-[#6b778c] mt-1.5 text-center ${
-            editable ? "cursor-pointer hover:text-[#0052cc]" : ""
-          }`}
-          onClick={editable ? onEditCaption : undefined}
-          title={editable ? "클릭하여 캡션 수정" : undefined}
-        >
+
+      {/* Cycle 63 followup — 캡션: 선택+편집 시 textarea(다이얼로그 패널),
+          그 외에는 캡션 있을 때만 표시. prompt 제거. */}
+      {editable && selected ? (
+        <textarea
+          value={captionDraft}
+          onChange={(e) => setCaptionDraft(e.target.value)}
+          onBlur={() => updateAttributes({ caption: captionDraft.trim() })}
+          placeholder="캡션 입력..."
+          rows={2}
+          className="w-full mt-1.5 text-[12px] text-[#6b778c] border border-[#dfe1e6] rounded p-1.5 focus:outline-none focus:border-[#0052cc] resize-none"
+        />
+      ) : caption ? (
+        <figcaption className="cf-image-caption text-[12px] text-[#6b778c] mt-1.5">
           {caption}
-        </figcaption>
-      ) : editable ? (
-        <figcaption
-          className="cf-image-caption-empty text-[12px] text-[#a5adba] italic mt-1.5 text-center cursor-pointer hover:text-[#0052cc]"
-          onClick={onEditCaption}
-          title="클릭하여 캡션 추가"
-        >
-          캡션 추가...
         </figcaption>
       ) : null}
     </NodeViewWrapper>
