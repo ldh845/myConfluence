@@ -23,7 +23,7 @@ import ImageInsertDialog from "@/components/ImageInsertDialog";
 import AppIcon from "@/components/AppIcon";
 import { usePageStore } from "@/lib/stores/usePageStore";
 import { useEditorUiStore } from "@/lib/stores/useEditorUiStore";
-import { SLASH_ITEMS, filterItems } from "@/lib/tiptap/slash-commands";
+import { insertMoreItems } from "@/lib/tiptap/slash-commands";
 import type { SlashCommandItem } from "@/lib/tiptap/slash-commands";
 
 type Props = { editor: Editor | null };
@@ -1063,7 +1063,7 @@ function InsertMoreButton({ editor }: { editor: Editor }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
-  const items = filterItems(query);
+  const items = insertMoreItems(query);
 
   // popup 외부 클릭 시 닫기.
   useEffect(() => {
@@ -1126,7 +1126,11 @@ function InsertMoreButton({ editor }: { editor: Editor }) {
   return (
     <div className="relative" ref={ref}>
       <TB title="더 많은 내용 삽입" onClick={() => setOpen((v) => !v)}>
-        <AppIcon name="plus" size={16} alt="더 많은 내용 삽입" />
+        {/* 드롭다운 열림을 알리는 아래 화살표를 플러스 옆에 표기. */}
+        <span className="flex items-center gap-0.5">
+          <AppIcon name="plus" size={16} alt="더 많은 내용 삽입" />
+          <AppIcon name="downArrow" size={10} alt="" />
+        </span>
       </TB>
       {open && (
         <div className="absolute left-0 top-full mt-1 bg-white border border-[#dfe1e6] rounded-md shadow-lg z-20 w-[260px]">

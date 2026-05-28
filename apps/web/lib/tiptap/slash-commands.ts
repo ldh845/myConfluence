@@ -225,3 +225,30 @@ export function filterItems(query: string): SlashCommandItem[] {
     return item.searchTerms.some((t) => t.toLowerCase().includes(q));
   });
 }
+
+// 에디터 툴바(네비게이션 바)에 이미 전용 버튼/드롭다운이 있는 항목 title.
+//   '더 많은 내용 삽입' 드롭다운에서는 중복이라 숨긴다. (제목→문단 스타일
+//   드롭다운, 목록/표/이미지/구분선/링크→해당 툴바 버튼.) 슬래시(/) 메뉴는
+//   전체 노출이 표준 UX 이므로 filterItems 는 그대로 두고 여기서만 제외한다.
+//   ⚠ title 정확 일치 비교 — 카탈로그 title 을 바꾸면 이 집합도 동기화할 것.
+const TOOLBAR_ITEM_TITLES = new Set<string>([
+  "제목 1",
+  "제목 2",
+  "제목 3",
+  "제목 4",
+  "불릿 리스트",
+  "번호 리스트",
+  "체크리스트",
+  "인용문",
+  "표 (3x3)",
+  "이미지",
+  "구분선",
+  "링크",
+]);
+
+// '더 많은 내용 삽입' 드롭다운 전용 — 툴바 중복 항목을 뺀 카탈로그 검색.
+export function insertMoreItems(query: string): SlashCommandItem[] {
+  return filterItems(query).filter(
+    (item) => !TOOLBAR_ITEM_TITLES.has(item.title),
+  );
+}
