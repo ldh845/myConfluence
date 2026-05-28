@@ -18,7 +18,6 @@ import { useEffect, useRef, useState } from "react";
 import { CODE_BLOCK_LANGUAGES } from "@/lib/tiptap/code-block-lowlight";
 import EditorColorPicker from "@/components/EditorColorPicker";
 import InternalPageLinkDialog from "@/components/InternalPageLinkDialog";
-import InlineCommentDialog from "@/components/InlineCommentDialog";
 import ImageInsertDialog from "@/components/ImageInsertDialog";
 import AppIcon from "@/components/AppIcon";
 import { usePageStore } from "@/lib/stores/usePageStore";
@@ -188,7 +187,6 @@ export default function EditorToolbar({ editor }: Props) {
         >
           ―
         </TB>
-        <InlineCommentButton editor={editor} />
         {/* Cycle 54-D — '+ 더 많은 내용 삽입' 버튼. slash 명령 카탈로그
             (SLASH_ITEMS) 를 재활용해 검색 + 클릭만으로 같은 블록 삽입 흐름 제공. */}
         <InsertMoreButton editor={editor} />
@@ -910,55 +908,6 @@ function ImageCaptionButton({ editor }: { editor: Editor }) {
     <TB title="이미지 캡션(figcaption) 편집" onClick={editCaption}>
       📝
     </TB>
-  );
-}
-
-// FR-071 (Cycle 16-3b-1) — 선택 텍스트에 인라인 댓글 작성.
-// selection이 비어 있으면 무반응. 작성 성공 시 onCreated로 받은 commentId를
-// inlineComment mark에 박는다.
-function InlineCommentButton({ editor }: { editor: Editor }) {
-  const [open, setOpen] = useState(false);
-  const [selectedText, setSelectedText] = useState("");
-  const [from, setFrom] = useState(0);
-  const [to, setTo] = useState(0);
-
-  const handleOpen = () => {
-    const sel = editor.state.selection;
-    if (sel.empty) {
-      window.alert("먼저 본문에서 댓글을 달 텍스트를 선택하세요.");
-      return;
-    }
-    const text = editor.state.doc.textBetween(sel.from, sel.to, " ");
-    if (!text.trim()) return;
-    setSelectedText(text);
-    setFrom(sel.from);
-    setTo(sel.to);
-    setOpen(true);
-  };
-
-  const handleCreated = (commentId: string) => {
-    editor
-      .chain()
-      .focus()
-      .setTextSelection({ from, to })
-      .setMark("inlineComment", { commentId })
-      .run();
-  };
-
-  return (
-    <>
-      <TB title="인라인 댓글 (텍스트 선택 후)" onClick={handleOpen}>
-        <AppIcon name="comment" size={16} alt="인라인 댓글" />
-      </TB>
-      <InlineCommentDialog
-        open={open}
-        onOpenChange={setOpen}
-        selectedText={selectedText}
-        anchorFrom={from}
-        anchorTo={to}
-        onCreated={handleCreated}
-      />
-    </>
   );
 }
 

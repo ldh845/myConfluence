@@ -68,8 +68,6 @@ type Props = {
   onCopyClick?: () => void;
   onShareClick?: () => void;
   // Cycle 53 — 인라인 댓글 사이드/하단 표시 토글 (V 단축키).
-  showInlineComments?: boolean;
-  onToggleInlineComments?: () => void;
 };
 
 export default function PageHeader({
@@ -90,8 +88,6 @@ export default function PageHeader({
   onMoveClick,
   onCopyClick,
   onShareClick,
-  showInlineComments,
-  onToggleInlineComments,
 }: Props) {
   const crumbs = space ? buildBreadcrumb(page, space.pages) : [];
   const ancestors = crumbs.slice(0, -1);
@@ -206,12 +202,6 @@ export default function PageHeader({
       }
       const key = e.key.toLowerCase();
       switch (key) {
-        case "v":
-          if (onToggleInlineComments) {
-            e.preventDefault();
-            onToggleInlineComments();
-          }
-          break;
         case "f":
           e.preventDefault();
           toggleSaved();
@@ -229,7 +219,7 @@ export default function PageHeader({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onToggleInlineComments, toggleSaved, toggleWatching, onShareClick]);
+  }, [toggleSaved, toggleWatching, onShareClick]);
 
   const commit = () => {
     const next = draft.trim();
@@ -345,14 +335,6 @@ export default function PageHeader({
           {/* Cycle 53 — 조회 모드 전용 메인 액션 4개 + ⋯. */}
           {!isBodyEditable && (
             <>
-              {/* (2) 인라인 댓글 보기 (V) — 본문 아래 InlineCommentsList show/hide */}
-              <ActionButton
-                icon={<AppIcon name="comment" size={14} alt="댓글" />}
-                label="인라인 댓글 보기"
-                tooltip={`인라인 댓글 보기 (V)`}
-                active={!!showInlineComments}
-                onClick={onToggleInlineComments}
-              />
               {/* (3) 나중을 위해 저장 (F) — SavedPage 토글 */}
               <ActionButton
                 icon={isSaved ? "🔖" : "💾"}

@@ -56,12 +56,6 @@ input[type="password"]::-ms-clear {
     font-size: 10px;
     color: #555;
   }
-  /* 인라인 댓글 마크 시각 단순화 */
-  .cf-inline-comment {
-    background-color: transparent !important;
-    border-bottom: 1px dashed #999 !important;
-    color: inherit !important;
-  }
 }
 
 /* shadcn/ui base tokens (Cycle 4 scaffold).
@@ -282,18 +276,6 @@ body {
 .ProseMirror mark {
   padding: 0 0.125em;
   border-radius: 2px;
-}
-
-/* FR-071 (Cycle 16-3b-1) — 인라인 댓글 마크. */
-.ProseMirror .cf-inline-comment {
-  background-color: rgba(255, 235, 59, 0.4);
-  border-bottom: 2px solid #fbc02d;
-  cursor: pointer;
-  border-radius: 2px;
-  padding: 0 1px;
-}
-.ProseMirror .cf-inline-comment:hover {
-  background-color: rgba(255, 235, 59, 0.65);
 }
 
 /* FR-033 (Cycle 12-1) — 본문 이미지. 폭 넘침 방지 + 선택 시 강조. */

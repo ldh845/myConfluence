@@ -27,7 +27,6 @@ import TextAlign from "@tiptap/extension-text-align";
 import Image from "@tiptap/extension-image";
 import { Extension } from "@tiptap/core";
 import { CodeBlockExtension } from "@/lib/tiptap/code-block-lowlight";
-import { InlineCommentMark } from "@/lib/tiptap/inline-comment-mark";
 import { MarkdownInputRules } from "@/lib/tiptap/markdown-input-rules";
 import { MathInline } from "@/lib/tiptap/math-inline";
 import { MathBlock } from "@/lib/tiptap/math-block";
@@ -166,12 +165,37 @@ const BlockIndent = Extension.create({
 //   가로채기에서 자연 우회).
 //   반환 타입은 TipTap 의 Content (string | object | array | null) 와 호환.
 type EditorSeed = string | Record<string, unknown> | unknown[];
+
+// 레거시 인라인 댓글 마크 제거. 인라인 댓글 기능 삭제(이 사이클)로 schema 에서
+// inlineComment 마크가 빠졌는데, 기존 페이지 JSON 에 이 마크가 남아 있으면
+// 로드 시 schema 불일치로 본문이 깨진다(빈 문서 fallback). 로드 직전 트리를
+// 훑어 inlineComment 마크만 걸러낸다 — 텍스트 자체는 그대로 보존.
+function stripInlineCommentMarks(value: unknown): void {
+  if (Array.isArray(value)) {
+    value.forEach(stripInlineCommentMarks);
+    return;
+  }
+  if (value && typeof value === "object") {
+    const obj = value as Record<string, unknown>;
+    if (Array.isArray(obj.marks)) {
+      obj.marks = (obj.marks as Array<{ type?: string }>).filter(
+        (m) => m?.type !== "inlineComment",
+      );
+    }
+    if (Array.isArray(obj.content)) {
+      obj.content.forEach(stripInlineCommentMarks);
+    }
+  }
+}
+
 function parseContent(raw: string | null | undefined): EditorSeed {
   if (!raw) return "";
   const trimmed = raw.trimStart();
   if (trimmed.startsWith("{")) {
     try {
-      return JSON.parse(raw) as Record<string, unknown>;
+      const json = JSON.parse(raw) as Record<string, unknown>;
+      stripInlineCommentMarks(json);
+      return json;
     } catch {
       // fallthrough — markdown 으로
     }
@@ -461,8 +485,6 @@ export default function CollaborativeEditor({
             return ReactNodeViewRenderer(ImageNodeView);
           },
         }),
-        // FR-071 (Cycle 16-3b-1) — 인라인 댓글 마크.
-        InlineCommentMark,
         // FR-040 (Cycle 20) — LaTeX 수식 (인라인 + 블록).
         MathInline,
         MathBlock,

@@ -14,7 +14,6 @@ import MentionEditPopover from "@/components/MentionEditPopover";
 import TableOfContents from "@/components/TableOfContents";
 import PageVersionHistory from "@/components/PageVersionHistory";
 import PageComments from "@/components/PageComments";
-import InlineCommentsList from "@/components/InlineCommentsList";
 import { useAuth } from "@/lib/auth/useAuth";
 import MovePageDialog from "@/components/MovePageDialog";
 import CopyPageDialog from "@/components/CopyPageDialog";
@@ -99,7 +98,6 @@ export default function HomePage() {
   const [shareOpen, setShareOpen] = useState(false);
   // Cycle 53 — 본문 아래 인라인 댓글 리스트 표시 토글 (V 단축키 / 헤더 버튼).
   //   default true: 기존 동작(항상 표시) 유지 — 회귀 없음.
-  const [showInlineComments, setShowInlineComments] = useState(true);
   // Cycle 58 — 편집 모드에서 멘션 토큰 클릭 시 컨텍스트 팝업.
   const [mentionPopover, setMentionPopover] = useState<
     | {
@@ -617,10 +615,6 @@ export default function HomePage() {
               onMoveClick={() => setMoveOpen(true)}
               onCopyClick={() => setCopyOpen(true)}
               onShareClick={() => setShareOpen(true)}
-              showInlineComments={showInlineComments}
-              onToggleInlineComments={() =>
-                setShowInlineComments((v) => !v)
-              }
             />
             <hr className="my-4 border-[#dfe1e6]" />
             <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_220px] gap-8">
@@ -646,14 +640,6 @@ export default function HomePage() {
                     내용으로만 노출. */}
                 {/* FR-073 (Cycle 25) — 페이지 이모지 반응 바. */}
                 <ReactionBar target="page" targetId={currentPage.id} />
-                {/* Cycle 53 — 헤더의 '인라인 댓글 보기 (V)' 토글로 show/hide.
-                    숨김 시 컴포넌트를 마운트하지 않아 불필요한 fetch 도 차단. */}
-                {showInlineComments && (
-                  <InlineCommentsList
-                    pageId={currentPage.id}
-                    editable={isBodyEditable}
-                  />
-                )}
                 {/* Fix — 댓글은 조회 모드에서도 로그인 사용자면 작성 가능
                     (Confluence 표준). 기존 editable={isBodyEditable} 은 편집
                     모드에서만 작성 가능해 댓글 창이 비활성으로 보였음. */}
