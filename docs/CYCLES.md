@@ -1639,3 +1639,21 @@
   3) 기존 페이지 편집 시 본문이 정상 1벌로 로드되는지(중복 시드 회귀 없음) 확인
 - **남은 일**: **기존 누적분은 자동 정리 안 됨** — 이미 브라우저 IndexedDB 에 쌓인 사본은 편집 모드에서 수동 삭제 후 재발행하거나 사이트 데이터 삭제로 정리. **브라우저 시각 확인 미수행**(API/DB 기동 필요) — 타입체크만 통과
 - **비고**: 서버 미영속 구조(=IndexedDB 가 유일 durable store) 가 이 race 의 전제. 멀티 인스턴스(USE_REDIS=true)로 가도 Redis 는 pub/sub 일 뿐 durable 이 아니므로 동일. 서버측 Y.Doc 영속(onStoreDocument/Database extension) 도입 시 seed 설계 재검토 필요.
+
+---
+
+## Cycle 67 — 2026-05-29 — ✅ Done ('더 많은 내용 삽입' 드롭다운 화살표 + 툴바 중복 제거)
+- **제목**: 편집 툴바 ＋(더 많은 내용 삽입) 버튼에 드롭다운 화살표 추가 + 드롭다운에서 툴바와 중복되는 항목 제거
+- **카테고리**: FE / UI (에디터 툴바 정리)
+- **커밋**: `02b8cc2`(67-1 코드), 본 CYCLES.md(67-2 Docs)
+- **변경 파일**:
+  - `apps/web/components/EditorToolbar.tsx` — ① `InsertMoreButton` 의 ＋ 아이콘 옆에 `down-arrow`(10px) 표기(드롭다운 affordance). ② 드롭다운 항목 소스를 `filterItems` → `insertMoreItems` 로 교체. import 정리(주석에서만 쓰이던 `SLASH_ITEMS`, 유일 사용처였던 `filterItems` 제거)
+  - `apps/web/lib/tiptap/slash-commands.ts` — `TOOLBAR_ITEM_TITLES` 집합 + `insertMoreItems(query)` 헬퍼 추가. 슬래시(/) 메뉴가 쓰는 `filterItems` 는 무변경(전체 노출 유지)
+- **검증**: `tsc --noEmit` EXIT 0. 마이그레이션 **없음**
+- **제외/유지 기준**: 툴바에 전용 버튼/드롭다운이 있는 항목은 InsertMore 에서 제외 — 제목1~4(문단 스타일 드롭다운)·인용문·불릿/번호/체크리스트(목록 그룹)·표·이미지·구분선·링크(삽입 그룹). **남는 항목: 코드 블록·수식·날짜·다이어그램**(툴바 미제공). 코드 블록은 문단 스타일 드롭다운이 *감지*만 하고 설정 항목엔 없어(Cycle 37 followup 의도적 제외) 중복 아님 → 유지
+- **동작 확인 안내**:
+  1) **마이그레이션 불필요**
+  2) 편집 툴바 ＋ 버튼 — 옆에 아래 화살표 표시 + 클릭 시 4개 항목(코드 블록/수식/날짜/다이어그램)만 노출
+  3) 본문에서 `/` 입력 — 슬래시 메뉴는 여전히 전체 카탈로그 노출(회귀 없음)
+- **남은 일**: **브라우저 시각 확인 미수행**(API/DB 기동 필요) — 타입체크만 통과. 화살표 크기(10px)/간격은 실제 렌더 후 미세조정 여지
+- **비고**: `insertMoreItems` 는 정확 title 비교(`TOOLBAR_ITEM_TITLES`) — 카탈로그 title 변경 시 동기화 필요(헬퍼 주석에 경고 명시). down-arrow 자산은 Cycle 65 에서 예비로 커밋해둔 `public/icons/down-arrow.png` 재활용.
