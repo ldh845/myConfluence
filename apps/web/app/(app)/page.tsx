@@ -11,7 +11,6 @@ import FullScreenEditor from "@/components/FullScreenEditor";
 import SpacePagesView from "@/components/SpacePagesView";
 import ProfileView from "@/components/ProfileView";
 import MentionEditPopover from "@/components/MentionEditPopover";
-import WelcomeBanner from "@/components/WelcomeBanner";
 import DiagramList from "@/components/DiagramList";
 import AttachmentList from "@/components/AttachmentList";
 import TableOfContents from "@/components/TableOfContents";
@@ -454,14 +453,6 @@ export default function HomePage() {
     return chain;
   }, [currentPage, activeSpace]);
 
-  const isFirstPageOfSpace = useMemo(() => {
-    if (!currentPage || !activeSpace) return false;
-    const firstRoot = activeSpace.pages
-      .filter((p) => !p.parentId)
-      .sort((a, b) => (a.updatedAt < b.updatedAt ? -1 : 1))[0];
-    return firstRoot?.id === currentPage.id;
-  }, [currentPage, activeSpace]);
-
   const handleTitleChange = async (title: string) => {
     if (!currentPage) return;
     setSaveStatus("saving");
@@ -606,9 +597,6 @@ export default function HomePage() {
           )
         ) : (
           <>
-            {isFirstPageOfSpace && activeSpace && (
-              <WelcomeBanner spaceName={activeSpace.name} />
-            )}
             <PageHeader
               page={currentPage}
               space={activeSpace}
