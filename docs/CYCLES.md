@@ -1553,3 +1553,29 @@
   6) slash `/` 다른 항목들 회귀 없음
 - **남은 일**: 이미지 크기 조절 핸들 — 별도 Cycle (TipTap 2.x 기본 미지원, 외부 패키지 peer 충돌/자체 NodeView 대형)
 - **비고**: slash command(.ts, React 밖)가 다이얼로그를 직접 마운트 못 하는 한계 → zustand store 신호(getState)로 우회. 날짜 picker 는 브라우저 native UI(input[type=date].showPicker) 라 라이브러리 0 + peer 충돌 회피. 한국어 표시는 NodeView/renderHTML 둘 다 적용, attrs.date 는 ISO 보존(정렬·파싱 안전). 라운드트립은 Cycle 57 JSON 저장이 보장하므로 markdown serialize 는 표시용 텍스트만.
+
+---
+
+## Cycle 63 — 2026-05-27 — ✅ Done (이미지 리사이즈 + 컨트롤 toolbar)
+- **제목**: 이미지 크기 조절(드래그+px) / 원본 / 테두리 / 정렬(옆 텍스트 float) / 연결 — ImageNodeView 확장
+- **카테고리**: 편집기 / 이미지 (Cycle 54-C 후속, "별도 사이클" 로 미뤘던 대형)
+- **커밋**: `e79b912`(63-1 attr+리사이즈), `88779dc`(63-2 toolbar), `82b4e47`(63-3 연결), 본 CYCLES.md(63-4 Docs)
+- **변경 파일**:
+  - `apps/web/components/CollaborativeEditor.tsx` Image `.extend` addAttributes — `width`/`border`/`align`/`link` 추가. renderHTML `() => ({})` (img/figure 에 잘못된 속성 출력 방지). JSON 저장(Cycle 57)이 attr 라운드트립 담당
+  - `apps/web/components/ImageNodeView.tsx` 대폭 확장:
+    - 우하단 **리사이즈 핸들**(편집 모드, `nwse-resize` 커서). 드래그 중 로컬 `previewWidth` 미리보기 → mouseup 에 `updateAttributes({width})` 한 번 (Yjs transaction 폭주 방지)
+    - **floating toolbar**(selected 시): width px input / 원본(width null) / 테두리 토글 / 정렬 ⬅☰➡ / 🔗연결. 선택 시 img outline(파란)
+    - **align float**(좌/우) → 텍스트가 이미지 옆으로 흐름 (가운데는 mx-auto). inline node 전환 대신 float 라 schema 변경 없음
+    - **연결**: 조회 모드 + link 면 img 를 a(target=_blank, noopener) 로 감싸 클릭 이동. 편집 모드는 selection/resize 위해 a 없이 img 직접
+    - caption(54-C) 유지
+- **검증**: tsc + next build EXIT 0. 마이그레이션 **없음** (JSON 저장)
+- **동작 확인 안내**:
+  1) **마이그레이션 불필요**
+  2) 편집 모드 이미지 → 우하단 핸들 드래그 → 크기 조절 (커서 nwse-resize)
+  3) 이미지 클릭(선택) → 위에 toolbar: px 입력 / 원본 / 테두리 / 정렬 / 연결
+  4) 정렬 ⬅ 또는 ➡ → 텍스트가 이미지 옆으로 흐름(float)
+  5) 테두리 토글 → 이미지 테두리 on/off
+  6) 🔗 연결 → URL 입력 → 조회 모드에서 이미지 클릭 시 새 창 이동
+  7) 발행 후 새로고침 → 크기/테두리/정렬/연결 유지 (JSON 라운드트립)
+- **남은 일**: 8방향 핸들·% 단위·이미지 정렬 시 캡션 폭 동기화 등 고도화는 필요 시점
+- **비고**: TipTap 2.x 기본 미지원이라 **자체 NodeView 로 구현** (외부 패키지 peer 충돌 회피 — Cycle 55 멘션 교훈). 드래그는 로컬 previewWidth 후 mouseup 1회 commit(Yjs transaction 폭주 방지). **"옆 텍스트" 는 inline node 전환 대신 float** — schema 변경 없이 기존 block 이미지 100% 호환. attr 4종(width/border/align/link) 모두 JSON 저장으로 라운드트립, markdown export 만 미반영(수용). **Cycle 54 편집 툴바 정비 영역 사실상 완성** (54-D/A/B/F/C + 62 + 63).
