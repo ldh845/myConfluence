@@ -67,19 +67,22 @@ export default function ImageNodeView({
 
   // 정렬 — 좌/우만. float 시 다음 문단이 이미지 옆으로 흐른다.
   //   align null(기본)은 block 좌측.
+  // Cycle 63 followup 2 — float 제거(커서가 이미지 높이만큼 늘어지는 문제).
+  //   블록 정렬(margin auto)로 좌/가운데/우 배치. block flow 라 커서 1개.
+  //   left(또는 null)=왼쪽, center=가운데, right=오른쪽.
   const figureStyle: React.CSSProperties = {
     width: displayWidth ? `${displayWidth}px` : undefined,
     maxWidth: "100%",
-    ...(attrs.align === "left"
-      ? { float: "left", marginRight: 16, marginTop: 4 }
-      : attrs.align === "right"
-        ? { float: "right", marginLeft: 16, marginTop: 4 }
-        : {}),
+    display: "block",
+    marginLeft:
+      attrs.align === "center" || attrs.align === "right" ? "auto" : undefined,
+    marginRight:
+      attrs.align === "center" || attrs.align === "left" ? "auto" : undefined,
   };
 
   const imgStyle: React.CSSProperties = {
-    border: attrs.border ? "1px solid #dfe1e6" : undefined,
-    borderRadius: attrs.border ? 4 : undefined,
+    // Cycle 63 followup 2 — 선명한 검정 테두리.
+    border: attrs.border ? "2px solid #000" : undefined,
     outline: selected && editable ? "2px solid #0052cc" : undefined,
   };
 
@@ -116,26 +119,25 @@ export default function ImageNodeView({
               테두리
             </ToolBtn>
             <span className="w-px h-4 bg-[#dfe1e6]" />
-            {/* 정렬 좌/우 — 토글(다시 누르면 해제). 가운데 제거(사용자 요청). */}
+            {/* Cycle 63 followup 2 — 정렬 좌/가운데/우 (블록 배치). */}
             <ToolBtn
-              active={attrs.align === "left"}
-              onClick={() =>
-                updateAttributes({
-                  align: attrs.align === "left" ? null : "left",
-                })
-              }
-              title="왼쪽 (텍스트가 오른쪽으로 흐름)"
+              active={!attrs.align || attrs.align === "left"}
+              onClick={() => updateAttributes({ align: "left" })}
+              title="왼쪽 정렬"
             >
               ⬅
             </ToolBtn>
             <ToolBtn
+              active={attrs.align === "center"}
+              onClick={() => updateAttributes({ align: "center" })}
+              title="가운데 정렬"
+            >
+              ☰
+            </ToolBtn>
+            <ToolBtn
               active={attrs.align === "right"}
-              onClick={() =>
-                updateAttributes({
-                  align: attrs.align === "right" ? null : "right",
-                })
-              }
-              title="오른쪽 (텍스트가 왼쪽으로 흐름)"
+              onClick={() => updateAttributes({ align: "right" })}
+              title="오른쪽 정렬"
             >
               ➡
             </ToolBtn>
