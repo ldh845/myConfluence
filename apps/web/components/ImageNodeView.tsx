@@ -132,21 +132,61 @@ export default function ImageNodeView({
             >
               ➡
             </ToolBtn>
+            <span className="w-px h-4 bg-[#dfe1e6]" />
+            {/* Cycle 63-3 — 연결(link). prompt 로 URL 입력. 빈 값이면 해제. */}
+            <ToolBtn
+              active={!!attrs.link}
+              onClick={() => {
+                const next = window.prompt(
+                  "이미지 클릭 시 이동할 URL (빈 값이면 연결 해제)",
+                  attrs.link ?? "",
+                );
+                if (next === null) return;
+                updateAttributes({ link: next.trim() || null });
+              }}
+              title="연결"
+            >
+              🔗
+            </ToolBtn>
           </div>
         )}
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          ref={imgRef}
-          src={src}
-          alt={alt}
-          className="cf-image block w-full h-auto"
-          draggable={false}
-          style={{
-            border: attrs.border ? "1px solid #dfe1e6" : undefined,
-            borderRadius: attrs.border ? 4 : undefined,
-            outline: selected && editable ? "2px solid #0052cc" : undefined,
-          }}
-        />
+        {/* Cycle 63-3 — 조회 모드 + link 면 a 로 감싸 클릭 이동. 편집 모드는
+            selection/resize 를 위해 a 없이 img 직접. */}
+        {!editable && attrs.link ? (
+          <a
+            href={attrs.link}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="block"
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              ref={imgRef}
+              src={src}
+              alt={alt}
+              className="cf-image block w-full h-auto"
+              draggable={false}
+              style={{
+                border: attrs.border ? "1px solid #dfe1e6" : undefined,
+                borderRadius: attrs.border ? 4 : undefined,
+              }}
+            />
+          </a>
+        ) : (
+          /* eslint-disable-next-line @next/next/no-img-element */
+          <img
+            ref={imgRef}
+            src={src}
+            alt={alt}
+            className="cf-image block w-full h-auto"
+            draggable={false}
+            style={{
+              border: attrs.border ? "1px solid #dfe1e6" : undefined,
+              borderRadius: attrs.border ? 4 : undefined,
+              outline: selected && editable ? "2px solid #0052cc" : undefined,
+            }}
+          />
+        )}
         {/* Cycle 63 — 우하단 리사이즈 핸들 (편집 모드만). */}
         {editable && (
           <span
