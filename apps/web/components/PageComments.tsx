@@ -227,7 +227,7 @@ export default function PageComments({ pageId, editable }: Props) {
     return (
       <li
         key={node.id}
-        className="border border-[#dfe1e6] rounded-md p-3 bg-[#f9fafb]"
+        className="border border-[#dfe1e6] rounded-md p-3"
         style={{ marginLeft: indent }}
       >
         <div className="flex items-center justify-between mb-1 text-[11px] text-[#6b778c]">
