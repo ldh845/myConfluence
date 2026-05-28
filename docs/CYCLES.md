@@ -1622,3 +1622,20 @@
   5) ⋯ 더보기 — 내보내기/공간 홈/삭제 항목 앞 아이콘
 - **남은 일**: 미적용 이모지(저장 🔖/💾, 발행 🚀, 알림 종 🔔, 다이어그램 📐, 활동피드 등) — 대응 아이콘 자산 없음/맥락상 이모지 유지. 필요 시 자산 추가 후 확장. **브라우저 시각 확인 미수행**(API/DB 기동 필요) — 타입체크만 통과
 - **비고**: `next/image` 가 SVG 를 기본 차단하므로 정적 `<img>` + `eslint-disable @next/next/no-img-element`(DiagramNodeView 등 기존 관례와 동일) 사용. SVG 아이콘(home/page/calendar)은 `fill` 미지정이라 기본 검정 렌더 — 라이트 배경에서 정상. PNG 아이콘은 SpaceStarButton(star.png 14px) 선례대로 소형 렌더 검증됨.
+
+---
+
+## Cycle 66 — 2026-05-29 — ✅ Done (편집 진입마다 본문 누적되는 버그 수정)
+- **제목**: 조회 시 빈 본문인 페이지를 편집 모드로 들어갈 때마다 동일 목록/노드가 한 벌씩 늘어나던 버그 fix
+- **카테고리**: FE / 버그 (협업 에디터 초기 seed)
+- **커밋**: `a526e93`(66-1 코드), 본 CYCLES.md(66-2 Docs)
+- **변경 파일**:
+  - `apps/web/components/CollaborativeEditor.tsx` — ① `instance` state 에 `persistence`(IndexeddbPersistence) 포함 ② seed 효과를 `provider.synced`(서버) 단독 대기 → `persistence.whenSynced`(IndexedDB) + `provider.synced` **둘 다** 대기 후 `frag.length===0` 판정으로 변경. `cancelled` 가드 + IndexedDB 불가 시 fallback seed(`.then(trySeed, trySeed)`)
+- **검증**: `tsc --noEmit` EXIT 0. 마이그레이션 **없음**
+- **증상/원인**: 조회=빈 본문인데 편집 진입 시 단추형 목록 1개 → 저장 없이 재진입마다 +1 누적. 원인은 **초기 seed 타이밍 경쟁** — 편집 진입 시 컴포넌트가 `key` 로 재마운트되며 새 Y.Doc + IndexedDB 영속 + Hocuspocus provider 생성. 서버는 Y.Doc 을 **영속하지 않아**(Redis 는 멀티 인스턴스 pub/sub 용) localhost in-process WS sync 가 IndexedDB 로드보다 먼저 끝남 → 그 찰나 frag 가 비어 보여 draft(=`draftContent`, React Query 캐시라 세션 간 1개 고정) 를 재삽입 → 직후 IndexedDB 가 이전 세션 본문 로드 → Yjs merge(concat) → 1벌 누적
+- **동작 확인 안내**:
+  1) **마이그레이션 불필요**
+  2) 빈 본문 페이지 편집 진입 → 빠져나오기(저장 X) → 재진입 반복 시 본문이 늘지 않는지 확인
+  3) 기존 페이지 편집 시 본문이 정상 1벌로 로드되는지(중복 시드 회귀 없음) 확인
+- **남은 일**: **기존 누적분은 자동 정리 안 됨** — 이미 브라우저 IndexedDB 에 쌓인 사본은 편집 모드에서 수동 삭제 후 재발행하거나 사이트 데이터 삭제로 정리. **브라우저 시각 확인 미수행**(API/DB 기동 필요) — 타입체크만 통과
+- **비고**: 서버 미영속 구조(=IndexedDB 가 유일 durable store) 가 이 race 의 전제. 멀티 인스턴스(USE_REDIS=true)로 가도 Redis 는 pub/sub 일 뿐 durable 이 아니므로 동일. 서버측 Y.Doc 영속(onStoreDocument/Database extension) 도입 시 seed 설계 재검토 필요.
