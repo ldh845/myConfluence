@@ -194,6 +194,7 @@ export default function CollaborativeEditor({
   const [instance, setInstance] = useState<{
     ydoc: Y.Doc;
     provider: HocuspocusProvider;
+    persistence: IndexeddbPersistence;
   } | null>(null);
 
   // FR-054 — onConnectionStateChange를 ref로 보관. WS effect가 콜백 정체성에
@@ -316,7 +317,7 @@ export default function CollaborativeEditor({
     window.addEventListener("offline", onOffline);
     pushState();
 
-    setInstance({ ydoc, provider });
+    setInstance({ ydoc, provider, persistence });
     return () => {
       provider.off("status", onStatus);
       provider.off("synced", onSynced);
@@ -576,29 +577,46 @@ export default function CollaborativeEditor({
     if (!editor || !instance) return;
     if (seededRef.current === pageId) return;
 
-    const { provider, ydoc } = instance;
+    const { provider, ydoc, persistence } = instance;
+    let cancelled = false;
+
     const trySeed = () => {
+      if (cancelled || seededRef.current === pageId) return;
+      seededRef.current = pageId;
       const frag = ydoc.getXmlFragment("default");
       if (frag.length === 0 && initialMarkdown) {
         // Cycle 57 — JSON / markdown 자동 분기.
         editor.commands.setContent(parseContent(initialMarkdown), false);
       }
-      seededRef.current = pageId;
     };
 
-    if (provider.synced) {
-      trySeed();
-      return;
-    }
-    // HocuspocusProvider fires "synced" once when the initial sync
-    // round-trip with the server completes.
-    const onSynced = () => {
-      trySeed();
-      provider.off("synced", onSynced);
-    };
-    provider.on("synced", onSynced);
+    // Cycle 66 — 본문 누적 버그 수정.
+    //   seed 판정을 로컬(IndexedDB)·원격(서버) 동기화가 *둘 다* 끝난 뒤로
+    //   미룬다. 이전엔 provider.synced(서버) 만 기다렸는데, 서버는 Y.Doc 을
+    //   영속하지 않아 localhost in-process WS sync 가 IndexedDB 로드보다 먼저
+    //   끝나는 경우가 잦았다. 그 순간 frag 가 비어 보여 draft 를 재삽입하고,
+    //   직후 IndexedDB 가 이전 세션 내용을 로드하면 Yjs 가 merge(concat) 하여
+    //   편집 진입마다 본문이 한 벌씩 누적됐다. 둘 다 기다리면 frag 가 이미
+    //   채워진 상태로 판정돼 재삽입이 일어나지 않는다.
+    const waitProvider = provider.synced
+      ? Promise.resolve()
+      : new Promise<void>((resolve) => {
+          const onSynced = () => {
+            provider.off("synced", onSynced);
+            resolve();
+          };
+          provider.on("synced", onSynced);
+        });
+
+    // persistence.whenSynced 가 거부/지연되는 환경(IndexedDB 불가)에서도
+    // 본문이 영영 비지 않도록 fallback seed. 영속이 없으면 누적 위험도 없다.
+    void Promise.all([persistence.whenSynced, waitProvider]).then(
+      trySeed,
+      trySeed,
+    );
+
     return () => {
-      provider.off("synced", onSynced);
+      cancelled = true;
     };
   }, [editor, instance, pageId, initialMarkdown, editable]);
 
