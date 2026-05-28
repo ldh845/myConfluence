@@ -225,11 +225,10 @@ export default function PageComments({ pageId, editable }: Props) {
     const isReplying = replyingTo === node.id;
     const indent = Math.min(depth, 5) * 24;
     return (
-      <li
-        key={node.id}
-        className="border-b border-[#dfe1e6] pb-3"
-        style={{ marginLeft: indent }}
-      >
+      <li key={node.id} style={{ marginLeft: indent }}>
+        {/* 본문 영역만 하단 구분선 — children(답글) 은 선 밖이라 깊은 중첩에도
+            댓글당 선 1개만 그려진다. */}
+        <div className="border-b border-[#dfe1e6] pb-3">
         <div className="flex items-center justify-between mb-1 text-[11px] text-[#6b778c]">
           <span>
             <strong className="text-[#172b4d]">{displayAuthor(node)}</strong>
@@ -331,6 +330,8 @@ export default function PageComments({ pageId, editable }: Props) {
             </div>
           </div>
         )}
+
+        </div>
 
         {node.children.length > 0 && (
           <ul className="space-y-2 mt-2">
