@@ -1474,3 +1474,30 @@
   - 이메일 알림 (SMTP, FR-102) — Cycle 48 Phase 2 영역
   - WebSocket / SSE 실시간 push (현재 60초 polling — 작은 팀 규모 충분)
 - **비고**: **dedupe 키**: `@@unique([recipientId, actorId, pageId, type])` — 한 발행에 같은 사용자 여러 번 멘션해도 알림 1개. 재발행 시에도 upsert noop → 같은 멘션이 계속 새 알림으로 spam 안 됨 (의도). 재알림 원하면 `update: { readAt: null, createdAt: new Date() }` 로 변경 가능. **publish best-effort**: 알림 실패가 발행 본체 깨뜨리지 않음. extractMentionIds 가 '{' 시작 아니면 빈 배열 → 옛 markdown 안전 skip. **polling 60초**: WebSocket/SSE 도입은 별도 사이클 (사내 규모면 polling 충분). **테이블 인덱스**: dedupe unique 외에 (recipientId, readAt) + (recipientId, createdAt) — 미읽 조회와 최근순 조회 모두 가속.
+
+---
+
+## Cycle 60 — 2026-05-27 — ✅ Done (댓글/답글 알림)
+- **제목**: 알림 종류 확장 — `comment.created` (내 페이지에 댓글) + `comment.reply` (내 댓글에 답글). Notification 모델 재활용, 마이그레이션 없음
+- **카테고리**: 알림 (Cycle 59 후속)
+- **커밋**: `30dcd81`(60-1 BE), `5c4399c`(60-2 spec), `2a81f11`(60-3 FE), 본 CYCLES.md(60-4 Docs)
+- **변경 파일**:
+  - `apps/api/src/notifications/notifications.service.ts` — `NotificationType` 확장 (mention / comment.created / comment.reply). `notifyOne(params)` 단일 recipient 일반 알림 — notifyMentions 와 같은 upsert dedupe + 자기 자신 skip + best-effort. 향후 다른 type 도 같은 함수로 추가 가능
+  - `apps/api/src/comments/comments.module.ts` — NotificationsModule import
+  - `apps/api/src/comments/comments.service.ts` — page select 에 authorId, parent select 에 authorId 추가. create 직후 best-effort 트리거: dto.parentId 있으면 `notifyOne(parent.author, 'comment.reply')`, 없으면 `notifyOne(page.author, 'comment.created')`. payload: pageTitle / actorName / preview(80자)
+  - `apps/api/src/notifications/notifications.service.spec.ts` — notifyOne 5 케이스 (정상 / reply 타입 / recipient null skip / 자기 자신 skip / throw swallow)
+  - `apps/web/components/NotificationBellButton.tsx` — `describeMention` → `describeNotification` type switch (🔔/💬/↩️ 아이콘 + 다른 문구). 리스트 항목에 type 별 아이콘 노출, 정렬 안정
+- **검증**: jest **13 suites · 102 tests** 통과(직전 97 + 신규 5). nest build / tsc EXIT 0. 마이그레이션 **없음** (Cycle 59 모델 재활용)
+- **동작 확인 안내**:
+  1) **마이그레이션 불필요**
+  2) 사용자 A 가 사용자 B 의 페이지에 댓글 → B 의 종 아이콘 "💬 A님이 ... 댓글을 달았습니다"
+  3) 사용자 A 가 사용자 B 의 댓글에 답글 → B 의 종 아이콘 "↩️ A님이 회원님 댓글에 답글을 달았습니다"
+  4) **자기 자신** 페이지에 자기 댓글 → 알림 X (skip)
+  5) **자기 댓글**에 자기 답글 → 알림 X (skip)
+  6) dedupe: 같은 사람이 같은 페이지에 댓글 여러 번 → 알림 1개
+  7) 알림 클릭 → 그 페이지 진입 + 자동 읽음 (Cycle 59 흐름 그대로)
+- **남은 일**:
+  - watch 기반 page.published 알림 (지켜보기 사용자에게)
+  - SMTP 이메일 알림 (FR-102)
+  - WebSocket / SSE 실시간 push
+- **비고**: notifyOne 은 단일 recipient 일반 트리거 — 향후 다른 type (watch.page_changed, share.received 등) 도 같은 함수로 한 줄 추가. dedupe key 기존 그대로 — 사용자가 한 페이지에 댓글 많이 달아도 알림 1번만 (조용함). 매 댓글 별개 알림 원하면 commentId 도 unique key 에 포함하는 schema 변경 필요.

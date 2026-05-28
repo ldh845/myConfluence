@@ -92,11 +92,15 @@
     수신자에게 알림 트리거 (dedupe + 자기 자신 skip + best-effort).
     TopNav 종 아이콘 + dropdown 패널 (60초 polling, unread badge).
     SRS FR-100~ 알림 인프라 1단계.
+  - Cycle 60 — 알림 종류 확장 (comment.created / comment.reply). notifyOne
+    일반 트리거 추가, comments.service.create 에서 페이지 작성자 / 부모
+    댓글 작성자에게 알림. NotificationBellButton type 별 문구·아이콘
+    (💬/↩️). 마이그레이션 없음.
 - **남은 일**: (현재 plat-level 큰 항목 없음 — 신규 기능은 Task G)
 - **닫힘 이력**: (v1 retro 미수행)
 - **차단 / 의존**: 없음
 - **Jira Epic**: 미등록
-- **관련 Cycle**: Cycle 1~41, 49, 50, 51, 52, 53, 54-D, 54-A, 54-B, 54-F, 54-C, 56, 55, 57, 58, 59
+- **관련 Cycle**: Cycle 1~41, 49, 50, 51, 52, 53, 54-D, 54-A, 54-B, 54-F, 54-C, 56, 55, 57, 58, 59, 60
 
 ---
 
@@ -287,6 +291,7 @@
 | Cycle 57 | A |
 | Cycle 58 | A |
 | Cycle 59 | A |
+| Cycle 60 | A |
 
 ---
 
