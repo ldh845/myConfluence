@@ -13,6 +13,7 @@ describe('NotificationsService', () => {
       count: jest.Mock;
       updateMany: jest.Mock;
     };
+    watchList: { findMany: jest.Mock };
   };
 
   beforeEach(async () => {
@@ -23,6 +24,7 @@ describe('NotificationsService', () => {
         count: jest.fn().mockResolvedValue(0),
         updateMany: jest.fn().mockResolvedValue({ count: 0 }),
       },
+      watchList: { findMany: jest.fn().mockResolvedValue([]) },
     };
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -165,6 +167,84 @@ describe('NotificationsService', () => {
           pageId: 'p-1',
           type: 'comment.reply',
         }),
+      ).resolves.toBeUndefined();
+    });
+  });
+
+  // Cycle 61 — refresh 옵션
+  describe('notifyOne refresh', () => {
+    it('refresh=true → update 에 readAt:null + createdAt + payload', async () => {
+      await service.notifyOne({
+        recipientId: 'u-1',
+        actorId: 'u-2',
+        pageId: 'p-1',
+        type: 'page.updated',
+        payload: { pageTitle: '제목' },
+        refresh: true,
+      });
+      const arg = prismaMock.notification.upsert.mock.calls[0][0];
+      expect(arg.update.readAt).toBeNull();
+      expect(arg.update.createdAt).toBeInstanceOf(Date);
+      expect(arg.update.payload).toEqual({ pageTitle: '제목' });
+    });
+
+    it('refresh=false(기본) → update 빈 객체 (재알림 X)', async () => {
+      await service.notifyOne({
+        recipientId: 'u-1',
+        actorId: 'u-2',
+        pageId: 'p-1',
+        type: 'comment.created',
+      });
+      const arg = prismaMock.notification.upsert.mock.calls[0][0];
+      expect(arg.update).toEqual({});
+    });
+  });
+
+  // Cycle 61 — notifyWatchers
+  describe('notifyWatchers', () => {
+    it('watcher 들 → 각자 notifyOne(page.updated, refresh)', async () => {
+      prismaMock.watchList.findMany.mockResolvedValueOnce([
+        { userId: 'u-1' },
+        { userId: 'u-2' },
+      ]);
+      await service.notifyWatchers({
+        actorId: 'a-1',
+        pageId: 'p-1',
+        payload: { pageTitle: '제목' },
+      });
+      // watcher 2명 → upsert 2회, 모두 page.updated + refresh update
+      expect(prismaMock.notification.upsert).toHaveBeenCalledTimes(2);
+      const types = prismaMock.notification.upsert.mock.calls.map(
+        (c) => c[0].create.type,
+      );
+      expect(types).toEqual(['page.updated', 'page.updated']);
+      // refresh=true 이므로 update 에 readAt:null
+      expect(prismaMock.notification.upsert.mock.calls[0][0].update.readAt).toBeNull();
+    });
+
+    it('작성자 본인이 watcher 면 skip (notifyOne 내부)', async () => {
+      prismaMock.watchList.findMany.mockResolvedValueOnce([
+        { userId: 'a-1' }, // 작성자 본인
+        { userId: 'u-2' },
+      ]);
+      await service.notifyWatchers({ actorId: 'a-1', pageId: 'p-1' });
+      expect(prismaMock.notification.upsert).toHaveBeenCalledTimes(1);
+      expect(
+        prismaMock.notification.upsert.mock.calls[0][0].where
+          .Notification_dedupe_key.recipientId,
+      ).toBe('u-2');
+    });
+
+    it('watcher 없음 → upsert 호출 0', async () => {
+      prismaMock.watchList.findMany.mockResolvedValueOnce([]);
+      await service.notifyWatchers({ actorId: 'a-1', pageId: 'p-1' });
+      expect(prismaMock.notification.upsert).not.toHaveBeenCalled();
+    });
+
+    it('WatchList 조회 throw → best-effort (예외 전파 X)', async () => {
+      prismaMock.watchList.findMany.mockRejectedValueOnce(new Error('db'));
+      await expect(
+        service.notifyWatchers({ actorId: 'a-1', pageId: 'p-1' }),
       ).resolves.toBeUndefined();
     });
   });
