@@ -51,6 +51,31 @@ export default function EditorToolbar({ editor }: Props) {
     editor.chain().focus().run();
   };
 
+  // Cycle 63 followup 3 — 정렬 버튼이 이미지 선택 시 image align attr 을,
+  //   그 외에는 텍스트 정렬(TextAlign)을 적용. 이미지 배치를 별도 toolbar 가
+  //   아닌 에디터 정렬 버튼으로 통합.
+  const applyAlign = (dir: "left" | "center" | "right") => {
+    if (editor.isActive("image")) {
+      editor.chain().focus().updateAttributes("image", { align: dir }).run();
+    } else {
+      editor.chain().focus().setTextAlign(dir).run();
+    }
+  };
+  const alignActive = (dir: "left" | "center" | "right") => {
+    if (editor.isActive("image")) {
+      const a = editor.getAttributes("image").align as string | null;
+      return dir === "left" ? !a || a === "left" : a === dir;
+    }
+    if (dir === "left") {
+      return (
+        editor.isActive({ textAlign: "left" }) ||
+        (!editor.isActive({ textAlign: "center" }) &&
+          !editor.isActive({ textAlign: "right" }))
+      );
+    }
+    return editor.isActive({ textAlign: dir });
+  };
+
   return (
     <div className="bg-white border-b border-[#dfe1e6] px-3 py-1.5 flex flex-wrap items-center gap-1">
       {/* G1: 문단 스타일 드롭다운 — 제목 1~4 / 인용 / 코드 블록 / 문단 */}
@@ -122,37 +147,27 @@ export default function EditorToolbar({ editor }: Props) {
         <IndentButton editor={editor} direction="indent" />
       </BtnGroup>
       <MiniDivider />
-      {/* 텍스트 정렬 — paragraph + heading 대상. */}
+      {/* 텍스트 정렬 — paragraph + heading 대상. Cycle 63 followup 3:
+          이미지 선택 시엔 이미지 배치(좌/가운데/우)에도 적용. */}
       <BtnGroup>
         <TB
           title="좌측 정렬"
-          active={
-            editor.isActive({ textAlign: "left" }) ||
-            // 기본값(left)은 isActive가 false로 나와 "좌측 정렬"이 아무 강조 없이
-            // 보이는데, 사용자에겐 left가 디폴트 활성처럼 보이는 게 자연스럽다.
-            // 명시적으로 다른 정렬이 활성이 아니면 left 활성으로 표시.
-            (!editor.isActive({ textAlign: "center" }) &&
-              !editor.isActive({ textAlign: "right" }))
-          }
-          onClick={run(() => editor.chain().focus().setTextAlign("left").run())}
+          active={alignActive("left")}
+          onClick={() => applyAlign("left")}
         >
           <AlignIcon dir="left" />
         </TB>
         <TB
           title="가운데 정렬"
-          active={editor.isActive({ textAlign: "center" })}
-          onClick={run(() =>
-            editor.chain().focus().setTextAlign("center").run()
-          )}
+          active={alignActive("center")}
+          onClick={() => applyAlign("center")}
         >
           <AlignIcon dir="center" />
         </TB>
         <TB
           title="우측 정렬"
-          active={editor.isActive({ textAlign: "right" })}
-          onClick={run(() =>
-            editor.chain().focus().setTextAlign("right").run()
-          )}
+          active={alignActive("right")}
+          onClick={() => applyAlign("right")}
         >
           <AlignIcon dir="right" />
         </TB>

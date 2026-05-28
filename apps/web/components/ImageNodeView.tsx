@@ -118,29 +118,9 @@ export default function ImageNodeView({
             >
               테두리
             </ToolBtn>
-            <span className="w-px h-4 bg-[#dfe1e6]" />
-            {/* Cycle 63 followup 2 — 정렬 좌/가운데/우 (블록 배치). */}
-            <ToolBtn
-              active={!attrs.align || attrs.align === "left"}
-              onClick={() => updateAttributes({ align: "left" })}
-              title="왼쪽 정렬"
-            >
-              ⬅
-            </ToolBtn>
-            <ToolBtn
-              active={attrs.align === "center"}
-              onClick={() => updateAttributes({ align: "center" })}
-              title="가운데 정렬"
-            >
-              ☰
-            </ToolBtn>
-            <ToolBtn
-              active={attrs.align === "right"}
-              onClick={() => updateAttributes({ align: "right" })}
-              title="오른쪽 정렬"
-            >
-              ➡
-            </ToolBtn>
+            {/* Cycle 63 followup 3 — 정렬은 에디터 상단 툴바의 정렬 버튼이
+                담당(이미지 선택 시 image align 갱신). ImageNodeView toolbar
+                에서는 제거. */}
             <span className="w-px h-4 bg-[#dfe1e6]" />
             <ToolBtn
               active={!!attrs.link}
@@ -209,10 +189,11 @@ export default function ImageNodeView({
           onBlur={() => updateAttributes({ caption: captionDraft.trim() })}
           placeholder="캡션 입력..."
           rows={2}
-          className="w-full mt-1.5 text-[12px] text-[#6b778c] border border-[#dfe1e6] rounded p-1.5 focus:outline-none focus:border-[#0052cc] resize-none"
+          className="w-full mt-1.5 text-[12px] text-[#6b778c] text-center border border-[#dfe1e6] rounded p-1.5 focus:outline-none focus:border-[#0052cc] resize-none"
         />
       ) : caption ? (
-        <figcaption className="cf-image-caption text-[12px] text-[#6b778c] mt-1.5">
+        // Cycle 63 followup 3 — 캡션은 이미지 하단 가운데에 작게.
+        <figcaption className="cf-image-caption text-[12px] text-[#6b778c] mt-1.5 text-center">
           {caption}
         </figcaption>
       ) : null}
