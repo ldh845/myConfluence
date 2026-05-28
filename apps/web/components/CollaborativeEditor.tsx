@@ -404,6 +404,13 @@ export default function CollaborativeEditor({
                 // caption 속성은 figure 의 figcaption 으로만 출력. img 속성으로는 X.
                 renderHTML: () => ({}),
               },
+              // Cycle 63 — 이미지 크기/테두리/정렬/연결. 화면은 ImageNodeView 가
+              //   inline style 로 적용. renderHTML 은 () => ({}) — img/figure 에
+              //   잘못된 속성 출력 방지. JSON 저장(Cycle 57)이 attr 라운드트립 담당.
+              width: { default: null, renderHTML: () => ({}) },
+              border: { default: false, renderHTML: () => ({}) },
+              align: { default: null, renderHTML: () => ({}) },
+              link: { default: null, renderHTML: () => ({}) },
             };
           },
           parseHTML() {
