@@ -74,6 +74,11 @@ function describeNotification(item: NotificationItem): {
         icon: "↩️",
         text: `${actorName}님이 회원님 댓글에 답글을 달았습니다 ('${pageTitle}')`,
       };
+    case "page.updated":
+      return {
+        icon: "👁️",
+        text: `${actorName}님이 회원님이 지켜보는 '${pageTitle}'을(를) 업데이트했습니다`,
+      };
     case "mention":
     default:
       return {
