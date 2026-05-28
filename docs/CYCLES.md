@@ -1501,3 +1501,25 @@
   - SMTP 이메일 알림 (FR-102)
   - WebSocket / SSE 실시간 push
 - **비고**: notifyOne 은 단일 recipient 일반 트리거 — 향후 다른 type (watch.page_changed, share.received 등) 도 같은 함수로 한 줄 추가. dedupe key 기존 그대로 — 사용자가 한 페이지에 댓글 많이 달아도 알림 1번만 (조용함). 매 댓글 별개 알림 원하면 commentId 도 unique key 에 포함하는 schema 변경 필요.
+
+---
+
+## Cycle 61 — 2026-05-27 — ✅ Done (지켜보는 페이지 발행 알림)
+- **제목**: 페이지 발행 시 그 페이지 watcher 들에게 `page.updated` 알림. Cycle 53 WatchList + Cycle 59/60 Notification 결합 — 지켜보기 기능 완성
+- **카테고리**: 알림 (Cycle 60 후속, Cycle 53 watch 토글 완성)
+- **커밋**: `d45e147`(61-1 BE), `5721c57`(61-2 spec), `685a103`(61-3 FE), 본 CYCLES.md(61-4 Docs)
+- **변경 파일**:
+  - `apps/api/src/notifications/notifications.service.ts` — NotificationType 에 `page.updated`. `notifyOne` 에 `refresh?:boolean` (true 면 upsert update 에서 `readAt=null` + `createdAt=now` + payload 갱신 — 재알림). `notifyWatchers({actorId, pageId, payload})` — WatchList 조회 → 각 watcher 에게 `notifyOne(page.updated, refresh:true)`. best-effort (조회 실패 swallow)
+  - `apps/api/src/pages/pages.service.ts` publish — 멘션 트리거 옆에 `notifyWatchers` 호출 (try/catch 안)
+  - `apps/api/src/notifications/notifications.service.spec.ts` — refresh 2 + notifyWatchers 4 = 6 케이스. prismaMock 에 watchList.findMany 추가
+  - `apps/web/components/NotificationBellButton.tsx` — `page.updated` case (👁️ + 문구)
+- **검증**: jest **13 suites · 108 tests** 통과(직전 102 + 신규 6). nest build / tsc EXIT 0. 마이그레이션 **없음** (Notification + WatchList 재활용)
+- **동작 확인 안내**:
+  1) **마이그레이션 불필요**
+  2) 사용자 B 가 페이지 X 지켜보기(👁️ Cycle 53 PageHeader 토글) → 사용자 A 가 X 발행 → B 종 아이콘 "👁️ A님이 회원님이 지켜보는 'X'을(를) 업데이트했습니다"
+  3) **재발행마다 재알림** (refresh) — 이미 읽은 알림도 미읽+최신으로 갱신, 종 badge 다시 +1
+  4) 작성자 본인이 watcher 여도 자기 발행엔 알림 X (notifyOne 자기 자신 skip)
+  5) 멘션 + watch 동시 — 멘션받은 사용자가 watcher 이기도 하면 두 알림 별개(type 다름)
+  6) 알림 클릭 → 그 페이지 진입 + 자동 읽음
+- **남은 일**: SMTP 이메일 알림(FR-102) / WebSocket·SSE 실시간 push (현재 60초 polling)
+- **비고**: **refresh=true 가 watch 알림의 핵심** — 변경 추적이라 매 발행마다 다시 알려야 함(mention/comment 는 refresh=false, 한 번만). dedupe key 동일 `(recipient, actor, page, type)` 이라 같은 actor 의 반복 발행은 알림 1행을 refresh (새 행 안 쌓임 — 깔끔). WatchList 조회 실패도 best-effort 라 발행 본체 안 깨짐. **지켜보기 기능 완성**: Cycle 53(토글) → Cycle 61(알림) 으로 watch 의 실효성 확보.
