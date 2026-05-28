@@ -11,8 +11,6 @@ import FullScreenEditor from "@/components/FullScreenEditor";
 import SpacePagesView from "@/components/SpacePagesView";
 import ProfileView from "@/components/ProfileView";
 import MentionEditPopover from "@/components/MentionEditPopover";
-import DiagramList from "@/components/DiagramList";
-import AttachmentList from "@/components/AttachmentList";
 import TableOfContents from "@/components/TableOfContents";
 import PageVersionHistory from "@/components/PageVersionHistory";
 import PageComments from "@/components/PageComments";
@@ -643,14 +641,9 @@ export default function HomePage() {
                   onEditor={setEditor}
                   onConnectionStateChange={setConnectionState}
                 />
-                <DiagramList
-                  pageId={currentPage.id}
-                  editable={isBodyEditable}
-                />
-                <AttachmentList
-                  pageId={currentPage.id}
-                  editable={isBodyEditable}
-                />
+                {/* Cycle 63 followup — 조회 화면에서 다이어그램/첨부파일 별도
+                    섹션 제거(사용자 요청). 첨부·다이어그램은 본문에 삽입된
+                    내용으로만 노출. */}
                 {/* FR-073 (Cycle 25) — 페이지 이모지 반응 바. */}
                 <ReactionBar target="page" targetId={currentPage.id} />
                 {/* Cycle 53 — 헤더의 '인라인 댓글 보기 (V)' 토글로 show/hide.
