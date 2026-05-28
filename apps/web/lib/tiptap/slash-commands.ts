@@ -1,5 +1,5 @@
 import type { Editor, Range } from "@tiptap/core";
-import { promptForDate } from "@/lib/tiptap/date";
+import { pickDate } from "@/lib/tiptap/date";
 import { useEditorUiStore } from "@/lib/stores/useEditorUiStore";
 
 // FR-037 — 슬래시 명령어 카탈로그.
@@ -143,20 +143,20 @@ export const SLASH_ITEMS: SlashCommandItem[] = [
       editor.chain().focus().deleteRange(range).setHorizontalRule().run(),
   },
   {
-    // Cycle 54-F — 날짜 inline atom. prompt 로 ISO 입력.
+    // Cycle 54-F / 62 — 날짜 inline atom. 네이티브 date picker 로 선택.
     title: "날짜",
-    description: "YYYY-MM-DD 형식 날짜 토큰",
+    description: "달력에서 날짜 선택",
     searchTerms: ["date", "day", "calendar", "날짜", "일자", "년월일"],
     command: ({ editor, range }) => {
-      const iso = promptForDate();
-      // 취소 시 토큰만 제거하고 종료.
+      // slash 토큰 먼저 제거 후 picker. picker 선택은 비동기 콜백.
       editor.chain().focus().deleteRange(range).run();
-      if (!iso) return;
-      editor
-        .chain()
-        .focus()
-        .insertContent({ type: "date", attrs: { date: iso } })
-        .run();
+      pickDate(undefined, (iso) => {
+        editor
+          .chain()
+          .focus()
+          .insertContent({ type: "date", attrs: { date: iso } })
+          .run();
+      });
     },
   },
   {

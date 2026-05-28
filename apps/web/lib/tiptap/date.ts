@@ -1,12 +1,11 @@
 import { Node, mergeAttributes } from "@tiptap/core";
 
 // Cycle 54-F — 날짜 inline atom 노드.
-//   클릭 시 prompt 로 ISO(YYYY-MM-DD) 재입력. 시각화는 색박스 1개 토큰
-//   (Confluence 의 인라인 date lozenge 스타일).
-//   markdown 직렬화는 plain text(YYYY-MM-DD)로만 — html=false 정책이라 raw
-//   HTML 으로 라운드트립 못 함. CLAUDE.md "마크다운 직렬화 한계"와 동일한
-//   범주: DB 의 markdown 에는 텍스트만 남고 노드 시각화는 새로고침 시 손실.
-//   향후 입력 규칙(예: "2026-05-27" 패턴 자동 인식)으로 라운드트립 보강 가능.
+// Cycle 62 — prompt → 네이티브 date picker(input[type=date]) + 한국어 locale
+//   표시("2026년 5월 27일"). attrs.date 는 ISO(YYYY-MM-DD) 그대로 보존,
+//   화면/직렬화 텍스트만 한국어.
+//   markdown 직렬화는 텍스트만 — Cycle 57 의 JSON 저장으로 라운드트립 보장됨
+//   (content 가 JSON 이면 attrs.date 그대로 복원).
 
 type DateAttrs = { date: string };
 
@@ -18,20 +17,54 @@ function todayIso(): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
-export function promptForDate(initial?: string): string | null {
-  // 빈/잘못된 입력은 null 반환 → 호출부가 삽입/수정 취소.
-  const seed = initial && ISO_RE.test(initial) ? initial : todayIso();
-  const v = window.prompt(
-    "날짜를 입력하세요 (YYYY-MM-DD)",
-    seed,
-  );
-  if (v === null) return null;
-  const trimmed = v.trim();
-  if (!ISO_RE.test(trimmed)) {
-    window.alert("형식: YYYY-MM-DD (예: 2026-05-27)");
-    return null;
+// ISO → 한국어 표시. 형식 안 맞으면 원문 그대로.
+export function formatKoreanDate(iso: string | null | undefined): string {
+  const m = (iso ?? "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return iso ?? "";
+  return `${m[1]}년 ${Number(m[2])}월 ${Number(m[3])}일`;
+}
+
+// Cycle 62 — 네이티브 date picker 를 띄우고, 선택 시 onPick(ISO) 호출.
+//   화면 밖 hidden input 으로 picker 만 노출. showPicker 미지원 브라우저는
+//   focus+click fallback. 취소(blur)는 cleanup 만.
+export function pickDate(
+  initial: string | undefined,
+  onPick: (iso: string) => void,
+): void {
+  const input = document.createElement("input");
+  input.type = "date";
+  input.value = initial && ISO_RE.test(initial) ? initial : todayIso();
+  input.style.position = "fixed";
+  input.style.left = "0";
+  input.style.top = "0";
+  input.style.opacity = "0";
+  input.style.pointerEvents = "none";
+  document.body.appendChild(input);
+  let done = false;
+  const cleanup = () => {
+    if (input.parentNode) input.parentNode.removeChild(input);
+  };
+  input.addEventListener("change", () => {
+    done = true;
+    const next = input.value;
+    cleanup();
+    if (next && ISO_RE.test(next)) onPick(next);
+  });
+  input.addEventListener("blur", () => {
+    // change 가 먼저 발화하면 done=true. blur 만 오면(취소) cleanup.
+    setTimeout(() => {
+      if (!done) cleanup();
+    }, 0);
+  });
+  const withPicker = input as HTMLInputElement & {
+    showPicker?: () => void;
+  };
+  if (typeof withPicker.showPicker === "function") {
+    withPicker.showPicker();
+  } else {
+    input.focus();
+    input.click();
   }
-  return trimmed;
 }
 
 export const DateExtension = Node.create({
@@ -54,15 +87,11 @@ export const DateExtension = Node.create({
   },
 
   parseHTML() {
-    // <time datetime="..."> + data-date="..." 보조. 일반 time 만 있어도 채움.
-    return [
-      { tag: "time[datetime]" },
-      { tag: "time[data-type='date']" },
-    ];
+    return [{ tag: "time[datetime]" }, { tag: "time[data-type='date']" }];
   },
 
   renderHTML({ HTMLAttributes, node }) {
-    const text = (node.attrs as DateAttrs).date || "";
+    const text = formatKoreanDate((node.attrs as DateAttrs).date);
     return [
       "time",
       mergeAttributes(HTMLAttributes, {
@@ -73,16 +102,14 @@ export const DateExtension = Node.create({
     ];
   },
 
-  // 노드 클릭 시 prompt 로 재입력.
+  // 노드 클릭 시 date picker 로 재선택.
   addNodeView() {
     return ({ node, editor, getPos }) => {
-      const dom = document.createElement("time");
       const attrs = node.attrs as DateAttrs;
+      const dom = document.createElement("time");
       dom.setAttribute("datetime", attrs.date);
       dom.setAttribute("data-type", "date");
       dom.className = "cf-date-lozenge";
-      // 색박스 시각 — globals.css 에 .cf-date-lozenge 추가 없이도 인라인
-      // 스타일로 즉시 동작하도록 최소 스타일을 inline 으로 보장.
       dom.style.display = "inline-block";
       dom.style.padding = "0 6px";
       dom.style.borderRadius = "3px";
@@ -90,37 +117,37 @@ export const DateExtension = Node.create({
       dom.style.color = "#0747a6";
       dom.style.fontSize = "0.9em";
       dom.style.cursor = "pointer";
-      dom.textContent = attrs.date;
+      dom.textContent = formatKoreanDate(attrs.date);
       dom.title = "클릭하여 날짜 수정";
       dom.addEventListener("click", (e) => {
         if (!editor.isEditable) return;
         e.preventDefault();
-        const next = promptForDate(attrs.date);
-        if (next === null) return;
-        const pos = typeof getPos === "function" ? getPos() : null;
-        if (pos == null) return;
-        editor
-          .chain()
-          .focus()
-          .setNodeSelection(pos)
-          .updateAttributes("date", { date: next })
-          .run();
+        pickDate(attrs.date, (next) => {
+          const pos = typeof getPos === "function" ? getPos() : null;
+          if (pos == null) return;
+          editor
+            .chain()
+            .focus()
+            .setNodeSelection(pos)
+            .updateAttributes("date", { date: next })
+            .run();
+        });
       });
       return { dom };
     };
   },
 
-  // markdown 직렬화: 텍스트만 (라운드트립 시 노드 시각화 손실, 데이터 보존).
+  // markdown 직렬화: 한국어 텍스트만 (JSON 저장이 주 경로라 라운드트립은 JSON).
   addStorage() {
     return {
       markdown: {
-        serialize(state: { write: (s: string) => void }, node: { attrs: DateAttrs }) {
-          state.write(node.attrs.date);
+        serialize(
+          state: { write: (s: string) => void },
+          node: { attrs: DateAttrs },
+        ) {
+          state.write(formatKoreanDate(node.attrs.date));
         },
-        parse: {
-          // 자동 파싱은 하지 않음 — 단순 텍스트와 구분이 모호해 false positive
-          // 를 만들 수 있다. 사용자가 명시적으로 + / slash 로 삽입해야 함.
-        },
+        parse: {},
       },
     };
   },
