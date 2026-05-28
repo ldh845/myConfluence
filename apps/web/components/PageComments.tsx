@@ -347,8 +347,21 @@ export default function PageComments({ pageId, editable }: Props) {
         💬 댓글 ({comments.length}개)
       </h3>
 
+      {/* 댓글 목록 — 작성창 위에 표시 (사용자 요청). */}
+      {isLoading ? (
+        <div className="text-[12px] text-[#6b778c] mb-4">불러오는 중...</div>
+      ) : tree.length === 0 ? (
+        <div className="text-[12px] text-[#6b778c] mb-4">
+          아직 댓글이 없습니다.
+        </div>
+      ) : (
+        <ul className="space-y-3 mb-4">
+          {tree.map((root) => renderItem(root, 0))}
+        </ul>
+      )}
+
       {editable && (
-        <form onSubmit={submitRoot} className="mb-4">
+        <form onSubmit={submitRoot}>
           <textarea
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
@@ -367,14 +380,6 @@ export default function PageComments({ pageId, editable }: Props) {
             </button>
           </div>
         </form>
-      )}
-
-      {isLoading ? (
-        <div className="text-[12px] text-[#6b778c]">불러오는 중...</div>
-      ) : tree.length === 0 ? (
-        <div className="text-[12px] text-[#6b778c]">아직 댓글이 없습니다.</div>
-      ) : (
-        <ul className="space-y-3">{tree.map((root) => renderItem(root, 0))}</ul>
       )}
     </section>
   );
