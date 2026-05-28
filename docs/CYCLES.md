@@ -1657,3 +1657,27 @@
   3) 본문에서 `/` 입력 — 슬래시 메뉴는 여전히 전체 카탈로그 노출(회귀 없음)
 - **남은 일**: **브라우저 시각 확인 미수행**(API/DB 기동 필요) — 타입체크만 통과. 화살표 크기(10px)/간격은 실제 렌더 후 미세조정 여지
 - **비고**: `insertMoreItems` 는 정확 title 비교(`TOOLBAR_ITEM_TITLES`) — 카탈로그 title 변경 시 동기화 필요(헬퍼 주석에 경고 명시). down-arrow 자산은 Cycle 65 에서 예비로 커밋해둔 `public/icons/down-arrow.png` 재활용.
+
+---
+
+## Cycle 68 — 2026-05-29 — ✅ Done (인라인 댓글 기능 전체 제거)
+- **제목**: 조회 화면 '인라인 댓글 보기' 토글 + 작성 경로(마크/버튼/다이얼로그)까지 인라인 댓글 기능 전체를 FE 에서 제거
+- **카테고리**: FE / 기능 제거 (FR-071 롤백)
+- **커밋**: `464ccd1`(68-1 코드), 본 CYCLES.md(68-2 Docs)
+- **배경**: 조회 화면의 '인라인 댓글 보기' 액션버튼이 기본 active(`useState(true)`)인데, `InlineCommentsList` 는 인라인 댓글 0건이면 `null` 반환 → "토글은 켜져 있는데 화면엔 아무것도 없음" → 불필요/고장처럼 보임. 사용자 확인 후 작성 경로 포함 **전체 제거(옵션 B)** 결정
+- **변경 파일**:
+  - **삭제** `apps/web/components/InlineCommentsList.tsx` / `InlineCommentDialog.tsx` / `apps/web/lib/tiptap/inline-comment-mark.ts`
+  - `apps/web/app/(app)/page.tsx` — `showInlineComments` 상태·PageHeader 토글 props·`InlineCommentsList` 조건부 렌더 제거
+  - `apps/web/components/PageHeader.tsx` — '인라인 댓글 보기' 액션버튼 + **V 단축키** + 관련 props/destructure/deps 제거
+  - `apps/web/components/EditorToolbar.tsx` — 툴바 `InlineCommentButton`(+ `InlineCommentDialog` import) 제거
+  - `apps/web/components/CollaborativeEditor.tsx` — `InlineCommentMark` schema 등록 제거 + `parseContent` 에 `stripInlineCommentMarks` 추가
+  - `apps/web/app/globals.css` — `.cf-inline-comment` 하이라이트 스타일 2블록 제거
+- **검증**: `tsc --noEmit` EXIT 0. 마이그레이션 **없음**
+- **데이터 안전**: 마크를 schema 에서 빼면 기존 페이지 JSON(Cycle 57)에 남은 `inlineComment` 마크가 로드 시 schema 불일치로 본문을 깨뜨림 → `parseContent` 가 로드 직전 트리에서 해당 마크만 필터(텍스트 보존). **발행본(DB JSON) 경로는 안전**
+- **동작 확인 안내**:
+  1) **마이그레이션 불필요**
+  2) 조회 화면 액션바에서 '인라인 댓글 보기' 버튼 사라짐, V 단축키 무동작
+  3) 편집 툴바에서 인라인 댓글(말풍선) 버튼 사라짐
+  4) 일반 페이지 댓글(`PageComments`)·반응 바는 그대로 동작
+- **남은 일**: **백엔드 댓글 API 의 `isInline`/anchor/`resolve` 경로는 잔존**(호출 FE 없음, 무해) — 완전 정리는 별도 사이클. **엣지 케이스**: 과거 인라인 댓글 단 페이지를 *편집 모드*로 열 때 그 브라우저 IndexedDB(Yjs)에 마크가 남아 있으면 깨질 수 있음(발행본은 안전) → 사이트 데이터 삭제로 해소. **브라우저 시각 확인 미수행**
+- **비고**: FR-071(Cycle 16-3b-1/2)의 FE 부분 롤백. 백엔드/DB(Comment.isInline, anchorJson) 스키마는 보존 — 향후 재도입 시 작성/표시 UI 만 다시 붙이면 됨.
