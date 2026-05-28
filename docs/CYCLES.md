@@ -1600,3 +1600,25 @@
   5) 발행 후 새로고침 → 노드(diagramId) 유지 (JSON 라운드트립)
 - **남은 일**: 본문 다이어그램 노드 삭제 시 Diagram 엔티티 orphan 정리(현재 엔티티 잔존) — 필요 시점
 - **비고**: **draw.io 미채택** — Confluence draw.io 앱은 유료 + `embed.diagrams.net` 외부 임베드는 사내망/Skyhigh 프록시 차단 리스크(운영 환경 편집 불가 위험). 기존 무료 내장 Excalidraw 유지(사용자 결정). 본문엔 diagramId 만 저장, data/preview 는 기존 diagrams API(POST/GET/PATCH/DELETE) 재활용. **DiagramList 별도 섹션은 조회에서 제거됨(직전 followup) → 본문 노드가 이제 다이어그램의 주 진입점**. DiagramList/DiagramCard 파일은 보존(향후 재활용 가능).
+
+---
+
+## Cycle 65 — 2026-05-28 — ✅ Done (public/icons 아이콘을 UI 전반에 적용)
+- **제목**: `apps/web/public/icons/*` 아이콘 자산을 액션바/에디터 툴바/사이드바 이모지 대체에 적용
+- **카테고리**: FE / 디자인 (아이콘 일관화)
+- **커밋**: `2f122c0`(65-1 코드+자산), 본 CYCLES.md(65-2 Docs)
+- **변경 파일**:
+  - `apps/web/components/AppIcon.tsx` 신규 — 의미 이름(`edit`/`comment`/`share`/`home`/`page`/`calendar`/`bulletList`/`numberList`/`link`/`plus`/`trash`/`watch`/`star` …) → `/icons/*` 매핑 공용 컴포넌트. **next/image 는 SVG 기본 차단**(images.dangerouslyAllowSVG=false) 이라 PNG·SVG 를 한 컴포넌트에서 다루기 위해 정적 `<img>` 직접 사용(아이콘은 작은 로컬 자산). `size` prop(기본 16)
+  - `apps/web/components/PageHeader.tsx` — 조회/편집 액션바: 편집(pencil_edit)·인라인댓글(comment)·지켜보기(watch)·공유(share) + MoreMenu(내보내기=page / 공간 홈=home / 페이지 삭제=trash) 이모지 → AppIcon. `ActionButton.icon` prop `string` → `ReactNode`
+  - `apps/web/components/EditorToolbar.tsx` — 글머리(bullet_list)·번호(number_list)·링크(link)·인라인댓글(comment)·＋삽입(plus)·표삭제(trash) 이모지 → AppIcon
+  - `apps/web/components/Sidebar.tsx` — 홈(home)·페이지(page)·캘린더(calendar)·즐겨찾기(star)·휴지통(trash) 이모지 → AppIcon. `NavItem.icon` prop `string` → `ReactNode`
+  - `apps/web/public/icons/` — 신규 아이콘 자산 커밋(bullet_list/comment/link/number_list/plus + dot/down-arrow/information/user 예비)
+- **검증**: `tsc --noEmit` EXIT 0. 마이그레이션 **없음**
+- **동작 확인 안내**:
+  1) **마이그레이션 불필요**
+  2) 페이지 조회 상단 액션바 — 편집/댓글/지켜보기/공유 버튼이 이미지 아이콘으로 표시
+  3) 편집 모드 툴바 — 글머리/번호/링크/인라인댓글/＋/표삭제 아이콘
+  4) 사이드바 — 홈/페이지/캘린더/즐겨찾기/휴지통 아이콘
+  5) ⋯ 더보기 — 내보내기/공간 홈/삭제 항목 앞 아이콘
+- **남은 일**: 미적용 이모지(저장 🔖/💾, 발행 🚀, 알림 종 🔔, 다이어그램 📐, 활동피드 등) — 대응 아이콘 자산 없음/맥락상 이모지 유지. 필요 시 자산 추가 후 확장. **브라우저 시각 확인 미수행**(API/DB 기동 필요) — 타입체크만 통과
+- **비고**: `next/image` 가 SVG 를 기본 차단하므로 정적 `<img>` + `eslint-disable @next/next/no-img-element`(DiagramNodeView 등 기존 관례와 동일) 사용. SVG 아이콘(home/page/calendar)은 `fill` 미지정이라 기본 검정 렌더 — 라이트 배경에서 정상. PNG 아이콘은 SpaceStarButton(star.png 14px) 선례대로 소형 렌더 검증됨.
