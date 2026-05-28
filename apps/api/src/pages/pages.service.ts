@@ -596,6 +596,15 @@ export class PagesService {
             },
           });
         }
+        // Cycle 61 — 지켜보는 사용자에게 발행 알림 (매 발행마다 refresh).
+        await this.notifications.notifyWatchers({
+          actorId: actor.id,
+          pageId: published.id,
+          payload: {
+            pageTitle: published.title,
+            actorName: actor.name,
+          },
+        });
       } catch {
         // ignore — best-effort
       }

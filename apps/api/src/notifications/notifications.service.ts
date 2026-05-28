@@ -3,12 +3,13 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 // Cycle 59 — 알림 (Notification). 현재 type = 'mention' / 'comment.created' /
-// 'comment.reply'. Cycle 60 에서 댓글 종류 확장.
+// 'comment.reply' / 'page.updated'. Cycle 60 댓글, Cycle 61 watch 확장.
 
 export type NotificationType =
   | 'mention'
   | 'comment.created'
-  | 'comment.reply';
+  | 'comment.reply'
+  | 'page.updated';
 
 @Injectable()
 export class NotificationsService {
@@ -66,15 +67,21 @@ export class NotificationsService {
 
   // Cycle 60 — 단일 recipient 에 일반 알림 생성. 자기 자신 skip + best-effort.
   //   notifyMentions 와 같은 upsert dedupe (recipient, actor, page, type) 패턴.
+  // Cycle 61 — refresh 옵션: true 면 이미 있는 알림도 readAt=null + createdAt
+  //   갱신(재알림). watch 변경 알림처럼 매 발행마다 다시 알려야 하는 type 용.
+  //   기본 false (mention/comment 는 한 번만 — spam 방지).
   async notifyOne(params: {
     recipientId: string | null | undefined;
     actorId: string;
     pageId: string;
     type: NotificationType;
     payload?: Record<string, unknown>;
+    refresh?: boolean;
   }): Promise<void> {
     const recipient = params.recipientId;
     if (!recipient || recipient === params.actorId) return;
+    const payloadValue = (params.payload ??
+      Prisma.JsonNull) as Prisma.InputJsonValue;
     try {
       await this.prisma.notification.upsert({
         where: {
@@ -85,13 +92,15 @@ export class NotificationsService {
             type: params.type,
           },
         },
-        update: {},
+        update: params.refresh
+          ? { readAt: null, createdAt: new Date(), payload: payloadValue }
+          : {},
         create: {
           recipientId: recipient,
           actorId: params.actorId,
           pageId: params.pageId,
           type: params.type,
-          payload: (params.payload ?? Prisma.JsonNull) as Prisma.InputJsonValue,
+          payload: payloadValue,
         },
       });
     } catch (err) {
@@ -99,6 +108,38 @@ export class NotificationsService {
         `notify ${params.type} failed (recipient=${recipient}): ${String(err)}`,
       );
     }
+  }
+
+  // Cycle 61 — 페이지 발행 시 그 페이지의 watcher 들에게 'page.updated' 알림.
+  //   WatchList 조회 → 각자 notifyOne(refresh: true). 작성자 본인은 notifyOne
+  //   내부에서 자동 skip. best-effort.
+  async notifyWatchers(params: {
+    actorId: string;
+    pageId: string;
+    payload?: Record<string, unknown>;
+  }): Promise<void> {
+    let watchers: { userId: string }[];
+    try {
+      watchers = await this.prisma.watchList.findMany({
+        where: { pageId: params.pageId },
+        select: { userId: true },
+      });
+    } catch (err) {
+      this.logger.warn(`notifyWatchers query failed: ${String(err)}`);
+      return;
+    }
+    await Promise.all(
+      watchers.map((w) =>
+        this.notifyOne({
+          recipientId: w.userId,
+          actorId: params.actorId,
+          pageId: params.pageId,
+          type: 'page.updated',
+          payload: params.payload,
+          refresh: true,
+        }),
+      ),
+    );
   }
 
   // 본인 알림 목록 (최근 limit, 미읽 우선 정렬은 클라이언트가).
