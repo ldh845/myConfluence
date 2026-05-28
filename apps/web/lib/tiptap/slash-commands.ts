@@ -1,6 +1,7 @@
 import type { Editor, Range } from "@tiptap/core";
 import { pickDate } from "@/lib/tiptap/date";
 import { useEditorUiStore } from "@/lib/stores/useEditorUiStore";
+import { usePageStore } from "@/lib/stores/usePageStore";
 
 // FR-037 — 슬래시 명령어 카탈로그.
 // 각 command는 슬래시 토큰("/...")을 먼저 지운 뒤(deleteRange) 해당 노드를
@@ -157,6 +158,39 @@ export const SLASH_ITEMS: SlashCommandItem[] = [
           .insertContent({ type: "date", attrs: { date: iso } })
           .run();
       });
+    },
+  },
+  {
+    // Cycle 64 — 다이어그램(Excalidraw). 새 Diagram 엔티티 POST 생성 후
+    //   본문에 diagram 노드(diagramId 참조) 삽입. 노드 클릭 시 편집 모달.
+    title: "다이어그램",
+    description: "Excalidraw 다이어그램 삽입",
+    searchTerms: ["diagram", "draw", "excalidraw", "다이어그램", "그림판", "도형"],
+    command: ({ editor, range }) => {
+      const pageId = usePageStore.getState().pageId;
+      editor.chain().focus().deleteRange(range).run();
+      if (!pageId) {
+        window.alert("페이지를 먼저 선택하세요.");
+        return;
+      }
+      fetch(`/api/pages/${pageId}/diagrams`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ title: "새 다이어그램" }),
+      })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d: { id: string } | null) => {
+          if (!d) return;
+          editor
+            .chain()
+            .focus()
+            .insertContent({ type: "diagram", attrs: { diagramId: d.id } })
+            .run();
+        })
+        .catch(() => {
+          /* best-effort */
+        });
     },
   },
   {
