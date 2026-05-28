@@ -215,10 +215,9 @@ export default function PageHeader({
           e.preventDefault();
           toggleSaved();
           break;
-        case "w":
-          e.preventDefault();
-          toggleWatching();
-          break;
+        // Cycle 61 followup — 지켜보기 비활성화(개발 중). W 단축키 무동작.
+        // toggleWatching 코드/알림 인프라는 유지 (재활성화 시 한 줄 복구).
+        // case "w": e.preventDefault(); toggleWatching(); break;
         case "s":
           if (onShareClick) {
             e.preventDefault();
@@ -358,14 +357,14 @@ export default function PageHeader({
                 disabled={!user || saveMutation.isPending}
                 onClick={toggleSaved}
               />
-              {/* (4) 지켜보기 (W) — WatchList 토글 */}
+              {/* (4) 지켜보기 — Cycle 61 followup: 개발 중이라 비활성화.
+                  WatchList 토글 + 알림 인프라(Cycle 53/61)는 코드로 유지,
+                  재활성화 시 disabled/onClick/단축키만 복구. */}
               <ActionButton
-                icon={isWatching ? "👁️" : "👁"}
-                label={isWatching ? "지켜보는 중" : "지켜보기"}
-                tooltip={user ? `지켜보기 (W)` : notLoggedInTitle}
-                active={isWatching}
-                disabled={!user || watchMutation.isPending}
-                onClick={toggleWatching}
+                icon="👁"
+                label="지켜보기"
+                tooltip="지켜보기 — 아직 개발 중인 기능입니다"
+                disabled
               />
               {/* (5) 공유 (S) — SharePageDialog */}
               <ActionButton
