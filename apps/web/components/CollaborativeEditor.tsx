@@ -33,6 +33,7 @@ import { MathInline } from "@/lib/tiptap/math-inline";
 import { MathBlock } from "@/lib/tiptap/math-block";
 import { DateExtension } from "@/lib/tiptap/date";
 import { MentionNode } from "@/lib/tiptap/mention";
+import { DiagramNode } from "@/lib/tiptap/diagram";
 import {
   SlashCommand,
   slashCommandSuggestion,
@@ -470,6 +471,8 @@ export default function CollaborativeEditor({
         //   향후 알림(Notification) 도입 시 멘션 transaction 을 hook 으로 잡아
         //   POST /notifications 호출.
         MentionNode,
+        // Cycle 64 — 본문 다이어그램 노드(Excalidraw). ＋/slash '다이어그램'.
+        DiagramNode,
         // FR-036 (Cycle 13) — StarterKit 미커버 input rules (체크리스트/링크/이미지).
         MarkdownInputRules,
         SlashCommand.configure({ suggestion: slashCommandSuggestion }),
