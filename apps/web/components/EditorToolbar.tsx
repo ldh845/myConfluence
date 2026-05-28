@@ -21,6 +21,7 @@ import InternalPageLinkDialog from "@/components/InternalPageLinkDialog";
 import InlineCommentDialog from "@/components/InlineCommentDialog";
 import ImageInsertDialog from "@/components/ImageInsertDialog";
 import { usePageStore } from "@/lib/stores/usePageStore";
+import { useEditorUiStore } from "@/lib/stores/useEditorUiStore";
 import { SLASH_ITEMS, filterItems } from "@/lib/tiptap/slash-commands";
 import type { SlashCommandItem } from "@/lib/tiptap/slash-commands";
 
@@ -825,20 +826,24 @@ function LinkButton({ editor }: { editor: Editor }) {
 //   에서 그대로 처리(회귀 없음). pageId 는 usePageStore 에서 가져옴 — TaskItemNodeView
 //   와 같은 패턴(NodeView 가 prop 못 받는 한계 회피용 store).
 function ImageButton({ editor }: { editor: Editor }) {
-  const [open, setOpen] = useState(false);
+  // Cycle 62 — 로컬 open state → 전역 store. slash '/이미지' 도 같은
+  //   다이얼로그를 열 수 있게(일관성). 버튼/slash 둘 다 openImageDialog.
+  const open = useEditorUiStore((s) => s.imageDialogOpen);
+  const openDialog = useEditorUiStore((s) => s.openImageDialog);
+  const closeDialog = useEditorUiStore((s) => s.closeImageDialog);
   const pageId = usePageStore((s) => s.pageId);
   const insert = (src: string, alt?: string) => {
     editor.chain().focus().setImage({ src, alt: alt ?? "" }).run();
   };
   return (
     <>
-      <TB title="이미지" onClick={() => setOpen(true)}>
+      <TB title="이미지" onClick={openDialog}>
         🖼️
       </TB>
       {pageId && (
         <ImageInsertDialog
           open={open}
-          onOpenChange={setOpen}
+          onOpenChange={(v) => (v ? openDialog() : closeDialog())}
           pageId={pageId}
           onSelect={insert}
         />

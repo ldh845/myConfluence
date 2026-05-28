@@ -1,5 +1,6 @@
 import type { Editor, Range } from "@tiptap/core";
 import { promptForDate } from "@/lib/tiptap/date";
+import { useEditorUiStore } from "@/lib/stores/useEditorUiStore";
 
 // FR-037 — 슬래시 명령어 카탈로그.
 // 각 command는 슬래시 토큰("/...")을 먼저 지운 뒤(deleteRange) 해당 노드를
@@ -108,16 +109,16 @@ export const SLASH_ITEMS: SlashCommandItem[] = [
         .run(),
   },
   {
-    // FR-033 (Cycle 12-2) — 외부 URL 이미지 삽입. 첨부 업로드는 12-1 드롭/붙여넣기 흐름.
+    // FR-033 (Cycle 12-2) — 이미지 삽입.
+    // Cycle 62 — prompt → 통합 다이얼로그(ImageInsertDialog) 와 일관화.
+    //   slash 토큰만 지우고 전역 store 신호로 다이얼로그를 연다(EditorToolbar
+    //   의 ImageButton 이 마운트한 다이얼로그). 첨부/URL 탭 모두 사용 가능.
     title: "이미지",
-    description: "외부 URL 이미지 삽입",
+    description: "첨부 또는 웹 URL 이미지 삽입",
     searchTerms: ["image", "img", "picture", "이미지", "사진", "그림"],
     command: ({ editor, range }) => {
-      const url = window.prompt("이미지 URL");
       editor.chain().focus().deleteRange(range).run();
-      if (!url) return;
-      const alt = window.prompt("이미지 캡션(alt 텍스트, 선택)", "") ?? "";
-      editor.chain().focus().setImage({ src: url, alt }).run();
+      useEditorUiStore.getState().openImageDialog();
     },
   },
   {
