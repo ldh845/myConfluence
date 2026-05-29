@@ -46,7 +46,7 @@ import { IndexeddbPersistence } from "y-indexeddb";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { EditorView } from "@tiptap/pm/view";
-import { getIdentity, type Identity } from "@/lib/userIdentity";
+import { useIdentity } from "@/lib/useIdentity";
 
 export type PresenceUser = {
   clientId: number;
@@ -213,7 +213,7 @@ export default function CollaborativeEditor({
   onConnectionStateChange,
   hideToolbar,
 }: Props) {
-  const identity = useMemo<Identity>(() => getIdentity(), []);
+  const identity = useIdentity();
   const queryClient = useQueryClient();
   const [instance, setInstance] = useState<{
     ydoc: Y.Doc;

@@ -18,7 +18,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { getIdentity } from "@/lib/userIdentity";
+import { useIdentity } from "@/lib/useIdentity";
 import PageVersionDiff from "@/components/PageVersionDiff";
 
 // FR-061 / FR-063 — 페이지 버전 히스토리 + 원복 다이얼로그.
@@ -56,6 +56,7 @@ export default function PageVersionHistory({
   onOpenChange,
 }: Props) {
   const queryClient = useQueryClient();
+  const identity = useIdentity();
   const [target, setTarget] = useState<PageVersion | null>(null);
   // FR-062 — 카드별 diff 패널 펼침 상태. 한 번에 하나만 펼친다.
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -72,7 +73,6 @@ export default function PageVersionHistory({
 
   const restore = useMutation({
     mutationFn: async (version: PageVersion) => {
-      const identity = getIdentity();
       const res = await fetch(
         `/api/pages/${version.pageId}/versions/${version.id}/restore`,
         {

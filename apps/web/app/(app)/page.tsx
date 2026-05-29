@@ -21,7 +21,7 @@ import CopyPageDialog from "@/components/CopyPageDialog";
 import SharePageDialog from "@/components/SharePageDialog";
 import DeletePageDialog from "@/components/DeletePageDialog";
 import ReactionBar from "@/components/ReactionBar";
-import { getIdentity } from "@/lib/userIdentity";
+import { useIdentity } from "@/lib/useIdentity";
 import { usePageStore } from "@/lib/stores/usePageStore";
 import { useRecentPagesStore } from "@/lib/stores/useRecentPagesStore";
 import { useRecentSpacesStore } from "@/lib/stores/useRecentSpacesStore";
@@ -68,6 +68,7 @@ export default function HomePage() {
   const isProfileView = !!profileIdFromUrl;
 
   const queryClient = useQueryClient();
+  const identity = useIdentity();
 
   const { data: spacesData } = useQuery<SpaceWithPages[]>({
     queryKey: ["spaces"],
@@ -207,11 +208,11 @@ export default function HomePage() {
   // pageId/authorName을 store에 동기화.
   useEffect(() => {
     if (currentPage) {
-      usePageStore.getState().setPage(currentPage.id, getIdentity().name);
+      usePageStore.getState().setPage(currentPage.id, identity.name);
     } else {
       usePageStore.getState().reset();
     }
-  }, [currentPage]);
+  }, [currentPage, identity.name]);
 
   // FR-130 (Cycle 22) — 최근 방문 기록.
   useEffect(() => {
@@ -337,7 +338,7 @@ export default function HomePage() {
         method: "POST",
         headers: { "Content-Type": "application/json; charset=utf-8" },
         body: JSON.stringify({
-          authorName: getIdentity().name,
+          authorName: identity.name,
           // content는 빈 문자열 ""도 명시 발행으로 인정해야 하므로
           // !== undefined로 분기. note는 빈 문자열이면 보내지 않는다.
           ...(vars.content !== undefined ? { content: vars.content } : {}),

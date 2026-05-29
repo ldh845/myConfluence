@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { formatBytes, formatDate } from "@/lib/format";
-import { getIdentity } from "@/lib/userIdentity";
+import { useIdentity } from "@/lib/useIdentity";
 
 // FR-080~083 — 첨부파일 UX (Cycle 8-3 진행률 / 드래그앤드롭 / 이미지 미리보기).
 
@@ -35,6 +35,7 @@ export default function AttachmentList({
   editable: boolean;
 }) {
   const queryClient = useQueryClient();
+  const identity = useIdentity();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dragDepth = useRef(0);
 
@@ -85,7 +86,7 @@ export default function AttachmentList({
         xhr.open("POST", `/api/pages/${pageId}/attachments`);
         const form = new FormData();
         form.append("file", file);
-        form.append("authorName", getIdentity().name);
+        form.append("authorName", identity.name);
         // 시작과 동시에 0% 카드를 노출. 완료/실패 시에는 finalize 단계에서 제거.
         setUploadingProgress({ filename: file.name, percent: 0 });
         xhr.send(form);

@@ -8,7 +8,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { getIdentity } from "@/lib/userIdentity";
+import { useIdentity } from "@/lib/useIdentity";
 
 // Cycle 54-C — 파일/그림 통합 삽입 다이얼로그.
 //   탭 1 '이 페이지 첨부' — 페이지의 첨부 중 이미지만 그리드로 표시, '+ 새 업로드'
@@ -44,6 +44,7 @@ export default function ImageInsertDialog({
   onSelect,
 }: Props) {
   const queryClient = useQueryClient();
+  const identity = useIdentity();
   const [tab, setTab] = useState<Tab>("attached");
   const [url, setUrl] = useState("");
   const [urlAlt, setUrlAlt] = useState("");
@@ -81,7 +82,7 @@ export default function ImageInsertDialog({
     mutationFn: async (file: File) => {
       const form = new FormData();
       form.append("file", file);
-      form.append("authorName", getIdentity().name);
+      form.append("authorName", identity.name);
       const r = await fetch(`/api/pages/${pageId}/attachments`, {
         method: "POST",
         credentials: "include",
