@@ -92,6 +92,10 @@ echo "[4/5] 컨테이너 재기동 (docker compose up -d)..."
 cd "$DOCSPACE"
 sudo -E docker compose up -d
 echo "  → 재기동 완료 (api 기동 시 prisma migrate deploy 자동 실행)"
+# web/api 가 새 IP 를 받으면 nginx 가 옛 IP 캐시를 들고 있어 502 발생.
+# 자세히는 docs/DEPLOY.md 트러블슈팅 '(compose nginx) 앱 컨테이너 재빌드/재생성 후 502' 참조.
+echo "  → nginx 재시작 (upstream IP 재해석)..."
+sudo docker compose restart nginx
 
 # [5/5] 완료 검증
 echo ""
