@@ -5,6 +5,7 @@ import { AttachmentsModule } from '../attachments/attachments.module';
 import { ActivitiesModule } from '../activities/activities.module';
 import { AuthModule } from '../auth/auth.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { SpacePermissionModule } from '../spaces/space-permission.module';
 
 @Module({
   // FR-080 — PagesService.remove가 첨부 디스크 정리 시 AttachmentsService를
@@ -17,6 +18,8 @@ import { NotificationsModule } from '../notifications/notifications.module';
     ActivitiesModule,
     AuthModule,
     NotificationsModule,
+    // Cycle 74-A — 페이지 read/edit 시 스페이스 권한 판정.
+    SpacePermissionModule,
   ],
   controllers: [PagesController],
   providers: [PagesService],

@@ -30,6 +30,23 @@ enum SpaceType {
   PERSONAL
 }
 
+// Cycle 74-A — 스페이스 단위 권한 역할.
+//   ADMIN=관리(설정/멤버/삭제), EDITOR=페이지 CRUD, VIEWER=읽기.
+enum SpaceRole {
+  ADMIN
+  EDITOR
+  VIEWER
+}
+
+// Cycle 74-A — 스페이스 공개 범위.
+//   PUBLIC=로그인 사용자 누구나 읽기+편집(암묵적 Editor), PRIVATE=멤버 전용(역할 기반),
+//   PERSONAL=소유자 전용(기존 개인 공간). 관리는 항상 Space Admin 또는 전역 ADMIN.
+enum SpaceVisibility {
+  PUBLIC
+  PRIVATE
+  PERSONAL
+}
+
 model User {
   id                         String        @id @default(cuid())
   username                   String        @unique
@@ -67,6 +84,8 @@ model User {
   reactions                  Reaction[]    @relation("UserReaction")
   // Cycle 32 — 사용자가 소유한 개인 공간.
   ownedSpaces                Space[]       @relation("SpaceOwner")
+  // Cycle 74-A — 스페이스 멤버십(권한). user 삭제 시 Cascade.
+  spaceMemberships           SpaceMember[] @relation("UserSpaceMember")
   // Cycle 53 — 사용자별 '나중을 위해 저장' / '지켜보기' 페이지 목록.
   // 본인 데이터라 user 삭제 시 Cascade.
   savedPages                 SavedPage[]   @relation("UserSaved")
@@ -84,8 +103,12 @@ model Space {
   description  String?
   // Cycle 32 — 개인 공간 지원. PERSONAL은 ownerId 소유자에게만 노출.
   type         SpaceType     @default(SITE)
+  // Cycle 74-A — 공개 범위. 기존 데이터는 마이그레이션에서 PUBLIC(PERSONAL 은 PERSONAL) 백필.
+  visibility   SpaceVisibility @default(PUBLIC)
   ownerId      String?
   owner        User?         @relation("SpaceOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  // Cycle 74-A — 스페이스 멤버(권한). PRIVATE 접근/역할의 출처. 공간 삭제 시 Cascade.
+  members      SpaceMember[] @relation("SpaceMembers")
   // Cycle 33 — 공간의 명시적 홈(메인) 페이지. 공간 생성 시 자동 생성.
   // 홈 페이지 삭제 시 SetNull → 사이드바는 첫 루트 페이지로 fallback.
   homePageId   String?       @unique
@@ -95,6 +118,20 @@ model Space {
   activityLogs ActivityLog[]
 
   @@index([ownerId])
+}
+
+// Cycle 74-A — 스페이스 멤버십(권한). (space, user) 당 최대 1행.
+//   스페이스/사용자 삭제 시 Cascade. 전역 ADMIN 은 멤버 행 없이도 override.
+model SpaceMember {
+  spaceId   String
+  space     Space     @relation("SpaceMembers", fields: [spaceId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User      @relation("UserSpaceMember", fields: [userId], references: [id], onDelete: Cascade)
+  role      SpaceRole @default(VIEWER)
+  createdAt DateTime  @default(now())
+
+  @@id([spaceId, userId])
+  @@index([userId])
 }
 
 model Page {

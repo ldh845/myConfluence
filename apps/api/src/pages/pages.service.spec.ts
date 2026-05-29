@@ -9,6 +9,18 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AttachmentsService } from '../attachments/attachments.service';
 import { ActivitiesService } from '../activities/activities.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { SpacePermissionService } from '../spaces/space-permission.service';
+
+// Cycle 74-A — recent/findOne 가 권한 서비스를 사용. 기존 테스트는 가시성 필터를
+//   no-op({})·loadAccess null 로 모킹해 행동 불변(권한 로직 자체는 별도 spec).
+const permsMock = {
+  pageVisibilityWhere: () => ({}),
+  spaceVisibilityWhere: () => ({}),
+  loadAccess: jest.fn().mockResolvedValue(null),
+  canView: () => true,
+  canEdit: () => true,
+  canManage: () => true,
+};
 
 // Cycle 51 — recent({ limit?, spaceId?, offset? }) 검증.
 //   - spaceId 지정 시 where 에 추가
@@ -36,6 +48,7 @@ describe('PagesService — recent', () => {
         { provide: ActivitiesService, useValue: {} },
         // Cycle 59 — PagesService 가 NotificationsService 의존.
         { provide: NotificationsService, useValue: { notifyMentions: jest.fn() } },
+        { provide: SpacePermissionService, useValue: permsMock },
       ],
     }).compile();
     service = module.get<PagesService>(PagesService);
@@ -228,6 +241,7 @@ describe('PagesService — remove (Cycle 56 cascade option)', () => {
           provide: NotificationsService,
           useValue: { notifyMentions: jest.fn() },
         },
+        { provide: SpacePermissionService, useValue: permsMock },
       ],
     }).compile();
     service = module.get<PagesService>(PagesService);
@@ -425,6 +439,7 @@ describe('PagesService — changeStatus (Cycle 70)', () => {
           provide: NotificationsService,
           useValue: { notifyMentions: jest.fn() },
         },
+        { provide: SpacePermissionService, useValue: permsMock },
       ],
     }).compile();
     service = module.get<PagesService>(PagesService);

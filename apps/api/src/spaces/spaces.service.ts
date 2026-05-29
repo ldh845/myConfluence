@@ -6,6 +6,10 @@ import {
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ActivitiesService } from '../activities/activities.service';
+import {
+  SpacePermissionService,
+  type Actor,
+} from './space-permission.service';
 import { CreateSpaceDto } from './dto/create-space.dto';
 
 // 사이드바/디렉터리에서 공통으로 쓰는 pages select.
@@ -34,19 +38,15 @@ export class SpacesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly activities: ActivitiesService,
+    private readonly perms: SpacePermissionService,
   ) {}
 
   // Cycle 32 — SITE 전체 + (인증 시) 본인 PERSONAL 공간만. 남의 개인 공간은 숨김.
-  findAll(userId?: string | null) {
+  // Cycle 74-A — visibility 기반으로 전환. PUBLIC 전체 + 본인 멤버인 PRIVATE +
+  //   본인 PERSONAL. 전역 ADMIN 은 전체. (기존 SITE→PUBLIC, PERSONAL→PERSONAL 백필과 일치.)
+  findAll(actor: Actor) {
     return this.prisma.space.findMany({
-      where: {
-        OR: [
-          { type: 'SITE' },
-          ...(userId
-            ? [{ type: 'PERSONAL' as const, ownerId: userId }]
-            : []),
-        ],
-      },
+      where: this.perms.spaceVisibilityWhere(actor),
       orderBy: { createdAt: 'asc' },
       include: PAGES_INCLUDE,
     });
@@ -75,6 +75,13 @@ export class SpacesService {
           publishedAt: new Date(),
         },
       });
+      // Cycle 74-A — 공간 생성자를 자동으로 Space Admin 멤버로 등록.
+      //   (PUBLIC 기본이라 당장 권한 차이는 없지만, PRIVATE 전환 시 관리 권한의 출처.)
+      if (actor?.id) {
+        await tx.spaceMember.create({
+          data: { spaceId: space.id, userId: actor.id, role: 'ADMIN' },
+        });
+      }
       const updated = await tx.space.update({
         where: { id: space.id },
         data: { homePageId: homePage.id },

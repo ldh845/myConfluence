@@ -23,7 +23,9 @@ export class SpacesController {
   @Get()
   @UseGuards(OptionalJwtAuthGuard)
   findAll(@Req() req: Request) {
-    return this.spaces.findAll(req.user?.id ?? null);
+    return this.spaces.findAll(
+      req.user ? { id: req.user.id, role: req.user.role } : null,
+    );
   }
 
   // Cycle 32 — 개인 공간 lazy 생성/조회. /spaces/:id 보다 위에 선언.

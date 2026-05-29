@@ -14,6 +14,7 @@ import {
 import type { Request } from 'express';
 import { PageStatus } from '@prisma/client';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { OptionalJwtAuthGuard } from '../auth/optional-jwt-auth.guard';
 import { PagesService } from './pages.service';
 import { CreatePageDto } from './dto/create-page.dto';
 import { UpdatePageDto } from './dto/update-page.dto';
@@ -127,7 +128,9 @@ export class PagesController {
   // Cycle 51 — spaceId(옵셔널) + offset(옵셔널) 추가. 미지정 시 기존 동작 그대로.
   //   /?spaceId=X&view=pages 의 SpacePagesView 가 spaceId+offset 으로 호출.
   @Get('recent')
+  @UseGuards(OptionalJwtAuthGuard)
   recent(
+    @Req() req: Request,
     @Query('limit') limit?: string,
     @Query('spaceId') spaceId?: string,
     @Query('offset') offset?: string,
@@ -139,6 +142,8 @@ export class PagesController {
       spaceId: spaceId || undefined,
       offset: offset ? Number(offset) : 0,
       statuses: parseStatuses(status),
+      // Cycle 74-A — 가시성 필터.
+      actor: req.user ? { id: req.user.id, role: req.user.role } : null,
     });
   }
 
@@ -156,8 +161,12 @@ export class PagesController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.pages.findOne(id);
+  @UseGuards(OptionalJwtAuthGuard)
+  findOne(@Param('id') id: string, @Req() req: Request) {
+    return this.pages.findOne(
+      id,
+      req.user ? { id: req.user.id, role: req.user.role } : null,
+    );
   }
 
   @Patch(':id')

@@ -9,6 +9,10 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AttachmentsService } from '../attachments/attachments.service';
 import { ActivitiesService } from '../activities/activities.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import {
+  SpacePermissionService,
+  type Actor,
+} from '../spaces/space-permission.service';
 import { promises as fs } from 'node:fs';
 import * as path from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -48,6 +52,8 @@ export class PagesService {
     private readonly activities: ActivitiesService,
     // Cycle 59 — 발행 시 멘션 추출 후 알림 트리거.
     private readonly notifications: NotificationsService,
+    // Cycle 74-A — 스페이스 권한(가시성) 판정.
+    private readonly perms: SpacePermissionService,
   ) {}
 
   // FR-064 — 같은 트랜잭션 안에서 호출. 새 PageVersion이 막 추가된
@@ -127,6 +133,8 @@ export class PagesService {
       spaceId?: string;
       offset?: number;
       statuses?: Array<PageStatus | 'NONE'>;
+      // Cycle 74-A — 가시성 필터용 actor. 비멤버는 PRIVATE/타인 PERSONAL 페이지 제외.
+      actor?: Actor;
     } = {},
   ) {
     const safeLimit = Math.min(Math.max(opts.limit ?? 10, 1), 50);
@@ -136,6 +144,7 @@ export class PagesService {
       NOT: { publishedAt: null },
       ...(opts.spaceId ? { spaceId: opts.spaceId } : {}),
       ...(this.statusWhere(opts.statuses) ?? {}),
+      ...this.perms.pageVisibilityWhere(opts.actor ?? null),
     };
     return this.prisma.page.findMany({
       where,
@@ -314,7 +323,7 @@ export class PagesService {
     );
   }
 
-  async findOne(id: string) {
+  async findOne(id: string, actor: Actor = null) {
     const page = await this.prisma.page.findFirst({
       where: { id, deletedAt: null },
       include: {
@@ -339,6 +348,15 @@ export class PagesService {
       },
     });
     if (!page) throw new NotFoundException({ error: 'not found' });
+    // Cycle 74-A — 가시성 가드. PUBLIC=누구나, PRIVATE=멤버, PERSONAL=소유자.
+    //   (전역 ADMIN override.) 비인가 read 는 403.
+    const access = await this.perms.loadAccess(
+      page.spaceId,
+      actor?.id ?? null,
+    );
+    if (access && !this.perms.canView(access, actor)) {
+      throw new ForbiddenException({ error: 'forbidden' });
+    }
     return page;
   }
 
@@ -380,7 +398,8 @@ export class PagesService {
         payload: { from, to: status },
       });
     }
-    return this.findOne(id);
+    // Cycle 74-A — 방금 편집한 사용자의 actor 로 반환(가시성 가드 통과).
+    return this.findOne(id, user ? { id: user.id, role: user.role } : null);
   }
 
   // FR-001 (Cycle 27c) — author/lastEditor 자동 세팅.
