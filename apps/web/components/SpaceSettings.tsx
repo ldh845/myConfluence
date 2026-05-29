@@ -102,6 +102,10 @@ export default function SpaceSettings({ spaceId }: { spaceId: string }) {
   const [visibility, setVisibility] = useState<SpaceVisibility>("PUBLIC");
   const [icon, setIcon] = useState<string | null>(null);
   const [confirmName, setConfirmName] = useState("");
+  // Cycle 75 — 개요 탭: 기본은 보기 모드, '세부 정보 편집' 시에만 입력 활성.
+  const [editingDetails, setEditingDetails] = useState(false);
+  // Cycle 75 — 삭제는 별도 버튼으로 분리. 클릭 시 확인 박스 노출.
+  const [showDelete, setShowDelete] = useState(false);
 
   useEffect(() => {
     if (space) {
@@ -139,10 +143,20 @@ export default function SpaceSettings({ spaceId }: { spaceId: string }) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["spaces"] });
+      setEditingDetails(false);
       window.alert("저장되었습니다.");
     },
     onError: () => window.alert("저장에 실패했습니다."),
   });
+
+  // 편집 취소 시 입력값을 서버 상태로 되돌린다.
+  const resetDetails = () => {
+    if (!space) return;
+    setName(space.name);
+    setDescription(space.description ?? "");
+    setVisibility((space.visibility as SpaceVisibility) ?? "PUBLIC");
+    setIcon(space.icon ?? null);
+  };
 
   const deleteMutation = useMutation({
     mutationFn: async () => {
@@ -221,149 +235,251 @@ export default function SpaceSettings({ spaceId }: { spaceId: string }) {
         className="space-y-5"
         style={{ display: activeTab === "overview" ? undefined : "none" }}
       >
-        <Field label="아이콘">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 shrink-0 rounded border border-[#dfe1e6] bg-[#f4f5f7] flex items-center justify-center overflow-hidden text-[24px]">
-              {icon ? (
-                icon.startsWith("data:") ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={icon}
-                    alt=""
-                    className="w-full h-full object-cover"
-                  />
+        {!editingDetails ? (
+          /* ── 보기 모드 ── 세부 정보를 읽기 전용으로 표시 + 편집 진입 버튼. */
+          <>
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 shrink-0 rounded border border-[#dfe1e6] bg-[#f4f5f7] flex items-center justify-center overflow-hidden text-[24px]">
+                {icon ? (
+                  icon.startsWith("data:") ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={icon}
+                      alt=""
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <span>{icon}</span>
+                  )
                 ) : (
-                  <span>{icon}</span>
-                )
-              ) : (
-                <span className="text-[#a5adba]">📄</span>
-              )}
+                  <span className="text-[#a5adba]">📄</span>
+                )}
+              </div>
+              <div className="flex-1 min-w-0 space-y-3">
+                <div>
+                  <div className="text-[12px] font-semibold text-[#42526e]">
+                    이름
+                  </div>
+                  <div className="text-[14px] text-[#172b4d]">{space.name}</div>
+                </div>
+                <div>
+                  <div className="text-[12px] font-semibold text-[#42526e]">
+                    설명
+                  </div>
+                  <div className="text-[14px] text-[#172b4d] whitespace-pre-wrap">
+                    {space.description?.trim() ? space.description : "—"}
+                  </div>
+                </div>
+                {space.type !== "PERSONAL" && (
+                  <div>
+                    <div className="text-[12px] font-semibold text-[#42526e]">
+                      공개 범위
+                    </div>
+                    <div className="text-[14px] text-[#172b4d]">
+                      {visibility === "PUBLIC"
+                        ? "전체 공개 — 모든 로그인 사용자 접근"
+                        : "비공개 — 멤버만 접근"}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
-            <div className="flex flex-wrap items-center gap-1">
-              {ICON_PRESETS.map((e) => (
-                <button
-                  key={e}
-                  type="button"
-                  onClick={() => setIcon(e)}
-                  className="w-8 h-8 rounded border border-[#dfe1e6] hover:bg-[#deebff] text-[18px]"
-                >
-                  {e}
-                </button>
-              ))}
-              <label className="px-2 py-1 text-[12px] rounded border border-[#dfe1e6] hover:bg-[#f4f5f7] cursor-pointer">
-                이미지 업로드
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={async (e) => {
-                    const f = e.target.files?.[0];
-                    e.target.value = "";
-                    if (!f) return;
-                    try {
-                      setIcon(await fileToIconDataUrl(f));
-                    } catch {
-                      window.alert("이미지를 불러올 수 없습니다.");
-                    }
-                  }}
-                />
-              </label>
-              {icon && (
-                <button
-                  type="button"
-                  onClick={() => setIcon(null)}
-                  className="px-2 py-1 text-[12px] text-[#6b778c] hover:underline"
-                >
-                  제거
-                </button>
-              )}
+            <div>
+              <button
+                type="button"
+                onClick={() => setEditingDetails(true)}
+                className="px-4 py-2 rounded border border-[#dfe1e6] hover:bg-[#f4f5f7] text-[13px] font-medium text-[#172b4d]"
+              >
+                스페이스 세부 정보 편집
+              </button>
             </div>
-          </div>
-          <p className="text-[11px] text-[#6b778c] mt-1">
-            이모지를 고르거나 이미지를 올리세요. 이미지는 128px 로 축소돼
-            저장됩니다. (&lsquo;저장&rsquo; 을 눌러야 반영)
-          </p>
-        </Field>
-        <Field label="스페이스 이름">
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className="w-full px-2 py-1.5 text-[14px] border border-[#dfe1e6] rounded focus:outline-none focus:border-[#0052cc]"
-          />
-        </Field>
-        <Field label="설명">
-          <textarea
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            rows={3}
-            className="w-full px-2 py-1.5 text-[14px] border border-[#dfe1e6] rounded resize-y focus:outline-none focus:border-[#0052cc]"
-          />
-        </Field>
-        {space.type !== "PERSONAL" && (
-          <Field label="공개 범위">
-            <select
-              value={visibility}
-              onChange={(e) =>
-                setVisibility(e.target.value as SpaceVisibility)
-              }
-              className="px-2 py-1.5 text-[14px] border border-[#dfe1e6] rounded focus:outline-none focus:border-[#0052cc]"
-            >
-              <option value="PUBLIC">전체 공개 — 모든 로그인 사용자 접근</option>
-              <option value="PRIVATE">비공개 — 멤버만 접근</option>
-            </select>
-            <p className="text-[11px] text-[#6b778c] mt-1">
-              비공개로 바꾸면 멤버가 아닌 사용자에게는 이 공간의 페이지가 보이지
-              않습니다. (멤버 관리는 &lsquo;권한&rsquo; 탭 — 준비 중)
-            </p>
-          </Field>
+          </>
+        ) : (
+          /* ── 편집 모드 ── 아이콘/이름/설명/공개범위 입력 + 저장/취소. */
+          <>
+            <Field label="아이콘">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 shrink-0 rounded border border-[#dfe1e6] bg-[#f4f5f7] flex items-center justify-center overflow-hidden text-[24px]">
+                  {icon ? (
+                    icon.startsWith("data:") ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={icon}
+                        alt=""
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <span>{icon}</span>
+                    )
+                  ) : (
+                    <span className="text-[#a5adba]">📄</span>
+                  )}
+                </div>
+                <div className="flex flex-wrap items-center gap-1">
+                  {ICON_PRESETS.map((e) => (
+                    <button
+                      key={e}
+                      type="button"
+                      onClick={() => setIcon(e)}
+                      className="w-8 h-8 rounded border border-[#dfe1e6] hover:bg-[#deebff] text-[18px]"
+                    >
+                      {e}
+                    </button>
+                  ))}
+                  <label className="px-2 py-1 text-[12px] rounded border border-[#dfe1e6] hover:bg-[#f4f5f7] cursor-pointer">
+                    이미지 업로드
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={async (e) => {
+                        const f = e.target.files?.[0];
+                        e.target.value = "";
+                        if (!f) return;
+                        try {
+                          setIcon(await fileToIconDataUrl(f));
+                        } catch {
+                          window.alert("이미지를 불러올 수 없습니다.");
+                        }
+                      }}
+                    />
+                  </label>
+                  {icon && (
+                    <button
+                      type="button"
+                      onClick={() => setIcon(null)}
+                      className="px-2 py-1 text-[12px] text-[#6b778c] hover:underline"
+                    >
+                      제거
+                    </button>
+                  )}
+                </div>
+              </div>
+              <p className="text-[11px] text-[#6b778c] mt-1">
+                이모지를 고르거나 이미지를 올리세요. 이미지는 128px 로 축소돼
+                저장됩니다. (&lsquo;저장&rsquo; 을 눌러야 반영)
+              </p>
+            </Field>
+            <Field label="스페이스 이름">
+              <input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="w-full px-2 py-1.5 text-[14px] border border-[#dfe1e6] rounded focus:outline-none focus:border-[#0052cc]"
+              />
+            </Field>
+            <Field label="설명">
+              <textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                rows={3}
+                className="w-full px-2 py-1.5 text-[14px] border border-[#dfe1e6] rounded resize-y focus:outline-none focus:border-[#0052cc]"
+              />
+            </Field>
+            {space.type !== "PERSONAL" && (
+              <Field label="공개 범위">
+                <select
+                  value={visibility}
+                  onChange={(e) =>
+                    setVisibility(e.target.value as SpaceVisibility)
+                  }
+                  className="px-2 py-1.5 text-[14px] border border-[#dfe1e6] rounded focus:outline-none focus:border-[#0052cc]"
+                >
+                  <option value="PUBLIC">
+                    전체 공개 — 모든 로그인 사용자 접근
+                  </option>
+                  <option value="PRIVATE">비공개 — 멤버만 접근</option>
+                </select>
+                <p className="text-[11px] text-[#6b778c] mt-1">
+                  비공개로 바꾸면 멤버가 아닌 사용자에게는 이 공간의 페이지가
+                  보이지 않습니다. (멤버 관리는 &lsquo;권한&rsquo; 탭)
+                </p>
+              </Field>
+            )}
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => saveMutation.mutate()}
+                disabled={saveMutation.isPending || !name.trim()}
+                className="px-4 py-2 rounded bg-[#0052cc] hover:bg-[#0747a6] disabled:bg-[#a5adba] text-white text-[13px] font-medium"
+              >
+                {saveMutation.isPending ? "저장 중..." : "저장"}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  resetDetails();
+                  setEditingDetails(false);
+                }}
+                disabled={saveMutation.isPending}
+                className="px-4 py-2 rounded border border-[#dfe1e6] hover:bg-[#f4f5f7] text-[13px] font-medium text-[#42526e]"
+              >
+                취소
+              </button>
+            </div>
+          </>
         )}
-        <div>
-          <button
-            type="button"
-            onClick={() => saveMutation.mutate()}
-            disabled={saveMutation.isPending || !name.trim()}
-            className="px-4 py-2 rounded bg-[#0052cc] hover:bg-[#0747a6] disabled:bg-[#a5adba] text-white text-[13px] font-medium"
-          >
-            {saveMutation.isPending ? "저장 중..." : "저장"}
-          </button>
-        </div>
 
-        {/* 개인 공간은 삭제 불가(자동 생성/재생성되는 핵심 공간). */}
+        {/* 스페이스 삭제 — 별도 버튼으로 분리. 개인 공간은 삭제 불가. */}
         {space.type !== "PERSONAL" && (
-        <div className="mt-8 border border-[#ffbdad] rounded-md p-4">
-          <h3 className="text-[14px] font-semibold text-[#bf2600] mb-1">
-            스페이스 삭제
-          </h3>
-          <p className="text-[12px] text-[#6b778c] mb-3">
-            이 공간과 모든 페이지가 영구 삭제됩니다. 되돌릴 수 없습니다. 확인을
-            위해 공간 이름{" "}
-            <strong className="text-[#172b4d]">{space.name}</strong> 을(를)
-            입력하세요.
-          </p>
-          <div className="flex items-center gap-2">
-            <input
-              value={confirmName}
-              onChange={(e) => setConfirmName(e.target.value)}
-              placeholder={space.name}
-              className="flex-1 px-2 py-1.5 text-[13px] border border-[#dfe1e6] rounded focus:outline-none focus:border-[#de350b]"
-            />
-            <button
-              type="button"
-              onClick={() => {
-                if (
-                  confirmName === space.name &&
-                  window.confirm("정말 삭제하시겠습니까?")
-                ) {
-                  deleteMutation.mutate();
-                }
-              }}
-              disabled={confirmName !== space.name || deleteMutation.isPending}
-              className="px-3 py-1.5 rounded bg-[#de350b] hover:bg-[#bf2600] disabled:bg-[#f4b6a6] text-white text-[13px] font-medium shrink-0"
-            >
-              삭제
-            </button>
+          <div className="mt-8 border-t border-[#dfe1e6] pt-6">
+            {!showDelete ? (
+              <button
+                type="button"
+                onClick={() => setShowDelete(true)}
+                className="px-3 py-1.5 rounded border border-[#ffbdad] text-[#bf2600] hover:bg-[#ffebe6] text-[13px] font-medium"
+              >
+                스페이스 삭제
+              </button>
+            ) : (
+              <div className="border border-[#ffbdad] rounded-md p-4">
+                <h3 className="text-[14px] font-semibold text-[#bf2600] mb-1">
+                  스페이스 삭제
+                </h3>
+                <p className="text-[12px] text-[#6b778c] mb-3">
+                  이 공간과 모든 페이지가 영구 삭제됩니다. 되돌릴 수 없습니다.
+                  확인을 위해 공간 이름{" "}
+                  <strong className="text-[#172b4d]">{space.name}</strong>{" "}
+                  을(를) 입력하세요.
+                </p>
+                <div className="flex items-center gap-2">
+                  <input
+                    value={confirmName}
+                    onChange={(e) => setConfirmName(e.target.value)}
+                    placeholder={space.name}
+                    className="flex-1 px-2 py-1.5 text-[13px] border border-[#dfe1e6] rounded focus:outline-none focus:border-[#de350b]"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (
+                        confirmName === space.name &&
+                        window.confirm("정말 삭제하시겠습니까?")
+                      ) {
+                        deleteMutation.mutate();
+                      }
+                    }}
+                    disabled={
+                      confirmName !== space.name || deleteMutation.isPending
+                    }
+                    className="px-3 py-1.5 rounded bg-[#de350b] hover:bg-[#bf2600] disabled:bg-[#f4b6a6] text-white text-[13px] font-medium shrink-0"
+                  >
+                    삭제
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowDelete(false);
+                      setConfirmName("");
+                    }}
+                    disabled={deleteMutation.isPending}
+                    className="px-3 py-1.5 rounded border border-[#dfe1e6] hover:bg-[#f4f5f7] text-[13px] font-medium text-[#42526e] shrink-0"
+                  >
+                    취소
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
-        </div>
         )}
       </div>
     </div>

@@ -35,6 +35,8 @@ export default function SpaceMembersPanel({ spaceId }: { spaceId: string }) {
   const qc = useQueryClient();
   const [adding, setAdding] = useState(false);
   const [addRole, setAddRole] = useState<SpaceRole>("EDITOR");
+  // Cycle 75 — 다중 선택 제거. 체크된 멤버 userId 집합.
+  const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const { data: members } = useQuery<Member[]>({
     queryKey: ["space-members", spaceId],
@@ -102,8 +104,55 @@ export default function SpaceMembersPanel({ spaceId }: { spaceId: string }) {
       ),
   });
 
+  // Cycle 75 — 선택된 멤버들을 순차 제거. 마지막 관리자 등 서버가 막는 건
+  //   건너뛰고 실패 건수를 모아 알린다.
+  const removeBulk = useMutation({
+    mutationFn: async (userIds: string[]) => {
+      let failed = 0;
+      for (const userId of userIds) {
+        const r = await fetch(`/api/spaces/${spaceId}/members/${userId}`, {
+          method: "DELETE",
+          credentials: "include",
+        });
+        if (!r.ok) failed += 1;
+      }
+      return failed;
+    },
+    onSuccess: (failed) => {
+      invalidate();
+      setSelected(new Set());
+      if (failed > 0) {
+        window.alert(
+          `${failed}명은 제거하지 못했습니다(마지막 관리자는 제거 불가).`,
+        );
+      }
+    },
+    onError: () => window.alert("멤버 제거에 실패했습니다."),
+  });
+
   const list = members ?? [];
   const existingIds = list.map((m) => m.userId);
+  const selectedCount = list.filter((m) => selected.has(m.userId)).length;
+  const allSelected = list.length > 0 && selectedCount === list.length;
+
+  const toggleOne = (userId: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(userId)) next.delete(userId);
+      else next.add(userId);
+      return next;
+    });
+  };
+  const toggleAll = () => {
+    setSelected(allSelected ? new Set() : new Set(list.map((m) => m.userId)));
+  };
+  const removeSelected = () => {
+    const ids = list.filter((m) => selected.has(m.userId)).map((m) => m.userId);
+    if (ids.length === 0) return;
+    if (window.confirm(`선택한 ${ids.length}명을 멤버에서 제거할까요?`)) {
+      removeBulk.mutate(ids);
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -139,6 +188,17 @@ export default function SpaceMembersPanel({ spaceId }: { spaceId: string }) {
             />
           )}
         </div>
+        {/* Cycle 75 — 선택 일괄 제거. 1명 이상 체크됐을 때만 활성. */}
+        <button
+          type="button"
+          onClick={removeSelected}
+          disabled={selectedCount === 0 || removeBulk.isPending}
+          className="ml-auto px-2 py-1 text-[13px] rounded border border-[#ffbdad] text-[#bf2600] hover:bg-[#ffebe6] disabled:border-[#dfe1e6] disabled:text-[#a5adba] disabled:hover:bg-transparent"
+        >
+          {removeBulk.isPending
+            ? "제거 중..."
+            : `선택 제거${selectedCount > 0 ? ` (${selectedCount})` : ""}`}
+        </button>
       </div>
 
       {list.length === 0 ? (
@@ -150,6 +210,15 @@ export default function SpaceMembersPanel({ spaceId }: { spaceId: string }) {
         <table className="w-full text-[13px]">
           <thead>
             <tr className="text-left text-[11px] text-[#6b778c] border-b border-[#dfe1e6]">
+              <th className="py-2 w-8">
+                <input
+                  type="checkbox"
+                  checked={allSelected}
+                  onChange={toggleAll}
+                  aria-label="전체 선택"
+                  className="align-middle"
+                />
+              </th>
               <th className="py-2 font-semibold">이름</th>
               <th className="font-semibold">부서</th>
               <th className="font-semibold">역할</th>
@@ -160,6 +229,15 @@ export default function SpaceMembersPanel({ spaceId }: { spaceId: string }) {
           <tbody>
             {list.map((m) => (
               <tr key={m.userId} className="border-b border-[#f4f5f7]">
+                <td className="py-2">
+                  <input
+                    type="checkbox"
+                    checked={selected.has(m.userId)}
+                    onChange={() => toggleOne(m.userId)}
+                    aria-label={`${m.user.name} 선택`}
+                    className="align-middle"
+                  />
+                </td>
                 <td className="py-2 text-[#172b4d]">{m.user.name}</td>
                 <td className="text-[#6b778c]">{m.user.department ?? "-"}</td>
                 <td>
