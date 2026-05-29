@@ -1966,3 +1966,28 @@
   5) 비-canManage 의 shortcut API 직접 호출 → 403
 - **남은 일**: '표시 항목 토글(페이지 트리/최근 활동/즐겨찾기)·트리 표시 방식' 은 현재 사이드바에 해당 토글 섹션이 없어 미구현(필요 시 별도). 74-G 스페이스 아이콘 이미지 업로드. **브라우저 시각 확인 미수행**
 - **비고**: 바로가기 목록은 `GET /spaces`(findAll) include 로 제공(별도 fetch 없이 사이드바·설정 패널 공유). 멤버 공통(Space 종속, 사용자별 아님 — 사이드바 구성 저장 위치 옵션 A).
+- **74-F followup (피드백 반영)**: 바로가기가 새 '바로가기' 섹션이 아니라 사이드바의 **기존 '공간 바로가기' 섹션**에 표시되도록 변경(별도 섹션 신설 회피). (`1006741`)
+
+---
+
+## Cycle 74-G — 2026-05-29 — ✅ Done (스페이스 아이콘)
+- **제목**: 스페이스 아이콘(이모지 또는 이미지 data URL) 설정 + 목록/사이드바 표시
+- **카테고리**: BE + FE / 기능 (스페이스 아이콘) — mega-cycle 74 마지막 서브사이클
+- **커밋**: `84b4eb2`(74-G 코드), 본 CYCLES.md
+- **마이그레이션**: `20260529030000_space_icon` (`Space.icon TEXT` nullable). migrate dev 가 EOL 드리프트로 리셋 요구 → 수기 마이그레이션 + `migrate deploy` 비파괴 적용 + `prisma generate`(API 프로세스 종료 후 DLL 잠금 해제)
+- **변경 파일 (BE)**:
+  - `schema.prisma` — `Space.icon String?`
+  - `dto/update-space-settings.dto.ts` — `icon?: string | null` (`@MaxLength(300000)`)
+  - `spaces.service.ts` — `updateSettings` 가 icon 수용. 검증: 빈 값=제거(null), 그 외엔 `data:image/` 접두 **또는** 길이 ≤16(이모지)만 허용, 위반 시 400
+- **변경 파일 (FE)**:
+  - `SpaceSettings.tsx` — 개요 탭 '아이콘' 필드: 미리보기 + 이모지 프리셋 10종 + '이미지 업로드'(canvas 로 128px 리사이즈 → data URL) + '제거'. 저장 시 `icon` 포함
+  - `lib/types.ts` — `SpaceWithPages.icon?: string | null`
+  - `app/(app)/spaces/page.tsx`·`Sidebar.tsx` — 아바타: `data:` 면 `<img>`, 짧은 문자면 이모지 span, 없으면 기존 이니셜 색상 박스 폴백
+- **검증**: web/api `tsc --noEmit` EXIT 0, jest **154 passed (15 suites)**
+- **동작 확인 안내**:
+  1) ⚠️ **`cd apps/api && npx prisma migrate deploy`** + `npx prisma generate` (적용 완료, **dev 서버 재기동 필요** — generate 위해 API 프로세스 종료했음)
+  2) 공간 도구 → 개요 → 아이콘: 이모지 선택/이미지 업로드/제거 → '저장'
+  3) 스페이스 목록(`/spaces`)·스페이스 사이드바 헤더 아바타에 아이콘 반영
+  4) 비정상 icon(긴 비-data 문자열) PATCH → 400
+- **남은 일**: 없음 — **mega-cycle 74 완료**. (브라우저 시각 확인 미수행 — dev 서버 재기동 후 확인 권장)
+- **비고**: 이미지는 첨부(page 종속)와 분리해 Space 행에 data URL 로 직접 저장(서빙 경로 불필요). 클라에서 128px 로 리사이즈해 용량 억제(DTO 상한 300KB).
