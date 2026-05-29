@@ -35,6 +35,9 @@ const ICON_SRC = {
   background: "/icons/background.png",
   image: "/icons/image.png",
   table: "/icons/table.png",
+  // Cycle 81 — 페이지 제한 버튼(잠금/열림).
+  lock: "/icons/lock.png",
+  openPadlock: "/icons/open-padlock.png",
 } as const;
 
 export type IconName = keyof typeof ICON_SRC;

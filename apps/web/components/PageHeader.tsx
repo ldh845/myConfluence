@@ -254,56 +254,30 @@ export default function PageHeader({
           자동으로 동기화됩니다.
         </div>
       )}
-      <nav className="text-[12px] text-[#6b778c] flex flex-wrap items-center gap-1">
-        {space && <span>{space.name}</span>}
-        {ancestors.map((c) => (
-          <span key={c.id} className="flex items-center gap-1">
-            <span>/</span>
-            <button
-              onClick={() => onSelectAncestor(c.id)}
-              className="hover:text-[#0052cc] hover:underline"
-            >
-              {c.title}
-            </button>
-          </span>
-        ))}
-        <span>/</span>
-        <span className="text-[#172b4d] font-medium">{page.title}</span>
-      </nav>
-
-      <div className="mt-3 flex items-start gap-4">
-        {isBodyEditable ? (
-          <input
-            ref={inputRef}
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onBlur={commit}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                commit();
-              } else if (e.key === "Escape") {
-                e.preventDefault();
-                cancel();
-              }
-            }}
-            placeholder="페이지 제목을 입력하세요"
-            className="flex-1 text-[32px] leading-tight font-bold text-[#172b4d] bg-white outline-none border-2 border-[#0052cc] rounded px-2 py-1 ring-2 ring-[#deebff]"
-          />
-        ) : (
-          <div className="flex-1 min-w-0 flex items-center gap-2 py-1 px-0.5">
-            <h1 className="text-[32px] leading-tight font-bold text-[#172b4d] min-w-0">
+      {/* Cycle 81 — 브레드크럼 줄: 좌측 브레드크럼 + 제한 버튼, 우측 정렬 액션. */}
+      <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <nav className="min-w-0 overflow-hidden text-[12px] text-[#6b778c] flex items-center gap-1 whitespace-nowrap">
+            {space && <span className="shrink-0">{space.name}</span>}
+            {ancestors.map((c) => (
+              <span key={c.id} className="flex items-center gap-1 shrink-0">
+                <span>/</span>
+                <button
+                  onClick={() => onSelectAncestor(c.id)}
+                  className="hover:text-[#0052cc] hover:underline"
+                >
+                  {c.title}
+                </button>
+              </span>
+            ))}
+            <span className="shrink-0">/</span>
+            <span className="text-[#172b4d] font-medium truncate">
               {page.title}
-            </h1>
-            {/* Cycle 70 — 제목 옆 작업 상태 배지 + 변경 드롭다운. */}
-            <PageStatusDropdown
-              pageId={page.id}
-              status={page.status}
-              canEdit={canEditStatus}
-            />
-          </div>
-        )}
-        <div className="flex items-center gap-2 pt-3 shrink-0">
+            </span>
+          </nav>
+          <RestrictButton />
+        </div>
+        <div className="flex items-center gap-2 shrink-0 ml-auto">
           <PresenceStrip users={presence} />
           <SaveStatusBadge status={saveStatus} />
           {/* FR-054 (Cycle 26) — 연결 상태 뱃지 (정상은 무소음). */}
@@ -391,6 +365,41 @@ export default function PageHeader({
             onHistoryClick={onHistoryClick}
           />
         </div>
+      </div>
+
+      {/* 제목 줄 — 액션은 위 브레드크럼 줄로 이동(Cycle 81). */}
+      <div className="mt-3 flex items-start gap-4">
+        {isBodyEditable ? (
+          <input
+            ref={inputRef}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={commit}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                commit();
+              } else if (e.key === "Escape") {
+                e.preventDefault();
+                cancel();
+              }
+            }}
+            placeholder="페이지 제목을 입력하세요"
+            className="flex-1 text-[32px] leading-tight font-bold text-[#172b4d] bg-white outline-none border-2 border-[#0052cc] rounded px-2 py-1 ring-2 ring-[#deebff]"
+          />
+        ) : (
+          <div className="flex-1 min-w-0 flex items-center gap-2 py-1 px-0.5">
+            <h1 className="text-[32px] leading-tight font-bold text-[#172b4d] min-w-0">
+              {page.title}
+            </h1>
+            {/* Cycle 70 — 제목 옆 작업 상태 배지 + 변경 드롭다운. */}
+            <PageStatusDropdown
+              pageId={page.id}
+              status={page.status}
+              canEdit={canEditStatus}
+            />
+          </div>
+        )}
       </div>
 
       <div className="mt-2 flex items-center gap-2 text-[12px] text-[#6b778c]">
@@ -499,6 +508,60 @@ function SaveStatusBadge({ status }: { status: SaveStatus }) {
   })();
   if (!text) return null;
   return <span className={`text-[12px] ${cls}`}>{text}</span>;
+}
+
+// Cycle 81 — 페이지 제한 버튼(브레드크럼 옆). 현재는 공간 권한을 따르는 '제한 없음'
+//   상태만 표시(열린 자물쇠). 특정 사용자/그룹 제한은 준비 중(닫힌 자물쇠 아이콘만 안내).
+function RestrictButton() {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  return (
+    <div className="relative shrink-0" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        title="페이지 제한"
+        className="inline-flex items-center gap-1 px-2 py-1 rounded text-[12px] text-[#42526e] hover:bg-[#ebecf0]"
+      >
+        <AppIcon name="openPadlock" size={14} alt="제한" />
+        <span>제한</span>
+      </button>
+      {open && (
+        <div className="absolute left-0 top-full mt-1 z-20 w-64 bg-white border border-[#dfe1e6] rounded-md shadow-lg p-3 text-[12px]">
+          <div className="flex items-center gap-2 text-[#172b4d] font-semibold">
+            <AppIcon name="openPadlock" size={16} alt="" />
+            제한 없음
+          </div>
+          <p className="text-[#6b778c] mt-1">
+            이 페이지는 공간 권한을 따릅니다. 공간 멤버 모두가 볼 수 있습니다.
+          </p>
+          <div className="mt-2 flex items-center gap-2 text-[#a5adba]">
+            <AppIcon name="lock" size={14} alt="" />
+            특정 사용자/그룹 제한 — 준비 중
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 // Cycle 53 — active(채워진 상태) / tooltip(단축키 노출) 옵션 추가.
