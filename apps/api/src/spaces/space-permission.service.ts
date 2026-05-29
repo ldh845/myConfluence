@@ -105,6 +105,16 @@ export class SpacePermissionService {
     return a;
   }
 
+  // pageId 로부터 스페이스를 찾아 편집 권한 assert (휴지통 페이지도 대상 — restore 등).
+  async assertCanEditPage(pageId: string, user: Actor): Promise<void> {
+    const page = await this.prisma.page.findUnique({
+      where: { id: pageId },
+      select: { spaceId: true },
+    });
+    if (!page) throw new NotFoundException({ error: 'page not found' });
+    await this.assertCanEdit(page.spaceId, user);
+  }
+
   async assertCanManage(spaceId: string, user: Actor): Promise<SpaceAccess> {
     const a = await this.loadAccess(spaceId, user?.id ?? null);
     if (!a) throw new NotFoundException({ error: 'space not found' });

@@ -16,6 +16,7 @@ import { PageStatus } from '@prisma/client';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { OptionalJwtAuthGuard } from '../auth/optional-jwt-auth.guard';
 import { PagesService } from './pages.service';
+import { SpacePermissionService } from '../spaces/space-permission.service';
 import { CreatePageDto } from './dto/create-page.dto';
 import { UpdatePageDto } from './dto/update-page.dto';
 import { UpdateDraftDto } from './dto/update-draft.dto';
@@ -29,7 +30,7 @@ function actorFromReq(req: Request): { id: string; name: string } | null {
   return req.user ? { id: req.user.id, name: req.user.name } : null;
 }
 
-// Cycle 70 — 상태 변경 가드(작성자/ADMIN)용. actor 에 role 까지 포함.
+// Cycle 70/74-A — role 까지 포함한 actor. 권한 판정(SpacePermissionService)에 사용.
 function userFromReq(
   req: Request,
 ): { id: string; name: string; role: string } | null {
@@ -52,16 +53,23 @@ function parseStatuses(raw?: string): Array<PageStatus | 'NONE'> | undefined {
 
 @Controller('pages')
 export class PagesController {
-  constructor(private readonly pages: PagesService) {}
+  constructor(
+    private readonly pages: PagesService,
+    // Cycle 74-A — 스페이스 권한 판정(읽기/쓰기 가드).
+    private readonly perms: SpacePermissionService,
+  ) {}
 
   @Get()
-  findAll() {
-    return this.pages.findAll();
+  @UseGuards(OptionalJwtAuthGuard)
+  findAll(@Req() req: Request) {
+    return this.pages.findAll(userFromReq(req));
   }
 
   @Post()
   @UseGuards(JwtAuthGuard)
-  create(@Body() dto: CreatePageDto, @Req() req: Request) {
+  async create(@Body() dto: CreatePageDto, @Req() req: Request) {
+    // Cycle 74-A — 대상 스페이스 편집 권한 확인.
+    await this.perms.assertCanEdit(dto.spaceId, userFromReq(req));
     return this.pages.create(dto, actorFromReq(req));
   }
 
@@ -69,7 +77,9 @@ export class PagesController {
   // FR-091 (Cycle 15-3) — 스페이스/날짜 필터 + 정렬.
   // ⚠️ 모든 정적 path는 @Get(':id') 위에 선언.
   @Get('full-search')
+  @UseGuards(OptionalJwtAuthGuard)
   fullSearch(
+    @Req() req: Request,
     @Query('q') q?: string,
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
@@ -108,14 +118,17 @@ export class PagesController {
           parsedTo && !isNaN(parsedTo.getTime()) ? parsedTo : undefined,
         sort: parsedSort,
       },
+      // Cycle 74-A — 가시성 필터.
+      userFromReq(req),
     );
   }
 
   // FR-034 (Cycle 11-1) — 내부 링크 modal용 제목 검색.
   // ⚠️ @Get(':id')보다 반드시 위에 선언해야 'search'가 cuid로 매칭되지 않는다.
   @Get('search')
-  search(@Query('q') q?: string) {
-    return this.pages.search(q ?? '');
+  @UseGuards(OptionalJwtAuthGuard)
+  search(@Req() req: Request, @Query('q') q?: string) {
+    return this.pages.search(q ?? '', 10, userFromReq(req));
   }
 
   // FR-024 (Cycle 18-1a) — 휴지통 목록. 정적 path → :id 위에.
@@ -143,17 +156,21 @@ export class PagesController {
       offset: offset ? Number(offset) : 0,
       statuses: parseStatuses(status),
       // Cycle 74-A — 가시성 필터.
-      actor: req.user ? { id: req.user.id, role: req.user.role } : null,
+      actor: userFromReq(req),
     });
   }
 
   // Cycle 71 — 칸반 보드: 공간 전체 발행 페이지(상태 그룹핑은 FE). :id 위에 선언.
   // Cycle 73 — ?userId= 콤마 목록(작성자/마지막 편집자 OR 필터).
+  // Cycle 74-A — 해당 스페이스 view 권한 확인(PRIVATE 비멤버 차단).
   @Get('board')
-  board(
+  @UseGuards(OptionalJwtAuthGuard)
+  async board(
+    @Req() req: Request,
     @Query('spaceId') spaceId?: string,
     @Query('userId') userId?: string,
   ) {
+    if (spaceId) await this.perms.assertCanView(spaceId, userFromReq(req));
     const userIds = userId
       ? userId.split(',').map((s) => s.trim()).filter(Boolean)
       : undefined;
@@ -163,23 +180,21 @@ export class PagesController {
   @Get(':id')
   @UseGuards(OptionalJwtAuthGuard)
   findOne(@Param('id') id: string, @Req() req: Request) {
-    return this.pages.findOne(
-      id,
-      req.user ? { id: req.user.id, role: req.user.role } : null,
-    );
+    return this.pages.findOne(id, userFromReq(req));
   }
 
   @Patch(':id')
   @UseGuards(JwtAuthGuard)
-  update(
+  async update(
     @Param('id') id: string,
     @Body() dto: UpdatePageDto,
     @Req() req: Request,
   ) {
+    await this.perms.assertCanEditPage(id, userFromReq(req));
     return this.pages.update(id, dto, actorFromReq(req));
   }
 
-  // Cycle 70 — 페이지 작업 상태 변경. 가드(작성자/ADMIN)는 service 에서.
+  // Cycle 70 — 페이지 작업 상태 변경. 가드(작성자/ADMIN 임시)는 service 에서 — 그대로 유지.
   @Patch(':id/status')
   @UseGuards(JwtAuthGuard)
   changeStatus(
@@ -193,11 +208,12 @@ export class PagesController {
   // 이슈 2 (Cycle 10-1) — 임시 저장. PageVersion 미적재.
   @Patch(':id/draft')
   @UseGuards(JwtAuthGuard)
-  updateDraft(
+  async updateDraft(
     @Param('id') id: string,
     @Body() dto: UpdateDraftDto,
     @Req() req: Request,
   ) {
+    await this.perms.assertCanEditPage(id, userFromReq(req));
     return this.pages.updateDraft(id, dto, actorFromReq(req));
   }
 
@@ -205,11 +221,12 @@ export class PagesController {
   @Post(':id/publish')
   @UseGuards(JwtAuthGuard)
   @HttpCode(200)
-  publish(
+  async publish(
     @Param('id') id: string,
     @Body() dto: PublishPageDto,
     @Req() req: Request,
   ) {
+    await this.perms.assertCanEditPage(id, userFromReq(req));
     return this.pages.publish(id, dto, actorFromReq(req));
   }
 
@@ -217,11 +234,12 @@ export class PagesController {
   // 후 부모만 휴지통. 사용자 의도("딱 페이지만") 가 기본.
   @Delete(':id')
   @UseGuards(JwtAuthGuard)
-  remove(
+  async remove(
     @Param('id') id: string,
     @Query('cascade') cascade: string | undefined,
     @Req() req: Request,
   ) {
+    await this.perms.assertCanEditPage(id, userFromReq(req));
     return this.pages.remove(
       id,
       { cascade: cascade === 'true' },
@@ -233,14 +251,16 @@ export class PagesController {
   @Post(':id/restore')
   @UseGuards(JwtAuthGuard)
   @HttpCode(200)
-  restore(@Param('id') id: string, @Req() req: Request) {
+  async restore(@Param('id') id: string, @Req() req: Request) {
+    await this.perms.assertCanEditPage(id, userFromReq(req));
     return this.pages.restore(id, actorFromReq(req));
   }
 
   // FR-024 (Cycle 18-1a) — 영구 삭제. 휴지통에 있는 페이지만 가능.
   @Delete(':id/permanent')
   @UseGuards(JwtAuthGuard)
-  permanentDelete(@Param('id') id: string, @Req() req: Request) {
+  async permanentDelete(@Param('id') id: string, @Req() req: Request) {
+    await this.perms.assertCanEditPage(id, userFromReq(req));
     return this.pages.permanentDelete(id, actorFromReq(req));
   }
 
@@ -248,11 +268,13 @@ export class PagesController {
   @Post(':id/copy')
   @UseGuards(JwtAuthGuard)
   @HttpCode(200)
-  copy(
+  async copy(
     @Param('id') id: string,
     @Body() dto: CopyPageDto,
     @Req() req: Request,
   ) {
+    // 원본 편집 권한 확인. (대상 스페이스 전환 시 추가 검증은 향후 sub-cycle.)
+    await this.perms.assertCanEditPage(id, userFromReq(req));
     return this.pages.copy(id, dto, actorFromReq(req));
   }
 
@@ -266,17 +288,28 @@ export class PagesController {
     return this.pages.listVersions(id);
   }
 
+  // Cycle 74-A — 기존 무가드였던 버전 복원에 JwtAuthGuard + 편집 권한 가드 추가.
   @Post(':id/versions/:versionId/restore')
-  restoreVersion(
+  @UseGuards(JwtAuthGuard)
+  async restoreVersion(
     @Param('id') id: string,
     @Param('versionId') versionId: string,
+    @Req() req: Request,
     @Body() body: { authorName?: string } = {},
   ) {
+    await this.perms.assertCanEditPage(id, userFromReq(req));
     return this.pages.restoreVersion(id, versionId, body?.authorName ?? null);
   }
 
+  // Cycle 74-A — 기존 무가드였던 다이어그램 생성에 JwtAuthGuard + 편집 권한 가드 추가.
   @Post(':id/diagrams')
-  createDiagram(@Param('id') id: string, @Body() dto: CreateDiagramDto) {
+  @UseGuards(JwtAuthGuard)
+  async createDiagram(
+    @Param('id') id: string,
+    @Body() dto: CreateDiagramDto,
+    @Req() req: Request,
+  ) {
+    await this.perms.assertCanEditPage(id, userFromReq(req));
     return this.pages.createDiagram(id, dto);
   }
 }

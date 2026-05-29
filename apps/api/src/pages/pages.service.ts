@@ -78,11 +78,16 @@ export class PagesService {
     });
   }
 
-  findAll() {
+  findAll(actor: Actor = null) {
     return this.prisma.page.findMany({
       // Cycle 35-followup — 미발행 draft(publishedAt=null)는 어디에서도 노출 X.
       // 휴지통 + draft 모두 제외.
-      where: { deletedAt: null, NOT: { publishedAt: null } },
+      // Cycle 74-A — 가시성 필터(비멤버는 PRIVATE/타인 PERSONAL 제외).
+      where: {
+        deletedAt: null,
+        NOT: { publishedAt: null },
+        ...this.perms.pageVisibilityWhere(actor),
+      },
       // FR-021 (19a) — 사이드바 트리 정렬: position 우선, 동률은 createdAt.
       orderBy: [{ position: 'asc' }, { createdAt: 'asc' }],
     });
@@ -92,7 +97,7 @@ export class PagesService {
   // 인증 도입 후엔 권한 필터를 추가한다. ILIKE로 한국어 포함 대소문자 무관.
   // FR-024 (18-1a) — 휴지통 페이지 제외.
   // Cycle 35-followup — 미발행 draft도 제외 (작성자 본인 외엔 존재 자체가 비공개).
-  search(query: string, limit = 10) {
+  search(query: string, limit = 10, actor: Actor = null) {
     const trimmed = (query ?? '').trim();
     if (!trimmed) return [];
     return this.prisma.page.findMany({
@@ -100,6 +105,8 @@ export class PagesService {
         title: { contains: trimmed, mode: 'insensitive' },
         deletedAt: null,
         NOT: { publishedAt: null },
+        // Cycle 74-A — 가시성 필터.
+        ...this.perms.pageVisibilityWhere(actor),
       },
       take: limit,
       orderBy: { updatedAt: 'desc' },
@@ -214,6 +221,7 @@ export class PagesService {
       dateTo?: Date;
       sort?: 'relevance' | 'newest' | 'updated';
     } = {},
+    actor: Actor = null,
   ) {
     const trimmed = (query ?? '').trim();
     if (!trimmed) return { results: [], total: 0 };
@@ -248,6 +256,9 @@ export class PagesService {
         },
       });
     }
+    // Cycle 74-A — 가시성 필터(비멤버는 PRIVATE/타인 PERSONAL 검색 결과 제외).
+    const visWhere = this.perms.pageVisibilityWhere(actor);
+    if (Object.keys(visWhere).length) filters.push(visWhere);
     const where: Prisma.PageWhereInput = { AND: filters };
 
     const orderBy: Prisma.PageOrderByWithRelationInput =
