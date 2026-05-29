@@ -1867,3 +1867,28 @@
   5) 비-관리자가 URL 직접 진입(`?view=settings`) → "권한 없음" 안내. 백엔드 PATCH/DELETE 는 canManage 로 403
 - **남은 일**: 74-C 권한(멤버 CRUD + 마지막 Admin 보호) / D 감사로그 / E 페이지순서 / F 사이드바구성 / G 아이콘. PRIVATE 전환이 이제 가능해졌으므로 멤버 관리(74-C)가 자연스러운 다음 순서. spaces.service.updateSettings/remove 단위 spec 미추가(canManage 매트릭스는 space-permission spec 이 커버). **브라우저 시각 확인 미수행**
 - **비고**: '공간 도구'는 PERSONAL 공간엔 미노출(개인 공간은 관리 대상 아님). 기존 SITE 공간은 멤버 0명이라 **전역 ADMIN 만** 공간 도구 접근 — 신규 생성 공간은 생성자가 ADMIN 멤버라 접근 가능.
+
+---
+
+## Cycle 74-C — 2026-05-29 — ✅ Done (공간 도구 권한 탭 — 멤버 CRUD)
+- **제목**: 스페이스 멤버 관리(추가/역할변경/제거) + 마지막 Admin 보호. 공간 도구 '권한' 탭.
+- **카테고리**: BE + FE / 권한 (멤버십 관리)
+- **커밋**: `1b36f46`(74-C 코드), 본 CYCLES.md
+- **변경 파일 (BE)**:
+  - `spaces.service.ts` — `listMembers`/`addMember`(upsert·idempotent)/`updateMemberRole`/`removeMember`, 각 `assertCanManage`. **마지막 ADMIN 강등·제거 방지**(`assertNotLastAdmin`: `spaceMember.count(role=ADMIN)<=1` 이면 BadRequest)
+  - `spaces.controller.ts` — `GET/POST /spaces/:id/members`, `PATCH/DELETE /spaces/:id/members/:userId`(JwtAuthGuard)
+  - `dto/add-member.dto.ts`·`update-member-role.dto.ts` 신규. 멤버 검색은 기존 `GET /api/users?q=` 재활용
+  - `spaces.service.spec.ts` 신규 — 마지막 Admin 보호·upsert·NotFound·EDITOR 제거 허용
+- **변경 파일 (FE)**:
+  - `SpaceMembersPanel.tsx` 신규 — 멤버 목록(이름/부서/역할/추가일) + `UserSearchCombobox`(Cycle 73 재활용) 추가 + 역할 변경 select + 제거 확인. 마지막 Admin 400 → 안내 메시지 변환
+  - `SpaceSettings.tsx` — 탭 전환(`activeTab`) + '권한' 탭 활성화(개요는 display 토글로 상태 보존)
+- **검증**: web/api `tsc --noEmit` EXIT 0, jest **147 passed (15 suites)**. **마이그레이션 없음**(74-A 스키마 재사용)
+- **동작 확인 안내**:
+  1) **마이그레이션 불필요**. dev 서버 재기동 필요
+  2) 공간 도구 → '권한' 탭 → 멤버 목록
+  3) '+ 사용자 검색' → 역할 선택 → 추가(이미 멤버면 역할 갱신)
+  4) 역할 드롭다운 변경 / 제거 동작, 즉시 갱신
+  5) **마지막 관리자**를 강등/제거 시도 → 막힘 + 안내(서버 400)
+  6) 비-canManage 사용자의 멤버 API 직접 호출 → 403
+- **남은 일**: 74-D 감사로그 / E 페이지순서 / F 사이드바구성 / G 아이콘. **브라우저 시각 확인 미수행**
+- **비고**: 멤버 추가/역할변경 시 `["spaces"]` 도 invalidate → 본인 역할 변동이 사이드바 '공간 도구' 노출에 즉시 반영. 전역 ADMIN 은 멤버 0명이어도 관리 가능(override) — 멤버 목록이 비어도 정상.
