@@ -48,8 +48,50 @@ export class SpacesService {
     return this.prisma.space.findMany({
       where: this.perms.spaceVisibilityWhere(actor),
       orderBy: { createdAt: 'asc' },
+      include: {
+        ...PAGES_INCLUDE,
+        // Cycle 74-B — 현재 사용자의 멤버 역할(0~1행). FE 가 '공간 도구' 노출/
+        //   canManage 판정에 사용. 비로그인 시 빈 배열.
+        ...(actor
+          ? { members: { where: { userId: actor.id }, select: { role: true } } }
+          : {}),
+      },
+    });
+  }
+
+  // Cycle 74-B — 공간 도구 '개요' 탭: 이름/설명/공개범위 변경. canManage 가드.
+  //   PERSONAL 공간은 visibility 변경 불가(개인 공간 유지).
+  async updateSettings(
+    id: string,
+    dto: {
+      name?: string;
+      description?: string | null;
+      visibility?: 'PUBLIC' | 'PRIVATE';
+    },
+    user: Actor,
+  ) {
+    const access = await this.perms.assertCanManage(id, user);
+    if (dto.visibility && access.space.visibility === 'PERSONAL') {
+      throw new BadRequestException({
+        error: 'cannot change visibility of a personal space',
+      });
+    }
+    const data: Prisma.SpaceUpdateInput = {};
+    if (dto.name !== undefined) data.name = dto.name;
+    if (dto.description !== undefined) data.description = dto.description;
+    if (dto.visibility !== undefined) data.visibility = dto.visibility;
+    return this.prisma.space.update({
+      where: { id },
+      data,
       include: PAGES_INCLUDE,
     });
+  }
+
+  // Cycle 74-B — 스페이스 삭제. canManage 가드. 페이지/멤버 등은 FK Cascade 로 정리.
+  async remove(id: string, user: Actor) {
+    await this.perms.assertCanManage(id, user);
+    await this.prisma.space.delete({ where: { id } });
+    return { ok: true };
   }
 
   // Cycle 33 — 공간 생성 시 홈(메인) 페이지를 자동 생성하고 homePageId로 지정.

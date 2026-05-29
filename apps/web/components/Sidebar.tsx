@@ -24,6 +24,8 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import type { PageNode, SpaceWithPages } from "@/lib/types";
 import { useFavoritesStore } from "@/lib/stores/useFavoritesStore";
+import { useAuth } from "@/lib/auth/useAuth";
+import { canManageSpace } from "@/lib/spacePermission";
 import SpaceStarButton from "@/components/SpaceStarButton";
 import DeletePageDialog from "@/components/DeletePageDialog";
 import AppIcon from "@/components/AppIcon";
@@ -275,6 +277,10 @@ export default function Sidebar({
   // Cycle 51 — "페이지" 메뉴의 active 표시에 view 파라미터를 본다.
   const searchParams = useSearchParams();
   const view = searchParams.get("view");
+  // Cycle 74-B — '공간 도구'는 SITE 공간을 관리할 수 있는 사용자에게만 노출.
+  const { user } = useAuth();
+  const canManage =
+    !!space && space.type !== "PERSONAL" && canManageSpace(space, user);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   // Cycle 56 — 페이지 삭제 다이얼로그(자식 카운트 + cascade 체크박스) 마운트 후보.
   const [deleteReq, setDeleteReq] = useState<
@@ -635,12 +641,20 @@ export default function Sidebar({
         >
           <AppIcon name="trash" size={15} alt="" /> 휴지통
         </button>
-        <button
-          type="button"
-          className="flex items-center gap-2 text-sm text-[#172b4d] hover:text-[#0052cc]"
-        >
-          <span>⚙️</span> 공간 도구
-        </button>
+        {/* Cycle 74-B — Space Admin/전역 ADMIN 에게만 노출. onClick → 설정 뷰. */}
+        {canManage && space && (
+          <button
+            type="button"
+            onClick={() => router.push(`/?spaceId=${space.id}&view=settings`)}
+            className={`flex items-center gap-2 text-sm hover:text-[#0052cc] ${
+              pathname === "/" && view === "settings"
+                ? "text-[#0052cc] font-semibold"
+                : "text-[#172b4d]"
+            }`}
+          >
+            <span>⚙️</span> 공간 도구
+          </button>
+        )}
       </div>
 
       {/* Cycle 56 — 페이지 삭제 다이얼로그 (자식 카운트 + cascade 체크박스) */}

@@ -10,6 +10,7 @@ import PageHeader from "@/components/PageHeader";
 import FullScreenEditor from "@/components/FullScreenEditor";
 import SpacePagesView from "@/components/SpacePagesView";
 import KanbanBoard from "@/components/KanbanBoard";
+import SpaceSettings from "@/components/SpaceSettings";
 import ProfileView from "@/components/ProfileView";
 import MentionEditPopover from "@/components/MentionEditPopover";
 import TableOfContents from "@/components/TableOfContents";
@@ -62,6 +63,8 @@ export default function HomePage() {
   // Cycle 71 — /?spaceId=X&view=board 칸반 보드. view=pages 와 동일하게 페이지
   //   본문 fetch 없이 보드만 렌더(아래 가드들에 함께 포함).
   const isBoardView = view === "board" && !!spaceIdFromUrl;
+  // Cycle 74-B — /?spaceId=X&view=settings 공간 도구. 동일하게 본문 fetch 없이 렌더.
+  const isSettingsView = view === "settings" && !!spaceIdFromUrl;
   // Cycle 58 — /?profileId=X 진입 시 사용자 프로파일 화면 (정보 + 활동 피드).
   //   멘션 토큰 클릭의 라우팅 타겟. 같은 (app)/page.tsx 안에서 view 분기로 처리.
   const profileIdFromUrl = searchParams.get("profileId");
@@ -139,7 +142,7 @@ export default function HomePage() {
   // 최근 방문 기록 같은 부작용도 발화하지 않아 SpacePagesView 만 깔끔히 표시.
   // Cycle 58 — profileId 진입도 동일 (ProfileView 만 표시, 본문 fetch 차단).
   const selectedPageId =
-    isPagesListView || isBoardView || isProfileView
+    isPagesListView || isBoardView || isSettingsView || isProfileView
       ? null
       : (pageIdFromUrl ?? defaultPageId);
 
@@ -153,6 +156,7 @@ export default function HomePage() {
       defaultPageId &&
       !isPagesListView &&
       !isBoardView &&
+      !isSettingsView &&
       !isProfileView
     ) {
       router.replace(`/?pageId=${defaultPageId}`);
@@ -164,6 +168,7 @@ export default function HomePage() {
     router,
     isPagesListView,
     isBoardView,
+    isSettingsView,
     isProfileView,
   ]);
 
@@ -540,6 +545,11 @@ export default function HomePage() {
     return (
       <KanbanBoard spaceId={spaceIdFromUrl} spaceName={activeSpace?.name} />
     );
+  }
+
+  // Cycle 74-B — 공간 도구(설정) 뷰.
+  if (isSettingsView && spaceIdFromUrl) {
+    return <SpaceSettings spaceId={spaceIdFromUrl} />;
   }
 
   // Cycle 58 — profileId 진입 시 ProfileView 만 렌더 (사이드바는 직전 컨텍스트

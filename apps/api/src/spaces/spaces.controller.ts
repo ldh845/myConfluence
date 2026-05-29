@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Patch,
@@ -14,6 +15,16 @@ import { OptionalJwtAuthGuard } from '../auth/optional-jwt-auth.guard';
 import { SpacesService } from './spaces.service';
 import { CreateSpaceDto } from './dto/create-space.dto';
 import { SetHomePageDto } from './dto/set-home-page.dto';
+import { UpdateSpaceSettingsDto } from './dto/update-space-settings.dto';
+
+// Cycle 74-B — 권한 판정용 actor(role 포함).
+function userFromReq(
+  req: Request,
+): { id: string; name: string; role: string } | null {
+  return req.user
+    ? { id: req.user.id, name: req.user.name, role: req.user.role }
+    : null;
+}
 
 @Controller('spaces')
 export class SpacesController {
@@ -53,5 +64,23 @@ export class SpacesController {
   @UseGuards(JwtAuthGuard)
   setHomePage(@Param('id') id: string, @Body() dto: SetHomePageDto) {
     return this.spaces.setHomePage(id, dto.homePageId);
+  }
+
+  // Cycle 74-B — 공간 도구 '개요' 탭: 이름/설명/공개범위 변경. canManage 는 service 에서.
+  @Patch(':id/settings')
+  @UseGuards(JwtAuthGuard)
+  updateSettings(
+    @Param('id') id: string,
+    @Body() dto: UpdateSpaceSettingsDto,
+    @Req() req: Request,
+  ) {
+    return this.spaces.updateSettings(id, dto, userFromReq(req));
+  }
+
+  // Cycle 74-B — 스페이스 삭제. canManage 는 service 에서.
+  @Delete(':id')
+  @UseGuards(JwtAuthGuard)
+  remove(@Param('id') id: string, @Req() req: Request) {
+    return this.spaces.remove(id, userFromReq(req));
   }
 }
