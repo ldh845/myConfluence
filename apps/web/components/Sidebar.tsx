@@ -34,7 +34,7 @@ import AppIcon from "@/components/AppIcon";
 const SPACE_TOOL_ITEMS: { id: string; label: string; enabled: boolean }[] = [
   { id: "overview", label: "개요", enabled: true },
   { id: "permissions", label: "권한", enabled: true },
-  { id: "audit", label: "감사 로그", enabled: false },
+  { id: "audit", label: "감사 로그", enabled: true },
   { id: "order", label: "페이지 순서", enabled: false },
   { id: "sidebar", label: "사이드바 구성", enabled: false },
 ];

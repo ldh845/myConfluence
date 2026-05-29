@@ -6,6 +6,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   Req,
   UseGuards,
 } from '@nestjs/common';
@@ -122,5 +123,34 @@ export class SpacesController {
     @Req() req: Request,
   ) {
     return this.spaces.removeMember(id, userId, userFromReq(req));
+  }
+
+  // Cycle 74-D — 감사 로그(공간 단위 ActivityLog 필터 뷰). canManage 는 service.
+  @Get(':id/audit')
+  @UseGuards(JwtAuthGuard)
+  audit(
+    @Param('id') id: string,
+    @Req() req: Request,
+    @Query('type') type?: string,
+    @Query('actorId') actorId?: string,
+    @Query('dateFrom') dateFrom?: string,
+    @Query('dateTo') dateTo?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    const from = dateFrom ? new Date(dateFrom) : undefined;
+    const to = dateTo ? new Date(dateTo) : undefined;
+    return this.spaces.getAuditLog(
+      id,
+      {
+        type: type || undefined,
+        actorId: actorId || undefined,
+        dateFrom: from && !isNaN(from.getTime()) ? from : undefined,
+        dateTo: to && !isNaN(to.getTime()) ? to : undefined,
+        limit: limit ? Number(limit) : 20,
+        offset: offset ? Number(offset) : 0,
+      },
+      userFromReq(req),
+    );
   }
 }

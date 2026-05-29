@@ -174,6 +174,23 @@ export class SpacesService {
     return { ok: true };
   }
 
+  // Cycle 74-D — 감사 로그 탭. canManage 가드 후 ActivityLog 를 스페이스 단위로 필터.
+  async getAuditLog(
+    id: string,
+    opts: {
+      type?: string;
+      actorId?: string;
+      dateFrom?: Date;
+      dateTo?: Date;
+      limit?: number;
+      offset?: number;
+    },
+    user: Actor,
+  ) {
+    await this.perms.assertCanManage(id, user);
+    return this.activities.list({ spaceId: id, ...opts });
+  }
+
   private async assertNotLastAdmin(spaceId: string) {
     const adminCount = await this.prisma.spaceMember.count({
       where: { spaceId, role: 'ADMIN' },

@@ -59,6 +59,9 @@ export class ActivitiesService {
     // Cycle 58 — 단일 actorId 필터. 사용자 프로파일 페이지의 '이 사용자의
     //   활동' 피드에 사용. actorName 과 동시 사용 시 둘 다 적용(AND).
     actorId?: string;
+    // Cycle 74-D — 감사 로그 탭 날짜 범위 필터(createdAt). 둘 다 옵션.
+    dateFrom?: Date;
+    dateTo?: Date;
     limit?: number;
     offset?: number;
   }) {
@@ -76,6 +79,14 @@ export class ActivitiesService {
         ? { actorName: { contains: opts.actorName, mode: 'insensitive' } }
         : {}),
       ...(opts.actorId ? { actorId: opts.actorId } : {}),
+      ...(opts.dateFrom || opts.dateTo
+        ? {
+            createdAt: {
+              ...(opts.dateFrom ? { gte: opts.dateFrom } : {}),
+              ...(opts.dateTo ? { lte: opts.dateTo } : {}),
+            },
+          }
+        : {}),
     };
     const [items, total] = await Promise.all([
       this.prisma.activityLog.findMany({

@@ -164,6 +164,27 @@ describe('ActivitiesService', () => {
     });
   });
 
+  // Cycle 74-D — 감사 로그 날짜 범위 필터.
+  describe('list — 날짜 필터', () => {
+    it('dateFrom + dateTo → createdAt gte/lte', async () => {
+      const from = new Date('2026-01-01T00:00:00Z');
+      const to = new Date('2026-02-01T00:00:00Z');
+      await service.list({ dateFrom: from, dateTo: to });
+      expect(capturedWhere()).toEqual({ createdAt: { gte: from, lte: to } });
+    });
+
+    it('dateFrom 만 → createdAt gte', async () => {
+      const from = new Date('2026-01-01T00:00:00Z');
+      await service.list({ dateFrom: from });
+      expect(capturedWhere()).toEqual({ createdAt: { gte: from } });
+    });
+
+    it('날짜 미지정 → createdAt 키 없음', async () => {
+      await service.list({});
+      expect(capturedWhere()).not.toHaveProperty('createdAt');
+    });
+  });
+
   describe('log — best-effort', () => {
     it('정상 케이스: create 호출', async () => {
       await service.log({
