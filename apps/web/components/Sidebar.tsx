@@ -28,7 +28,6 @@ import { useAuth } from "@/lib/auth/useAuth";
 import { canManageSpace } from "@/lib/spacePermission";
 import SpaceStarButton from "@/components/SpaceStarButton";
 import SpaceAvatar from "@/components/SpaceAvatar";
-import DeletePageDialog from "@/components/DeletePageDialog";
 import AppIcon from "@/components/AppIcon";
 
 // Cycle 74 — 공간 도구 드롭다운 메뉴 항목(= SpaceSettings 탭). enabled=false 는 준비 중.
@@ -44,8 +43,9 @@ type Props = {
   space: SpaceWithPages | null;
   selectedPageId: string | null;
   onSelect: (pageId: string) => void;
+  // Cycle 77 — 트리 행의 ＋/× 버튼 제거(사용자 요청). 셸(layout)이 여전히
+  //   페이지 생성/삭제 핸들러를 제공하므로 prop 자체는 유지(향후 재사용 여지).
   onCreatePage: (spaceId: string, parentId: string | null) => void;
-  // Cycle 56 — cascade 옵션. true 면 자손 모두 휴지통, false 면 자식 승격 후 단일.
   onDeletePage: (pageId: string, cascade: boolean) => void;
   onOpenTrash?: () => void;
   onReorder?: () => void;
@@ -169,8 +169,6 @@ function SortableTreeRow({
   collapsedHas,
   toggleCollapsed,
   onSelect,
-  onCreatePage,
-  onRequestDelete,
   dropHint,
   isOverTarget,
 }: {
@@ -179,9 +177,6 @@ function SortableTreeRow({
   collapsedHas: boolean;
   toggleCollapsed: (id: string) => void;
   onSelect: (id: string) => void;
-  onCreatePage: (spaceId: string, parentId: string | null) => void;
-  // Cycle 56 — confirm 제거. 부모(Sidebar)가 다이얼로그를 띄움.
-  onRequestDelete: (item: FlatItem) => void;
   dropHint: DropHint;
   isOverTarget: boolean;
 }) {
@@ -245,30 +240,6 @@ function SortableTreeRow({
         )}
       </button>
       <span className="flex-1 truncate">{item.title}</span>
-      <button
-        title="하위 페이지 추가"
-        className="opacity-0 group-hover:opacity-100 text-[#6b778c] hover:text-[#0052cc] px-1"
-        onClick={(e) => {
-          stop(e);
-          onCreatePage(item.spaceId, item.id);
-        }}
-        onPointerDown={stop}
-      >
-        ＋
-      </button>
-      <button
-        title="삭제"
-        className="opacity-0 group-hover:opacity-100 text-[#6b778c] hover:text-[#de350b] px-1"
-        onClick={(e) => {
-          stop(e);
-          // Cycle 56 — window.confirm 제거. 부모가 DeletePageDialog 띄움
-          // (자식 카운트 + cascade 체크박스).
-          onRequestDelete(item);
-        }}
-        onPointerDown={stop}
-      >
-        ×
-      </button>
     </div>
   );
 }
@@ -277,8 +248,6 @@ export default function Sidebar({
   space,
   selectedPageId,
   onSelect,
-  onCreatePage,
-  onDeletePage,
   onOpenTrash,
   onReorder,
 }: Props) {
@@ -315,11 +284,6 @@ export default function Sidebar({
     };
   }, [toolsOpen]);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
-  // Cycle 56 — 페이지 삭제 다이얼로그(자식 카운트 + cascade 체크박스) 마운트 후보.
-  const [deleteReq, setDeleteReq] = useState<
-    | { id: string; title: string; childCount: number }
-    | null
-  >(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [overId, setOverId] = useState<string | null>(null);
   const [dropHint, setDropHint] = useState<DropHint>(null);
@@ -668,19 +632,6 @@ export default function Sidebar({
                 collapsedHas={collapsed.has(v.id)}
                 toggleCollapsed={toggleCollapsed}
                 onSelect={onSelect}
-                onCreatePage={onCreatePage}
-                onRequestDelete={(item) => {
-                  // Cycle 56 — 직접 활성 자식 카운트(휴지통 제외). pages 는
-                  // 이미 활성만(remove 후 invalidate 로 갱신).
-                  const cc = pages.filter(
-                    (p) => p.parentId === item.id,
-                  ).length;
-                  setDeleteReq({
-                    id: item.id,
-                    title: item.title,
-                    childCount: cc,
-                  });
-                }}
                 dropHint={overId === v.id ? dropHint : null}
                 isOverTarget={overId === v.id}
               />
@@ -749,22 +700,6 @@ export default function Sidebar({
           </div>
         )}
       </div>
-
-      {/* Cycle 56 — 페이지 삭제 다이얼로그 (자식 카운트 + cascade 체크박스) */}
-      {deleteReq && (
-        <DeletePageDialog
-          open={true}
-          onOpenChange={(v) => {
-            if (!v) setDeleteReq(null);
-          }}
-          pageTitle={deleteReq.title}
-          childCount={deleteReq.childCount}
-          onConfirm={(cascade) => {
-            onDeletePage(deleteReq.id, cascade);
-            setDeleteReq(null);
-          }}
-        />
-      )}
     </aside>
   );
 }

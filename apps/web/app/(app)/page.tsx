@@ -664,12 +664,9 @@ export default function HomePage() {
                     내용으로만 노출. */}
                 {/* FR-073 (Cycle 25) — 페이지 이모지 반응 바. */}
                 <ReactionBar target="page" targetId={currentPage.id} />
-                {/* Cycle 75 — 좋아요/레이블 줄을 댓글 위로 이동(댓글이 최하단). */}
-                <div className="mt-10 flex items-center justify-between border-t border-[#dfe1e6] pt-4">
-                  <div className="flex items-center gap-2 text-[13px] text-[#6b778c]">
-                    <button className="hover:text-[#0052cc]">👍</button>
-                    <span>처음으로 좋아하는 사람이 돼볼까요?</span>
-                  </div>
+                {/* Cycle 77 — 좋아요 placeholder 제거(이모지 반응 바로 대체).
+                    레이블 줄만 댓글 위에 유지. */}
+                <div className="mt-10 flex items-center justify-end border-t border-[#dfe1e6] pt-4">
                   <div className="text-[13px] text-[#6b778c]">
                     🏷️ 레이블 없음
                   </div>
