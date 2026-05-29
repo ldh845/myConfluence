@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
 import PageCard from "@/components/PageCard";
 import StatusFilterChips, {
@@ -45,11 +44,9 @@ const VALID: ReadonlySet<string> = new Set([
 export default function SpacePagesView({ spaceId, spaceName }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const queryClient = useQueryClient();
   const [pages, setPages] = useState<RecentPage[]>([]);
   const [hasMore, setHasMore] = useState(true);
   const [loading, setLoading] = useState(false);
-  const [creating, setCreating] = useState(false);
 
   // URL ?status= 가 단일 출처. 선택된 토큰 배열 derive.
   const statusParam = searchParams.get("status") ?? "";
@@ -103,55 +100,14 @@ export default function SpacePagesView({ spaceId, spaceName }: Props) {
     router.replace(`/?${params.toString()}`);
   };
 
-  // 빈 상태 + 새 페이지 만들기. TopNav 의 + 만들기와 동일 패턴(draft 시작).
-  const onCreate = async () => {
-    if (creating) return;
-    setCreating(true);
-    try {
-      const r = await fetch("/api/pages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
-          title: "제목 없음",
-          content: "",
-          spaceId,
-          parentId: null,
-          draft: true,
-        }),
-      });
-      if (r.status === 401) {
-        window.alert("로그인이 필요합니다.");
-        return;
-      }
-      if (!r.ok) {
-        window.alert("페이지 생성에 실패했습니다.");
-        return;
-      }
-      const page = (await r.json()) as { id: string };
-      queryClient.invalidateQueries({ queryKey: ["spaces"] });
-      router.push(`/?pageId=${page.id}&edit=1`);
-    } finally {
-      setCreating(false);
-    }
-  };
-
   const filtering = selected.length > 0;
 
   return (
     <div className="max-w-[880px] px-6 pt-6 pb-16">
-      <div className="flex items-center justify-between mb-4">
+      <div className="mb-4">
         <h1 className="text-[22px] font-semibold text-[#172b4d]">
           {spaceName ? `${spaceName} · 페이지` : "페이지"}
         </h1>
-        <button
-          type="button"
-          onClick={onCreate}
-          disabled={creating}
-          className="px-3 py-1.5 rounded bg-[#0052cc] hover:bg-[#0747a6] disabled:bg-[#a5adba] text-white text-[13px] font-medium"
-        >
-          ＋ 새 페이지
-        </button>
       </div>
 
       {/* Cycle 71 — 상태 필터 칩. */}
@@ -163,7 +119,7 @@ export default function SpacePagesView({ spaceId, spaceName }: Props) {
         <div className="mt-4 text-[13px] text-[#6b778c] border border-dashed border-[#dfe1e6] rounded p-6 text-center">
           {filtering
             ? "선택한 상태의 페이지가 없습니다."
-            : "이 공간에 아직 페이지가 없습니다. 위의 ‘＋ 새 페이지’ 버튼으로 첫 페이지를 만들어보세요."}
+            : "이 공간에 아직 페이지가 없습니다."}
         </div>
       )}
 
