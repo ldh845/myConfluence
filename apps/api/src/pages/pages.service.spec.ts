@@ -120,6 +120,49 @@ describe('PagesService — recent', () => {
     expect(arg.skip).toBe(10);
     expect(arg.take).toBe(20);
   });
+
+  // Cycle 71 — 상태 필터.
+  it('statuses=[TODO] → where 에 status in [TODO]', () => {
+    service.recent({ statuses: ['TODO'] });
+    expect(findManyArg().where).toMatchObject({ status: { in: ['TODO'] } });
+  });
+
+  it("statuses=['NONE'] → where 에 status null", () => {
+    service.recent({ statuses: ['NONE'] });
+    expect(findManyArg().where).toMatchObject({ status: null });
+  });
+
+  it("statuses=['NONE','TODO'] → where 에 OR(null + in)", () => {
+    service.recent({ statuses: ['NONE', 'TODO'] });
+    expect(findManyArg().where.OR).toEqual(
+      expect.arrayContaining([{ status: { in: ['TODO'] } }, { status: null }]),
+    );
+  });
+
+  it('statuses 미지정 → status 필터 없음', () => {
+    service.recent({});
+    const where = findManyArg().where;
+    expect(where).not.toHaveProperty('status');
+    expect(where).not.toHaveProperty('OR');
+  });
+
+  // Cycle 71 — 칸반 보드 쿼리.
+  it('boardPages(spaceId) → 발행/비삭제 전체, take 500', () => {
+    void service.boardPages('sp-1');
+    const arg = findManyArg();
+    expect(arg.where).toEqual({
+      spaceId: 'sp-1',
+      deletedAt: null,
+      NOT: { publishedAt: null },
+    });
+    expect(arg.take).toBe(500);
+  });
+
+  it('boardPages("") → 쿼리 없이 빈 배열', async () => {
+    const r = await service.boardPages('');
+    expect(r).toEqual([]);
+    expect(prismaMock.page.findMany).not.toHaveBeenCalled();
+  });
 });
 
 // Cycle 56 — remove(id, opts.cascade) 검증.

@@ -1,17 +1,21 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import PageCard from "@/components/PageCard";
+import StatusFilterChips, {
+  type StatusToken,
+} from "@/components/StatusFilterChips";
 import { relativeTime } from "@/lib/activity-format";
+import type { PageStatus } from "@/lib/types";
 
 // Cycle 51 — 스페이스 사이드바 '페이지' 메뉴 클릭 시 보이는 화면.
 //   /?spaceId=X&view=pages 에서 마운트. 그 공간의 페이지를 updatedAt desc 로
-//   카드 리스트로 표시. 과거의 "첫 페이지로 자동 이동" 동작을 폐기.
-//   draft(publishedAt=null) / 휴지통(deletedAt!=null) 제외는 백엔드 recent() 가 보장.
-//   페이지네이션: '더 보기' 버튼(offset += LIMIT) — 코드베이스 다른 리스트가
-//   서버 페이징 없이 단발이라 가장 단순한 패턴 채택.
+//   카드 리스트로 표시. draft / 휴지통 제외는 백엔드 recent() 가 보장.
+//   페이지네이션: '더 보기' 버튼(offset += LIMIT).
+// Cycle 71 — 상태 필터(다중) 추가. ?status= 쿼리로 URL 동기화(새로고침/뒤로
+//   가기 시 유지), 서버사이드 필터(recent ?status=) — 오프셋 페이징과 일관.
 
 const LIMIT = 10;
 
@@ -20,6 +24,7 @@ type RecentPage = {
   title: string;
   spaceId: string;
   updatedAt: string;
+  status?: PageStatus | null;
   space: { name: string };
   author?: { id: string; name: string } | null;
   lastEditor?: { id: string; name: string } | null;
@@ -30,34 +35,55 @@ type Props = {
   spaceName?: string;
 };
 
+const VALID: ReadonlySet<string> = new Set([
+  "TODO",
+  "IN_PROGRESS",
+  "DONE",
+  "NONE",
+]);
+
 export default function SpacePagesView({ spaceId, spaceName }: Props) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const [pages, setPages] = useState<RecentPage[]>([]);
   const [hasMore, setHasMore] = useState(true);
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
 
+  // URL ?status= 가 단일 출처. 선택된 토큰 배열 derive.
+  const statusParam = searchParams.get("status") ?? "";
+  const selected = useMemo(
+    () =>
+      statusParam
+        .split(",")
+        .map((s) => s.trim())
+        .filter((s) => VALID.has(s)) as StatusToken[],
+    [statusParam],
+  );
+
   const load = useCallback(
     async (offset: number, append: boolean) => {
       setLoading(true);
       try {
+        const statusQs = statusParam
+          ? `&status=${encodeURIComponent(statusParam)}`
+          : "";
         const r = await fetch(
-          `/api/pages/recent?spaceId=${encodeURIComponent(spaceId)}&limit=${LIMIT}&offset=${offset}`,
+          `/api/pages/recent?spaceId=${encodeURIComponent(spaceId)}&limit=${LIMIT}&offset=${offset}${statusQs}`,
           { credentials: "include" },
         );
         const data: RecentPage[] = r.ok ? await r.json() : [];
         setPages((prev) => (append ? [...prev, ...data] : data));
-        // 한 페이지가 LIMIT 만큼 채워지지 않았으면 더 없음.
         setHasMore(data.length === LIMIT);
       } finally {
         setLoading(false);
       }
     },
-    [spaceId],
+    [spaceId, statusParam],
   );
 
-  // spaceId 변경(다른 공간으로 진입) 시 초기화 + 첫 페이지 로드.
+  // spaceId / 필터 변경 시 초기화 + 첫 페이지 로드.
   useEffect(() => {
     setPages([]);
     setHasMore(true);
@@ -66,6 +92,15 @@ export default function SpacePagesView({ spaceId, spaceName }: Props) {
 
   const onLoadMore = () => {
     if (!loading) load(pages.length, true);
+  };
+
+  // 필터 변경 → URL 갱신(spaceId/view 유지). searchParams 변경이 load 를 재구동.
+  const onFilterChange = (next: StatusToken[]) => {
+    const params = new URLSearchParams();
+    params.set("spaceId", spaceId);
+    params.set("view", "pages");
+    if (next.length) params.set("status", next.join(","));
+    router.replace(`/?${params.toString()}`);
   };
 
   // 빈 상태 + 새 페이지 만들기. TopNav 의 + 만들기와 동일 패턴(draft 시작).
@@ -82,7 +117,6 @@ export default function SpacePagesView({ spaceId, spaceName }: Props) {
           content: "",
           spaceId,
           parentId: null,
-          // Cycle 35 — draft 로 시작. 발행 전엔 트리/목록 양쪽에서 숨김.
           draft: true,
         }),
       });
@@ -95,8 +129,6 @@ export default function SpacePagesView({ spaceId, spaceName }: Props) {
         return;
       }
       const page = (await r.json()) as { id: string };
-      // spaces 캐시 갱신(현재는 draft 라 트리에 안 보이지만 ?pageId 진입 시
-      // activeSpace 결정을 위해).
       queryClient.invalidateQueries({ queryKey: ["spaces"] });
       router.push(`/?pageId=${page.id}&edit=1`);
     } finally {
@@ -104,9 +136,11 @@ export default function SpacePagesView({ spaceId, spaceName }: Props) {
     }
   };
 
+  const filtering = selected.length > 0;
+
   return (
     <div className="max-w-[880px] px-6 pt-6 pb-16">
-      <div className="flex items-center justify-between mb-5">
+      <div className="flex items-center justify-between mb-4">
         <h1 className="text-[22px] font-semibold text-[#172b4d]">
           {spaceName ? `${spaceName} · 페이지` : "페이지"}
         </h1>
@@ -120,10 +154,16 @@ export default function SpacePagesView({ spaceId, spaceName }: Props) {
         </button>
       </div>
 
+      {/* Cycle 71 — 상태 필터 칩. */}
+      <div className="mb-4">
+        <StatusFilterChips selected={selected} onChange={onFilterChange} />
+      </div>
+
       {pages.length === 0 && !loading && (
         <div className="mt-4 text-[13px] text-[#6b778c] border border-dashed border-[#dfe1e6] rounded p-6 text-center">
-          이 공간에 아직 페이지가 없습니다. 위의 &lsquo;＋ 새 페이지&rsquo;
-          버튼으로 첫 페이지를 만들어보세요.
+          {filtering
+            ? "선택한 상태의 페이지가 없습니다."
+            : "이 공간에 아직 페이지가 없습니다. 위의 ‘＋ 새 페이지’ 버튼으로 첫 페이지를 만들어보세요."}
         </div>
       )}
 
@@ -140,6 +180,7 @@ export default function SpacePagesView({ spaceId, spaceName }: Props) {
               title={p.title}
               subtitle={subtitle}
               icon="📄"
+              status={p.status}
             />
           );
         })}

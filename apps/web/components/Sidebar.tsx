@@ -515,6 +515,15 @@ export default function Sidebar({
             if (space) router.push(`/?spaceId=${space.id}&view=pages`);
           }}
         />
+        {/* Cycle 71 — 칸반 보드 진입점. */}
+        <NavItem
+          icon={<AppIcon name="chart" size={15} alt="" />}
+          label="보드"
+          active={pathname === "/" && view === "board"}
+          onClick={() => {
+            if (space) router.push(`/?spaceId=${space.id}&view=board`);
+          }}
+        />
         <NavItem
           icon={<AppIcon name="calendar" size={15} alt="" />}
           label="캘린더"

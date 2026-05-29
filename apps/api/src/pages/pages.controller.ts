@@ -12,6 +12,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import type { Request } from 'express';
+import { PageStatus } from '@prisma/client';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PagesService } from './pages.service';
 import { CreatePageDto } from './dto/create-page.dto';
@@ -34,6 +35,18 @@ function userFromReq(
   return req.user
     ? { id: req.user.id, name: req.user.name, role: req.user.role }
     : null;
+}
+
+// Cycle 71 — ?status= 콤마 목록을 유효 토큰만 추려 파싱. 빈 결과면 undefined.
+//   NONE = 상태 없음(null). 그 외는 PageStatus enum 값.
+function parseStatuses(raw?: string): Array<PageStatus | 'NONE'> | undefined {
+  if (!raw) return undefined;
+  const valid = new Set(['TODO', 'IN_PROGRESS', 'DONE', 'NONE']);
+  const list = raw
+    .split(',')
+    .map((s) => s.trim())
+    .filter((s) => valid.has(s)) as Array<PageStatus | 'NONE'>;
+  return list.length ? list : undefined;
 }
 
 @Controller('pages')
@@ -118,12 +131,21 @@ export class PagesController {
     @Query('limit') limit?: string,
     @Query('spaceId') spaceId?: string,
     @Query('offset') offset?: string,
+    // Cycle 71 — 상태 필터(콤마 구분). 값: TODO,IN_PROGRESS,DONE,NONE(상태 없음).
+    @Query('status') status?: string,
   ) {
     return this.pages.recent({
       limit: limit ? Number(limit) : 10,
       spaceId: spaceId || undefined,
       offset: offset ? Number(offset) : 0,
+      statuses: parseStatuses(status),
     });
+  }
+
+  // Cycle 71 — 칸반 보드: 공간 전체 발행 페이지(상태 그룹핑은 FE). :id 위에 선언.
+  @Get('board')
+  board(@Query('spaceId') spaceId?: string) {
+    return this.pages.boardPages(spaceId || '');
   }
 
   @Get(':id')

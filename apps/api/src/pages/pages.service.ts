@@ -107,15 +107,38 @@ export class PagesService {
   // Cycle 51 — 스페이스 단위 필터(spaceId) + offset 페이지네이션 옵션 추가.
   //   /?spaceId=X&view=pages 의 SpacePagesView 가 사용. 둘 다 미지정 시 기존
   //   동작(/home 의 limit-only 호출) 과 완전 동일.
-  recent(opts: { limit?: number; spaceId?: string; offset?: number } = {}) {
+  // Cycle 71 — 상태 필터 where 절. 'NONE'=상태 없음(null). enum 값 + NONE 혼합 시 OR.
+  //   빈 배열/undefined → 필터 없음(undefined 반환).
+  private statusWhere(
+    statuses?: Array<PageStatus | 'NONE'>,
+  ): Prisma.PageWhereInput | undefined {
+    if (!statuses || statuses.length === 0) return undefined;
+    const enums = statuses.filter((s): s is PageStatus => s !== 'NONE');
+    const ors: Prisma.PageWhereInput[] = [];
+    if (enums.length) ors.push({ status: { in: enums } });
+    if (statuses.includes('NONE')) ors.push({ status: null });
+    return ors.length === 1 ? ors[0] : { OR: ors };
+  }
+
+  // Cycle 71 — statuses 필터(상태별 목록 보기) 추가. SpacePagesView 의 ?status= 가 사용.
+  recent(
+    opts: {
+      limit?: number;
+      spaceId?: string;
+      offset?: number;
+      statuses?: Array<PageStatus | 'NONE'>;
+    } = {},
+  ) {
     const safeLimit = Math.min(Math.max(opts.limit ?? 10, 1), 50);
     const safeOffset = Math.max(opts.offset ?? 0, 0);
+    const where: Prisma.PageWhereInput = {
+      deletedAt: null,
+      NOT: { publishedAt: null },
+      ...(opts.spaceId ? { spaceId: opts.spaceId } : {}),
+      ...(this.statusWhere(opts.statuses) ?? {}),
+    };
     return this.prisma.page.findMany({
-      where: {
-        deletedAt: null,
-        NOT: { publishedAt: null },
-        ...(opts.spaceId ? { spaceId: opts.spaceId } : {}),
-      },
+      where,
       orderBy: { updatedAt: 'desc' },
       take: safeLimit,
       skip: safeOffset,
@@ -129,6 +152,24 @@ export class PagesService {
         space: { select: { name: true } },
         author: { select: { id: true, name: true } },
         lastEditor: { select: { id: true, name: true } },
+      },
+    });
+  }
+
+  // Cycle 71 — 칸반 보드용. 공간의 발행·비삭제 페이지 전체(상태별 컬럼 그룹핑은 FE).
+  //   페이지가 많은 공간 대비 상한 500. draft/휴지통은 제외(기존 정책).
+  async boardPages(spaceId: string) {
+    if (!spaceId) return [];
+    return this.prisma.page.findMany({
+      where: { spaceId, deletedAt: null, NOT: { publishedAt: null } },
+      orderBy: { updatedAt: 'desc' },
+      take: 500,
+      select: {
+        id: true,
+        title: true,
+        status: true,
+        updatedAt: true,
+        author: { select: { id: true, name: true } },
       },
     });
   }
