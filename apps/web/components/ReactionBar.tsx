@@ -68,7 +68,7 @@ export default function ReactionBar({ target, targetId }: Props) {
   const groups = data ?? [];
 
   return (
-    <div className="flex flex-wrap items-center gap-1.5 mt-2">
+    <div className="flex flex-wrap items-center gap-1.5">
       {groups.map((g) => {
         const mine = !!user && g.userIds.includes(user.id);
         return (

@@ -75,4 +75,6 @@ export type PageFull = {
   lastEditor?: PageUserSummary | null;
   // Cycle 70 — 작업 상태. findOne 은 scalar 자동 포함이라 항상 옴(상태 없으면 null).
   status?: PageStatus | null;
+  // Cycle 78 — 페이지 레이블(태그). 없으면 빈 배열.
+  labels?: string[];
 };

@@ -22,6 +22,7 @@ import CopyPageDialog from "@/components/CopyPageDialog";
 import SharePageDialog from "@/components/SharePageDialog";
 import DeletePageDialog from "@/components/DeletePageDialog";
 import ReactionBar from "@/components/ReactionBar";
+import LabelBar from "@/components/LabelBar";
 import { useIdentity } from "@/lib/useIdentity";
 import { usePageStore } from "@/lib/stores/usePageStore";
 import { useRecentPagesStore } from "@/lib/stores/useRecentPagesStore";
@@ -662,14 +663,14 @@ export default function HomePage() {
                 {/* Cycle 63 followup — 조회 화면에서 다이어그램/첨부파일 별도
                     섹션 제거(사용자 요청). 첨부·다이어그램은 본문에 삽입된
                     내용으로만 노출. */}
-                {/* FR-073 (Cycle 25) — 페이지 이모지 반응 바. */}
-                <ReactionBar target="page" targetId={currentPage.id} />
-                {/* Cycle 77 — 좋아요 placeholder 제거(이모지 반응 바로 대체).
-                    레이블 줄만 댓글 위에 유지. */}
-                <div className="mt-10 flex items-center justify-end border-t border-[#dfe1e6] pt-4">
-                  <div className="text-[13px] text-[#6b778c]">
-                    🏷️ 레이블 없음
-                  </div>
+                {/* Cycle 78 — 레이블 + 이모지 반응을 같은 줄에(레이블 좌측, 반응 우측). */}
+                <div className="mt-8 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-[#dfe1e6] pt-4">
+                  <LabelBar
+                    pageId={currentPage.id}
+                    labels={currentPage.labels ?? []}
+                    editable={!!user}
+                  />
+                  <ReactionBar target="page" targetId={currentPage.id} />
                 </div>
                 {/* Fix — 댓글은 조회 모드에서도 로그인 사용자면 작성 가능
                     (Confluence 표준). 기존 editable={isBodyEditable} 은 편집

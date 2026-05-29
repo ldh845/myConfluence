@@ -1,6 +1,12 @@
-import { IsInt, IsOptional, IsString } from 'class-validator';
+import { IsArray, IsInt, IsOptional, IsString } from 'class-validator';
 
 export class UpdatePageDto {
+  // Cycle 78 — 페이지 레이블(태그) 전체 교체. 서비스에서 trim/dedupe/상한 정규화.
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  labels?: string[];
+
   @IsOptional()
   @IsString()
   title?: string;

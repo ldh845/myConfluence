@@ -41,13 +41,8 @@ function buildFlat(pages: PageNode[], homeId: string | null): FlatItem[] {
   }
   const out: FlatItem[] = [];
   const walk = (parentId: string | null, depth: number) => {
-    let group = byParent.get(parentId) ?? [];
-    // 루트에서는 홈을 맨 앞으로.
-    if (parentId === null && homeId) {
-      group = [...group].sort((a, b) =>
-        a.id === homeId ? -1 : b.id === homeId ? 1 : 0,
-      );
-    }
+    // Cycle 78 — 홈도 다른 페이지와 동일하게 실제 position 순서로 표시(핀 제거).
+    const group = byParent.get(parentId) ?? [];
     for (const p of group) {
       out.push({
         id: p.id,
@@ -76,8 +71,9 @@ function Row({
   onIndent: () => void;
   onOutdent: () => void;
 }) {
+  // Cycle 78 — 홈도 다른 페이지와 동일하게 드래그/들여쓰기 가능. 🏠/(홈) 표시만 유지.
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
-    useSortable({ id: item.id, disabled: item.isHome });
+    useSortable({ id: item.id });
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
     transition,
@@ -88,53 +84,48 @@ function Row({
       ref={setNodeRef}
       style={style}
       className={`flex items-center gap-2 px-2 py-1.5 mb-1 rounded border text-[13px] ${
-        item.isHome
-          ? "border-[#dfe1e6] bg-[#f4f5f7]"
-          : isDragging
-            ? "border-[#0052cc] bg-white opacity-60"
+        isDragging
+          ? "border-[#0052cc] bg-white opacity-60"
+          : item.isHome
+            ? "border-[#dfe1e6] bg-[#f4f5f7]"
             : "border-[#dfe1e6] bg-white"
       }`}
     >
-      {item.isHome ? (
-        <span className="text-[13px]">🏠</span>
-      ) : (
-        <span
-          {...attributes}
-          {...listeners}
-          className="text-[#a5adba] cursor-grab active:cursor-grabbing select-none"
-          title="드래그하여 순서 변경"
-        >
-          ⠿
-        </span>
-      )}
+      <span
+        {...attributes}
+        {...listeners}
+        className="text-[#a5adba] cursor-grab active:cursor-grabbing select-none"
+        title="드래그하여 순서 변경"
+      >
+        ⠿
+      </span>
       <span className="flex-1 truncate text-[#172b4d]">
+        {item.isHome && <span className="mr-1">🏠</span>}
         {item.title || "(제목 없음)"}
         {item.isHome && (
           <span className="ml-1 text-[11px] text-[#6b778c]">(홈)</span>
         )}
       </span>
-      {!item.isHome && (
-        <span className="flex items-center gap-0.5 shrink-0">
-          <button
-            type="button"
-            onClick={onOutdent}
-            disabled={!canOutdent}
-            title="상위 밖으로 (내어쓰기)"
-            className="px-1.5 py-0.5 text-[12px] rounded text-[#42526e] hover:bg-[#ebecf0] disabled:text-[#c1c7d0] disabled:hover:bg-transparent"
-          >
-            ←
-          </button>
-          <button
-            type="button"
-            onClick={onIndent}
-            disabled={!canIndent}
-            title="바로 위 페이지의 하위로 (들여쓰기)"
-            className="px-1.5 py-0.5 text-[12px] rounded text-[#42526e] hover:bg-[#ebecf0] disabled:text-[#c1c7d0] disabled:hover:bg-transparent"
-          >
-            →
-          </button>
-        </span>
-      )}
+      <span className="flex items-center gap-0.5 shrink-0">
+        <button
+          type="button"
+          onClick={onOutdent}
+          disabled={!canOutdent}
+          title="상위 밖으로 (내어쓰기)"
+          className="px-1.5 py-0.5 text-[12px] rounded text-[#42526e] hover:bg-[#ebecf0] disabled:text-[#c1c7d0] disabled:hover:bg-transparent"
+        >
+          ←
+        </button>
+        <button
+          type="button"
+          onClick={onIndent}
+          disabled={!canIndent}
+          title="바로 위 페이지의 하위로 (들여쓰기)"
+          className="px-1.5 py-0.5 text-[12px] rounded text-[#42526e] hover:bg-[#ebecf0] disabled:text-[#c1c7d0] disabled:hover:bg-transparent"
+        >
+          →
+        </button>
+      </span>
     </div>
   );
 }
@@ -154,7 +145,7 @@ export default function SpacePageOrderPanel({ spaceId }: { spaceId: string }) {
     () => buildFlat(space?.pages ?? [], homeId),
     [space, homeId],
   );
-  const sortableIds = items.filter((i) => !i.isHome).map((i) => i.id);
+  const sortableIds = items.map((i) => i.id);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -198,7 +189,7 @@ export default function SpacePageOrderPanel({ spaceId }: { spaceId: string }) {
     if (!over || active.id === over.id) return;
     const a = items.find((i) => i.id === active.id);
     const b = items.find((i) => i.id === over.id);
-    if (!a || !b || a.isHome) return;
+    if (!a || !b) return;
     if (a.parentId !== b.parentId) {
       window.alert(
         "순서 변경은 같은 상위 안에서만 됩니다. 계층 이동은 → / ← 버튼을 쓰세요.",

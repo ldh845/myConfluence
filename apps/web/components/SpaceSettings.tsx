@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth/useAuth";
 import { canManageSpace } from "@/lib/spacePermission";
+import SpaceAvatar from "@/components/SpaceAvatar";
 import SpaceMembersPanel from "@/components/SpaceMembersPanel";
 import SpaceAuditPanel from "@/components/SpaceAuditPanel";
 import SpacePageOrderPanel from "@/components/SpacePageOrderPanel";
@@ -230,22 +231,7 @@ export default function SpaceSettings({ spaceId }: { spaceId: string }) {
           /* ── 보기 모드 ── 세부 정보를 읽기 전용으로 표시 + 편집 진입 버튼. */
           <>
             <div className="flex items-start gap-4">
-              <div className="w-12 h-12 shrink-0 rounded border border-[#dfe1e6] bg-[#f4f5f7] flex items-center justify-center overflow-hidden text-[24px]">
-                {icon ? (
-                  icon.startsWith("data:") ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={icon}
-                      alt=""
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <span>{icon}</span>
-                  )
-                ) : (
-                  <span className="text-[#a5adba]">📄</span>
-                )}
-              </div>
+              <SpaceAvatar name={space.name} icon={icon} size={48} />
               <div className="flex-1 min-w-0 space-y-3">
                 <div>
                   <div className="text-[12px] font-semibold text-[#42526e]">
@@ -290,22 +276,7 @@ export default function SpaceSettings({ spaceId }: { spaceId: string }) {
           <>
             <Field label="아이콘">
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 shrink-0 rounded border border-[#dfe1e6] bg-[#f4f5f7] flex items-center justify-center overflow-hidden text-[24px]">
-                  {icon ? (
-                    icon.startsWith("data:") ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={icon}
-                        alt=""
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <span>{icon}</span>
-                    )
-                  ) : (
-                    <span className="text-[#a5adba]">📄</span>
-                  )}
-                </div>
+                <SpaceAvatar name={space.name} icon={icon} size={48} />
                 <div className="flex flex-wrap items-center gap-1">
                   {ICON_PRESETS.map((e) => (
                     <button

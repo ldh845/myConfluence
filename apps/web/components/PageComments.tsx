@@ -301,7 +301,11 @@ export default function PageComments({ pageId, editable }: Props) {
         )}
 
         {/* FR-073 (Cycle 25) — 댓글 이모지 반응. */}
-        {!isEditing && <ReactionBar target="comment" targetId={node.id} />}
+        {!isEditing && (
+          <div className="mt-2">
+            <ReactionBar target="comment" targetId={node.id} />
+          </div>
+        )}
 
         {isReplying && (
           <div className="mt-2">

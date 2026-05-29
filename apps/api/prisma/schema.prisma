@@ -201,6 +201,8 @@ model Page {
   // 사이드바 페이지 트리에서 숨긴다. 첫 publish 시 now()로 채우고 이후엔 그대로.
   // 기존 페이지는 마이그레이션에서 createdAt으로 백필.
   publishedAt  DateTime?
+  // Cycle 78 — 페이지 레이블(태그). 페이지 조회 화면에서 추가/제거. 단순 문자열 배열.
+  labels       String[]      @default([])
   // Cycle 53 — '나중을 위해 저장' / '지켜보기' back-relation. 페이지 삭제 시 Cascade.
   savedBy      SavedPage[]   @relation("PageSaved")
   watchers     WatchList[]   @relation("PageWatching")

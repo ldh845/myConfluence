@@ -41,6 +41,25 @@ const EMPTY_EXCALIDRAW = JSON.stringify({
   files: {},
 });
 
+// Cycle 78 — 레이블 정규화: trim → 빈값 제거 → 라벨당 50자 → 중복(대소문자 무시) 제거
+//   → 최대 20개. 클라이언트 입력을 신뢰하지 않고 서버에서 항상 정리.
+const MAX_LABELS = 20;
+const MAX_LABEL_LEN = 50;
+function normalizeLabels(raw: string[]): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const item of raw) {
+    const label = (item ?? '').trim().slice(0, MAX_LABEL_LEN);
+    if (!label) continue;
+    const key = label.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(label);
+    if (out.length >= MAX_LABELS) break;
+  }
+  return out;
+}
+
 @Injectable()
 export class PagesService {
   // 모듈 로드 시 한 번만 평가. dev 시 .env 변경 후 재시작 필요.
@@ -523,6 +542,10 @@ export class PagesService {
           ...(dto.content !== undefined ? { content: dto.content } : {}),
           ...(dto.parentId !== undefined ? { parentId: dto.parentId } : {}),
           ...(dto.spaceId !== undefined ? { spaceId: dto.spaceId } : {}),
+          // Cycle 78 — 레이블: trim/빈값 제거/중복 제거/길이·개수 상한 정규화.
+          ...(dto.labels !== undefined
+            ? { labels: normalizeLabels(dto.labels) }
+            : {}),
           ...editorChange,
         },
       });

@@ -13,22 +13,19 @@ import type { SpaceWithPages } from "@/lib/types";
 // 좌측 sub-nav (모든/사이트/개인/내/보관) + 우측 검색 + 공간 만들기 + 테이블.
 // 사이드바 없는 전체 폭 페이지 ((app)/layout.tsx 가 /spaces 를 분기 처리).
 
-type TabId = "all" | "site" | "personal" | "my" | "archived";
+type TabId = "all" | "site" | "my";
 
 const TAB_LABELS: Record<TabId, string> = {
   all: "모든 공간",
   site: "사이트 공간",
-  personal: "개인 공간",
   my: "내 공간",
-  archived: "보관된 공간",
 };
 
+// Cycle 78 — 비활성(준비 중)이던 '개인 공간'/'보관된 공간' 탭 제거(사용자 요청).
 const TABS: { id: TabId; disabled?: boolean }[] = [
   { id: "all" },
   { id: "site" },
-  { id: "personal", disabled: true },
   { id: "my" },
-  { id: "archived", disabled: true },
 ];
 
 function parseTab(raw: string | null): TabId {
@@ -74,11 +71,7 @@ function TabLink({
 
 function EmptyState({ tab, query }: { tab: TabId; query: string }) {
   let msg: string;
-  if (tab === "personal") {
-    msg = "개인 공간은 추후 지원 예정입니다.";
-  } else if (tab === "archived") {
-    msg = "보관된 공간은 추후 지원 예정입니다.";
-  } else if (tab === "my") {
+  if (tab === "my") {
     msg = "아직 별표한 공간이 없습니다. 각 공간의 ☆을 클릭해 추가하세요.";
   } else if (query.trim()) {
     msg = `'${query.trim()}'에 일치하는 공간이 없습니다.`;
@@ -122,9 +115,7 @@ function SpacesDirectory() {
   const filteredSpaces = useMemo(() => {
     const all = spaces ?? [];
     let base: SpaceWithPages[];
-    if (tab === "personal" || tab === "archived") {
-      base = [];
-    } else if (tab === "my") {
+    if (tab === "my") {
       // SystemSidebar "내 공간"과 동일 — 별표한 공간 (useStarredSpacesStore).
       base = all.filter((s) => starredIds.includes(s.id));
     } else {
