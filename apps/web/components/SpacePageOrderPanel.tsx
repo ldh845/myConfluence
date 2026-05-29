@@ -18,20 +18,22 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import type { PageNode, SpaceWithPages } from "@/lib/types";
 
-// Cycle 74-E — 공간 도구 '페이지 순서' 탭. 스페이스 발행 페이지 트리를 들여쓰기된
-//   flat 리스트로 보여주고, 같은 상위 페이지 안에서 드래그로 순서 변경(즉시 PATCH).
-//   계층(재부모) 변경은 사이드바 트리 DnD 를 그대로 사용(여기선 형제 순서만).
+// Cycle 74-E (개정) — 공간 도구 '페이지 순서' 탭.
+//   홈(메인 페이지)을 최상단에 고정하고, 나머지 발행 페이지를 실제 parentId 트리로
+//   표시. 드래그=같은 상위 안 순서 변경, → 버튼=바로 위 형제의 하위로(들여쓰기),
+//   ← 버튼=상위 밖으로(내어쓰기). 모두 즉시 PATCH /pages/:id 후 ["spaces"] 갱신.
 type FlatItem = {
   id: string;
   title: string;
   depth: number;
   parentId: string | null;
+  isHome: boolean;
 };
 
-function flatten(pages: PageNode[]): FlatItem[] {
+function buildFlat(pages: PageNode[], homeId: string | null): FlatItem[] {
+  const pub = pages.filter((p) => p.publishedAt); // 미발행 draft 제외
   const byParent = new Map<string | null, PageNode[]>();
-  for (const p of pages) {
-    if (!p.publishedAt) continue; // 미발행 draft 제외(사이드바와 동일 정책)
+  for (const p of pub) {
     const key = p.parentId ?? null;
     const arr = byParent.get(key) ?? [];
     arr.push(p);
@@ -39,8 +41,21 @@ function flatten(pages: PageNode[]): FlatItem[] {
   }
   const out: FlatItem[] = [];
   const walk = (parentId: string | null, depth: number) => {
-    for (const p of byParent.get(parentId) ?? []) {
-      out.push({ id: p.id, title: p.title, depth, parentId: p.parentId ?? null });
+    let group = byParent.get(parentId) ?? [];
+    // 루트에서는 홈을 맨 앞으로.
+    if (parentId === null && homeId) {
+      group = [...group].sort((a, b) =>
+        a.id === homeId ? -1 : b.id === homeId ? 1 : 0,
+      );
+    }
+    for (const p of group) {
+      out.push({
+        id: p.id,
+        title: p.title,
+        depth,
+        parentId: p.parentId ?? null,
+        isHome: p.id === homeId,
+      });
       walk(p.id, depth + 1);
     }
   };
@@ -48,9 +63,21 @@ function flatten(pages: PageNode[]): FlatItem[] {
   return out;
 }
 
-function Row({ item }: { item: FlatItem }) {
+function Row({
+  item,
+  canIndent,
+  canOutdent,
+  onIndent,
+  onOutdent,
+}: {
+  item: FlatItem;
+  canIndent: boolean;
+  canOutdent: boolean;
+  onIndent: () => void;
+  onOutdent: () => void;
+}) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
-    useSortable({ id: item.id });
+    useSortable({ id: item.id, disabled: item.isHome });
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
     transition,
@@ -60,16 +87,54 @@ function Row({ item }: { item: FlatItem }) {
     <div
       ref={setNodeRef}
       style={style}
-      {...attributes}
-      {...listeners}
-      className={`flex items-center gap-2 px-2 py-1.5 mb-1 rounded border border-[#dfe1e6] bg-white text-[13px] cursor-grab active:cursor-grabbing ${
-        isDragging ? "opacity-50" : "hover:border-[#0052cc]"
+      className={`flex items-center gap-2 px-2 py-1.5 mb-1 rounded border text-[13px] ${
+        item.isHome
+          ? "border-[#dfe1e6] bg-[#f4f5f7]"
+          : isDragging
+            ? "border-[#0052cc] bg-white opacity-60"
+            : "border-[#dfe1e6] bg-white"
       }`}
     >
-      <span className="text-[#a5adba] select-none">⠿</span>
-      <span className="truncate text-[#172b4d]">
+      {item.isHome ? (
+        <span className="text-[13px]">🏠</span>
+      ) : (
+        <span
+          {...attributes}
+          {...listeners}
+          className="text-[#a5adba] cursor-grab active:cursor-grabbing select-none"
+          title="드래그하여 순서 변경"
+        >
+          ⠿
+        </span>
+      )}
+      <span className="flex-1 truncate text-[#172b4d]">
         {item.title || "(제목 없음)"}
+        {item.isHome && (
+          <span className="ml-1 text-[11px] text-[#6b778c]">(홈)</span>
+        )}
       </span>
+      {!item.isHome && (
+        <span className="flex items-center gap-0.5 shrink-0">
+          <button
+            type="button"
+            onClick={onOutdent}
+            disabled={!canOutdent}
+            title="상위 밖으로 (내어쓰기)"
+            className="px-1.5 py-0.5 text-[12px] rounded text-[#42526e] hover:bg-[#ebecf0] disabled:text-[#c1c7d0] disabled:hover:bg-transparent"
+          >
+            ←
+          </button>
+          <button
+            type="button"
+            onClick={onIndent}
+            disabled={!canIndent}
+            title="바로 위 페이지의 하위로 (들여쓰기)"
+            className="px-1.5 py-0.5 text-[12px] rounded text-[#42526e] hover:bg-[#ebecf0] disabled:text-[#c1c7d0] disabled:hover:bg-transparent"
+          >
+            →
+          </button>
+        </span>
+      )}
     </div>
   );
 }
@@ -84,41 +149,66 @@ export default function SpacePageOrderPanel({ spaceId }: { spaceId: string }) {
     },
   });
   const space = (spaces ?? []).find((s) => s.id === spaceId) ?? null;
-  const items = useMemo(() => flatten(space?.pages ?? []), [space]);
-  const ids = items.map((i) => i.id);
+  const homeId = space?.homePageId ?? null;
+  const items = useMemo(
+    () => buildFlat(space?.pages ?? [], homeId),
+    [space, homeId],
+  );
+  const sortableIds = items.filter((i) => !i.isHome).map((i) => i.id);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
   );
 
-  const reorder = useMutation({
-    mutationFn: async (v: { id: string; position: number }) => {
+  const patch = useMutation({
+    mutationFn: async (v: {
+      id: string;
+      body: { parentId?: string | null; position?: number };
+    }) => {
       const r = await fetch(`/api/pages/${v.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ position: v.position }),
+        body: JSON.stringify(v.body),
       });
-      if (!r.ok) throw new Error("reorder failed");
+      if (!r.ok) throw new Error("update failed");
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["spaces"] }),
-    onError: () => window.alert("순서 변경에 실패했습니다."),
+    onError: () => window.alert("페이지 순서/계층 변경에 실패했습니다."),
   });
+
+  const siblingsOf = (parentId: string | null) =>
+    items.filter((i) => i.parentId === parentId);
+
+  const onIndent = (item: FlatItem) => {
+    const sibs = siblingsOf(item.parentId);
+    const idx = sibs.findIndex((s) => s.id === item.id);
+    if (idx <= 0) return; // 첫 형제는 들여쓰기 불가
+    patch.mutate({ id: item.id, body: { parentId: sibs[idx - 1].id } });
+  };
+
+  const onOutdent = (item: FlatItem) => {
+    if (item.parentId === null) return; // 이미 루트
+    const parent = items.find((i) => i.id === item.parentId);
+    patch.mutate({ id: item.id, body: { parentId: parent?.parentId ?? null } });
+  };
 
   const onDragEnd = (e: DragEndEvent) => {
     const { active, over } = e;
     if (!over || active.id === over.id) return;
     const a = items.find((i) => i.id === active.id);
     const b = items.find((i) => i.id === over.id);
-    if (!a || !b) return;
+    if (!a || !b || a.isHome) return;
     if (a.parentId !== b.parentId) {
-      window.alert("같은 상위 페이지 안에서만 순서를 바꿀 수 있습니다.");
+      window.alert(
+        "순서 변경은 같은 상위 안에서만 됩니다. 계층 이동은 → / ← 버튼을 쓰세요.",
+      );
       return;
     }
-    const siblings = items.filter((i) => i.parentId === a.parentId);
-    const newIndex = siblings.findIndex((s) => s.id === b.id);
+    const sibs = siblingsOf(a.parentId);
+    const newIndex = sibs.findIndex((s) => s.id === b.id);
     if (newIndex < 0) return;
-    reorder.mutate({ id: a.id, position: newIndex });
+    patch.mutate({ id: a.id, body: { position: newIndex } });
   };
 
   if (items.length === 0) {
@@ -132,19 +222,33 @@ export default function SpacePageOrderPanel({ spaceId }: { spaceId: string }) {
   return (
     <div className="space-y-2">
       <p className="text-[12px] text-[#6b778c]">
-        드래그하여 같은 상위 페이지 안에서 순서를 바꿀 수 있습니다. 변경은 즉시
-        저장됩니다. (계층 이동은 사이드바 트리에서)
+        ⠿ 드래그로 같은 상위 안 순서 변경 · → 바로 위 페이지의 하위로 ·
+        ← 상위 밖으로. 변경은 즉시 저장됩니다.
       </p>
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
         onDragEnd={onDragEnd}
       >
-        <SortableContext items={ids} strategy={verticalListSortingStrategy}>
+        <SortableContext
+          items={sortableIds}
+          strategy={verticalListSortingStrategy}
+        >
           <div>
-            {items.map((it) => (
-              <Row key={it.id} item={it} />
-            ))}
+            {items.map((it) => {
+              const sibs = siblingsOf(it.parentId);
+              const idx = sibs.findIndex((s) => s.id === it.id);
+              return (
+                <Row
+                  key={it.id}
+                  item={it}
+                  canIndent={idx > 0}
+                  canOutdent={it.parentId !== null}
+                  onIndent={() => onIndent(it)}
+                  onOutdent={() => onOutdent(it)}
+                />
+              );
+            })}
           </div>
         </SortableContext>
       </DndContext>
