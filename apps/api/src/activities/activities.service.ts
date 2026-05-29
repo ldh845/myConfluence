@@ -8,6 +8,7 @@ import { PrismaService } from '../prisma/prisma.service';
 export type ActivityType =
   | 'page.created'
   | 'page.published'
+  | 'page.updated'
   | 'page.moved'
   | 'page.copied'
   | 'page.soft_deleted'

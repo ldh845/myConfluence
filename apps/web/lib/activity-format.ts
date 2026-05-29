@@ -28,6 +28,7 @@ export const ACTIVITY_TYPES: Array<{ value: string; label: string }> = [
   { value: "", label: "전체" },
   { value: "page.created", label: "페이지 생성" },
   { value: "page.published", label: "페이지 발행" },
+  { value: "page.updated", label: "페이지 수정" },
   { value: "page.moved", label: "페이지 이동" },
   { value: "page.copied", label: "페이지 복사" },
   { value: "page.soft_deleted", label: "휴지통 이동" },
@@ -98,6 +99,15 @@ export function formatActivity(item: ActivityItem): FormattedActivity {
       return {
         icon: "🚀",
         text: `'${pageTitle}' 페이지가 발행되었습니다`,
+        pageId: item.pageId,
+        pageTitle,
+        spaceName,
+        actor,
+      };
+    case "page.updated":
+      return {
+        icon: "✏️",
+        text: `${actor}님이 '${pageTitle}' 페이지를 수정했습니다`,
         pageId: item.pageId,
         pageTitle,
         spaceName,

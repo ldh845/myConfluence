@@ -660,9 +660,12 @@ export class PagesService {
     const userId = actor?.id ?? null;
     // 클라이언트가 명시적으로 content를 보냈는지 (빈 문자열 "" 도 명시로 인정).
     const explicitContent = dto.content !== undefined;
+    // Cycle 74-D followup — 첫 발행(발행) vs 재발행(수정) 구분용. 업데이트 전 상태.
+    let wasPublished = false;
     const published = await this.prisma.$transaction(async (tx) => {
       const page = await tx.page.findUnique({ where: { id } });
       if (!page) throw new NotFoundException({ error: 'page not found' });
+      wasPublished = !!page.publishedAt;
       // 발행할 본문 결정. explicit이면 그 값, 아니면 서버 draftContent.
       // 둘 다 없으면 발행할 변경 없음(400). 빈 문자열 explicit은 허용.
       const nextContent = explicitContent
@@ -702,7 +705,8 @@ export class PagesService {
       return published;
     });
     await this.activities.log({
-      type: 'page.published',
+      // Cycle 74-D followup — 이미 발행됐던 페이지의 재발행은 '수정'으로 구분.
+      type: wasPublished ? 'page.updated' : 'page.published',
       spaceId: published.spaceId,
       pageId: published.id,
       actorId: actor?.id ?? null,

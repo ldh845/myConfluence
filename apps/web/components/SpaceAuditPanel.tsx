@@ -5,14 +5,25 @@ import Link from "next/link";
 import {
   ACTIVITY_TYPES,
   formatActivity,
-  relativeTime,
   type ActivityItem,
 } from "@/lib/activity-format";
 import UserSearchCombobox from "./UserSearchCombobox";
 
 // Cycle 74-D — 공간 도구 '감사 로그' 탭. ActivityLog 를 스페이스 단위로 필터.
 //   필터: 이벤트 타입 / 기간(from~to) / 사용자(actorId). 페이지네이션 '더 보기'.
+//   표시: 날짜 · 작성자 · 분류 · 요약 (4열).
 const LIMIT = 20;
+
+// type → 한국어 분류 라벨 (ACTIVITY_TYPES 의 '전체' 항목 제외).
+const TYPE_LABEL: Record<string, string> = Object.fromEntries(
+  ACTIVITY_TYPES.filter((t) => t.value).map((t) => [t.value, t.label]),
+);
+
+function formatDateTime(iso: string): string {
+  const d = new Date(iso);
+  const p = (n: number) => n.toString().padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
 
 export default function SpaceAuditPanel({ spaceId }: { spaceId: string }) {
   const [items, setItems] = useState<ActivityItem[]>([]);
@@ -136,43 +147,56 @@ export default function SpaceAuditPanel({ spaceId }: { spaceId: string }) {
         </div>
       </div>
 
-      {/* 목록 */}
+      {/* 목록 — 날짜 · 작성자 · 분류 · 요약 */}
       {items.length === 0 && !loading ? (
         <div className="text-[13px] text-[#6b778c] border border-dashed border-[#dfe1e6] rounded p-4">
           조건에 맞는 활동이 없습니다.
         </div>
       ) : (
-        <ul className="border border-[#dfe1e6] rounded-md divide-y divide-[#dfe1e6] bg-white">
-          {items.map((it) => {
-            const fmt = formatActivity(it);
-            const row = (
-              <div className="flex items-start gap-2 px-3 py-2.5 hover:bg-[#f4f5f7]">
-                <span className="text-[14px] leading-none mt-0.5">
-                  {fmt.icon}
-                </span>
-                <div className="flex-1 min-w-0">
-                  <div className="text-[13px] text-[#172b4d] truncate">
-                    {fmt.text}
-                  </div>
-                  <div className="text-[11px] text-[#6b778c]">
-                    {fmt.actor} · {relativeTime(it.createdAt)}
-                  </div>
-                </div>
-              </div>
-            );
-            return (
-              <li key={it.id}>
-                {fmt.pageId ? (
-                  <Link href={`/?pageId=${fmt.pageId}`} className="block">
-                    {row}
-                  </Link>
-                ) : (
-                  row
-                )}
-              </li>
-            );
-          })}
-        </ul>
+        <table className="w-full text-[13px] border border-[#dfe1e6] rounded-md overflow-hidden">
+          <thead>
+            <tr className="text-left text-[11px] text-[#6b778c] bg-[#f4f5f7] border-b border-[#dfe1e6]">
+              <th className="px-3 py-2 font-semibold whitespace-nowrap">날짜</th>
+              <th className="px-3 py-2 font-semibold whitespace-nowrap">
+                작성자
+              </th>
+              <th className="px-3 py-2 font-semibold whitespace-nowrap">분류</th>
+              <th className="px-3 py-2 font-semibold">요약</th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((it) => {
+              const fmt = formatActivity(it);
+              return (
+                <tr key={it.id} className="border-b border-[#f4f5f7]">
+                  <td className="px-3 py-2 text-[#6b778c] whitespace-nowrap tabular-nums align-top">
+                    {formatDateTime(it.createdAt)}
+                  </td>
+                  <td className="px-3 py-2 text-[#172b4d] whitespace-nowrap align-top">
+                    {fmt.actor}
+                  </td>
+                  <td className="px-3 py-2 whitespace-nowrap align-top">
+                    <span className="inline-block px-1.5 py-0.5 rounded bg-[#dfe1e6] text-[#42526e] text-[11px]">
+                      {TYPE_LABEL[it.type] ?? it.type}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2 text-[#172b4d] align-top">
+                    {fmt.pageId ? (
+                      <Link
+                        href={`/?pageId=${fmt.pageId}`}
+                        className="text-[#0052cc] hover:underline"
+                      >
+                        {fmt.text}
+                      </Link>
+                    ) : (
+                      fmt.text
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       )}
 
       {items.length < total && (
