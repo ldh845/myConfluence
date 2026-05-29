@@ -321,9 +321,20 @@ export class SpacesService {
     dto: CreateSpaceDto,
     actor?: { id: string; name: string } | null,
   ) {
+    // Cycle 80 — 스페이스 키 정규화(대문자) + 중복 검사. 빈 값이면 null.
+    const key = dto.key?.trim().toUpperCase() || null;
+    if (key) {
+      const dup = await this.prisma.space.findFirst({
+        where: { key },
+        select: { id: true },
+      });
+      if (dup) {
+        throw new BadRequestException({ error: 'space key already in use' });
+      }
+    }
     const result = await this.prisma.$transaction(async (tx) => {
       const space = await tx.space.create({
-        data: { name: dto.name, description: dto.description ?? null },
+        data: { name: dto.name, description: dto.description ?? null, key },
       });
       const homePage = await tx.page.create({
         data: {

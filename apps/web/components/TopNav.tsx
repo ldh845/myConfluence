@@ -10,6 +10,7 @@ import { useRecentSpacesStore } from "@/lib/stores/useRecentSpacesStore";
 import { getSpaceHomePageId } from "@/lib/spaceHome";
 import SearchOverlay from "@/components/SearchOverlay";
 import SpaceAvatar from "@/components/SpaceAvatar";
+import CreatePageDialog from "@/components/CreatePageDialog";
 import NotificationBellButton from "@/components/NotificationBellButton";
 
 type Props = {
@@ -80,7 +81,7 @@ export default function TopNav({
         </button>
       </nav>
 
-      <CreateSplitButton spaces={spaces} onCreateSpace={onCreateSpace} />
+      <CreateSplitButton spaces={spaces} />
 
       <div className="flex-1" />
 
@@ -420,32 +421,14 @@ function SpaceCombobox({ spaces, onSelectSpace, onCreateSpace }: Props) {
 }
 
 // Cycle 32 — 분할 "만들기" 버튼. 좌측 main = 컨텍스트 기반 빠른 페이지 생성,
-// 우측 ⋯ = 드롭다운(새 페이지 / 새 공간).
-function CreateSplitButton({
-  spaces,
-  onCreateSpace,
-}: {
-  spaces: SpaceWithPages[];
-  onCreateSpace: () => void;
-}) {
+// Cycle 80 — 우측 ⋯ = '만들기' 모달(빈 페이지 카드, 향후 템플릿).
+function CreateSplitButton({ spaces }: { spaces: SpaceWithPages[] }) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const [menuOpen, setMenuOpen] = useState(false);
   const [creating, setCreating] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!menuOpen) return;
-    const onDown = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setMenuOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", onDown);
-    return () => document.removeEventListener("mousedown", onDown);
-  }, [menuOpen]);
 
   // 현재 컨텍스트로 타깃 스페이스/부모를 결정해 페이지를 즉시 생성하고
   // 편집 모드(?edit=1)로 진입한다.
@@ -538,7 +521,7 @@ function CreateSplitButton({
   };
 
   return (
-    <div className="relative ml-2" ref={ref}>
+    <div className="relative ml-2">
       <div className="inline-flex items-stretch rounded overflow-hidden">
         <button
           type="button"
@@ -552,35 +535,19 @@ function CreateSplitButton({
         <button
           type="button"
           aria-label="만들기 옵션"
-          onClick={() => setMenuOpen((v) => !v)}
+          onClick={() => setMenuOpen(true)}
           className="px-2 bg-[#0052cc] hover:bg-[#0747a6] text-white text-sm"
         >
           ⋯
         </button>
       </div>
-      {menuOpen && (
-        <div className="absolute right-0 top-full mt-1 w-44 bg-white border border-[#dfe1e6] rounded shadow-lg z-30 py-1">
-          <button
-            type="button"
-            onClick={handleQuickCreate}
-            className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-[#172b4d] hover:bg-[#ebecf0]"
-          >
-            <span className="w-4 text-center">📄</span>
-            새 페이지
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setMenuOpen(false);
-              onCreateSpace();
-            }}
-            className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-[#172b4d] hover:bg-[#ebecf0]"
-          >
-            <span className="w-4 text-center">📁</span>
-            새 공간
-          </button>
-        </div>
-      )}
+      {/* Cycle 80 — ⋯ → '만들기' 모달(빈 페이지 카드). */}
+      <CreatePageDialog
+        open={menuOpen}
+        onOpenChange={setMenuOpen}
+        onSelectBlank={handleQuickCreate}
+        creating={creating}
+      />
     </div>
   );
 }

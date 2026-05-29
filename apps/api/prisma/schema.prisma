@@ -108,6 +108,9 @@ model Space {
   id           String        @id @default(cuid())
   name         String
   description  String?
+  // Cycle 80 — 스페이스 키(Confluence 식 짧은 식별자). 선택 입력, 대문자/숫자.
+  //   기존 공간은 null. 유니크(null 다중 허용).
+  key          String?       @unique
   // Cycle 74-G — 스페이스 아이콘. 이모지 문자 또는 data: 이미지 URL(클라 리사이즈).
   icon         String?
   // Cycle 32 — 개인 공간 지원. PERSONAL은 ownerId 소유자에게만 노출.

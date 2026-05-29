@@ -7,6 +7,7 @@ import TopNav from "@/components/TopNav";
 import Sidebar from "@/components/Sidebar";
 import SystemSidebar from "@/components/SystemSidebar";
 import TrashSheet from "@/components/TrashSheet";
+import CreateSpaceDialog from "@/components/CreateSpaceDialog";
 import { useRecentPagesStore } from "@/lib/stores/useRecentPagesStore";
 import { getSpaceHomePageId } from "@/lib/spaceHome";
 import type { PageFull, SpaceWithPages } from "@/lib/types";
@@ -25,6 +26,7 @@ function AppShell({ children }: { children: React.ReactNode }) {
   const [selectedSpaceId, setSelectedSpaceId] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [trashOpen, setTrashOpen] = useState(false);
+  const [createSpaceOpen, setCreateSpaceOpen] = useState(false);
 
   const { data: spacesData } = useQuery<SpaceWithPages[]>({
     queryKey: ["spaces"],
@@ -81,24 +83,8 @@ function AppShell({ children }: { children: React.ReactNode }) {
     else router.push(`/?spaceId=${id}`);
   };
 
-  const handleCreateSpace = async () => {
-    const name = prompt("새 공간 이름:");
-    if (!name) return;
-    const description = prompt("공간 설명 (선택):") || null;
-    const res = await fetch("/api/spaces", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, description }),
-    });
-    if (!res.ok) {
-      alert("공간 생성 실패");
-      return;
-    }
-    const created = (await res.json()) as { id: string };
-    invalidateSpaces();
-    setSelectedSpaceId(created.id);
-    router.push("/");
-  };
+  // Cycle 80 — prompt 체인 → '공간 만들기' 모달.
+  const handleCreateSpace = () => setCreateSpaceOpen(true);
 
   const handleCreatePage = async (
     spaceId: string,
@@ -237,6 +223,17 @@ function AppShell({ children }: { children: React.ReactNode }) {
         open={trashOpen}
         onOpenChange={setTrashOpen}
         onRestored={invalidateSpaces}
+      />
+
+      <CreateSpaceDialog
+        open={createSpaceOpen}
+        onOpenChange={setCreateSpaceOpen}
+        onCreated={(space) => {
+          invalidateSpaces();
+          setSelectedSpaceId(space.id);
+          const homeId = getSpaceHomePageId(space);
+          router.push(homeId ? `/?pageId=${homeId}` : `/?spaceId=${space.id}`);
+        }}
       />
     </div>
   );

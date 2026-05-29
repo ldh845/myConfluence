@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import SpaceStarButton from "@/components/SpaceStarButton";
 import SpaceAvatar from "@/components/SpaceAvatar";
+import CreateSpaceDialog from "@/components/CreateSpaceDialog";
 import { useStarredSpacesStore } from "@/lib/stores/useStarredSpacesStore";
 import type { SpaceWithPages } from "@/lib/types";
 
@@ -131,21 +132,9 @@ function SpacesDirectory() {
     );
   }, [spaces, tab, q, starredIds]);
 
-  const handleCreateSpace = async () => {
-    const name = prompt("새 공간 이름?");
-    if (!name || !name.trim()) return;
-    const description = prompt("설명 (선택)?") || null;
-    const res = await fetch("/api/spaces", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: name.trim(), description }),
-    });
-    if (!res.ok) {
-      alert("공간 생성에 실패했습니다.");
-      return;
-    }
-    queryClient.invalidateQueries({ queryKey: ["spaces"] });
-  };
+  // Cycle 80 — prompt 체인 → '공간 만들기' 모달.
+  const [createOpen, setCreateOpen] = useState(false);
+  const handleCreateSpace = () => setCreateOpen(true);
 
   const showTable = tab === "all" || tab === "site" || tab === "my";
 
@@ -244,6 +233,15 @@ function SpacesDirectory() {
           </table>
         )}
       </main>
+
+      <CreateSpaceDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        onCreated={(space) => {
+          queryClient.invalidateQueries({ queryKey: ["spaces"] });
+          router.push(`/?spaceId=${space.id}`);
+        }}
+      />
     </div>
   );
 }

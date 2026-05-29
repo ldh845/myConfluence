@@ -32,6 +32,8 @@ export type SpaceWithPages = {
   id: string;
   name: string;
   description: string | null;
+  // Cycle 80 — 스페이스 키(짧은 식별자). 없으면 null.
+  key?: string | null;
   // Cycle 74-G — 아이콘(이모지 또는 data:image URL).
   icon?: string | null;
   createdAt: string;
