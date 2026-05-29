@@ -1892,3 +1892,29 @@
   6) 비-canManage 사용자의 멤버 API 직접 호출 → 403
 - **남은 일**: 74-D 감사로그 / E 페이지순서 / F 사이드바구성 / G 아이콘. **브라우저 시각 확인 미수행**
 - **비고**: 멤버 추가/역할변경 시 `["spaces"]` 도 invalidate → 본인 역할 변동이 사이드바 '공간 도구' 노출에 즉시 반영. 전역 ADMIN 은 멤버 0명이어도 관리 가능(override) — 멤버 목록이 비어도 정상.
+- **74-C followup**: '공간 도구'를 클릭 시 라우팅 대신 **위로 열리는 드롭다운 메뉴**(개요/권한 + 준비중 항목)로 변경. 항목 선택 → `?view=settings&tab=<id>` → `SpaceSettings` 가 `?tab=` 으로 초기 탭 결정. 외부클릭/Esc 닫힘. (`59e9d8b`)
+- **운영 메모(데드락 해소)**: 기존 SITE 공간은 백필상 멤버 0명이라 전역 ADMIN(`admin1`)만 공간 도구 접근 가능. 테스트 계정(`testuser`=DEVELOPER)을 쓰려면 멤버 시드 필요 → 기존 6개 SITE 공간에 testuser 를 SpaceMember(ADMIN) 로 일회성 INSERT 함(추가 전용). 전역 ADMIN 승격은 Keycloak realm role 필요(DB role 은 로그인마다 동기화돼 리셋).
+
+---
+
+## Cycle 74-D — 2026-05-29 — ✅ Done (공간 도구 감사 로그 탭)
+- **제목**: ActivityLog 를 스페이스 단위로 필터링한 감사 로그 뷰(옵션 A — 신규 모델 없음)
+- **카테고리**: BE + FE / 기능 (감사 로그)
+- **커밋**: `3989544`(74-D 코드), 본 CYCLES.md
+- **변경 파일 (BE)**:
+  - `activities.service.ts` — `list` 에 `dateFrom`/`dateTo`(createdAt gte/lte) 필터
+  - `spaces.service.ts` — `getAuditLog(id,opts,user)` = `assertCanManage` + `activities.list({spaceId,...})`
+  - `spaces.controller.ts` — `GET /spaces/:id/audit`(type/actorId/dateFrom/dateTo/limit/offset)
+  - `activities.service.spec.ts` — 날짜 필터 3종
+- **변경 파일 (FE)**:
+  - `SpaceAuditPanel.tsx` 신규 — 이벤트 타입(`ACTIVITY_TYPES`)/기간(from~to)/사용자(`UserSearchCombobox`) 필터 + '더 보기' 페이지네이션 + `formatActivity` 목록
+  - `SpaceSettings.tsx`/`Sidebar.tsx` 드롭다운에 '감사 로그' 탭 활성화(`?tab=audit`)
+- **검증**: web/api `tsc --noEmit` EXIT 0, jest **150 passed (15 suites)**. **마이그레이션 없음**
+- **동작 확인 안내**:
+  1) **마이그레이션 불필요**
+  2) 공간 도구 드롭다운/탭 → '감사 로그'
+  3) 이벤트 타입/기간/사용자 필터 조합 → 결과 즉시 갱신, '더 보기' 페이지네이션
+  4) 페이지 항목 클릭 → 해당 페이지 이동
+  5) 비-canManage 의 `GET /spaces/:id/audit` 직접 호출 → 403
+- **남은 일**: 74-E 페이지 순서 / F 사이드바 구성 / G 아이콘 업로드. **브라우저 시각 확인 미수행**
+- **비고**: 감사 로그는 ActivityLog 재활용이라 기록되는 활동(page.created/published/moved/copied/soft_deleted/restored/permanent_deleted/status_changed/comment.created)만 노출. 멤버/권한 변경 활동 로그는 미기록 — 필요 시 별도 type 추가(후속).
