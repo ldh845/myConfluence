@@ -36,7 +36,7 @@ const SPACE_TOOL_ITEMS: { id: string; label: string; enabled: boolean }[] = [
   { id: "permissions", label: "권한", enabled: true },
   { id: "audit", label: "감사 로그", enabled: true },
   { id: "order", label: "페이지 순서", enabled: true },
-  { id: "sidebar", label: "사이드바 구성", enabled: false },
+  { id: "sidebar", label: "사이드바 구성", enabled: true },
 ];
 
 type Props = {
@@ -570,6 +570,42 @@ export default function Sidebar({
           disabled
         />
       </div>
+
+      {/* Cycle 74-F — 스페이스 바로가기(공간 도구 > 사이드바 구성에서 관리). */}
+      {space && (space.shortcuts?.length ?? 0) > 0 && (
+        <>
+          <div className="border-t border-[#dfe1e6] mx-2" />
+          <div className="px-4 pt-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-[#6b778c]">
+            바로가기
+          </div>
+          <ul className="px-2 pb-1 space-y-0.5">
+            {space.shortcuts!.map((s) =>
+              s.type === "INTERNAL_PAGE" ? (
+                <li key={s.id}>
+                  <button
+                    type="button"
+                    onClick={() => onSelect(s.target)}
+                    className="w-full text-left px-2 py-1 text-sm rounded truncate text-[#172b4d] hover:bg-[#ebecf0]"
+                  >
+                    🔗 {s.label}
+                  </button>
+                </li>
+              ) : (
+                <li key={s.id}>
+                  <a
+                    href={s.target}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block px-2 py-1 text-sm rounded truncate text-[#172b4d] hover:bg-[#ebecf0]"
+                  >
+                    ↗ {s.label}
+                  </a>
+                </li>
+              ),
+            )}
+          </ul>
+        </>
+      )}
 
       {favPages.length > 0 && (
         <>

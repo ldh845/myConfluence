@@ -16,9 +16,17 @@ export type PageNode = {
   status?: PageStatus | null;
 };
 
-// Cycle 74 — 스페이스 공개 범위 / 멤버 역할.
+// Cycle 74 — 스페이스 공개 범위 / 멤버 역할 / 바로가기.
 export type SpaceVisibility = "PUBLIC" | "PRIVATE" | "PERSONAL";
 export type SpaceRole = "ADMIN" | "EDITOR" | "VIEWER";
+export type SpaceShortcutType = "INTERNAL_PAGE" | "EXTERNAL_URL";
+export type SpaceShortcut = {
+  id: string;
+  type: SpaceShortcutType;
+  label: string;
+  target: string; // pageId(INTERNAL_PAGE) 또는 URL(EXTERNAL_URL)
+  position: number;
+};
 
 export type SpaceWithPages = {
   id: string;
@@ -36,6 +44,8 @@ export type SpaceWithPages = {
   visibility?: SpaceVisibility;
   // Cycle 74-B — 현재 사용자의 멤버 역할(0~1행). '공간 도구' 노출/canManage 판정용.
   members?: { role: SpaceRole }[];
+  // Cycle 74-F — 사이드바 바로가기(순서대로).
+  shortcuts?: SpaceShortcut[];
 };
 
 // FR-001 (Cycle 27c) — 페이지 작성자/마지막 편집자 요약.

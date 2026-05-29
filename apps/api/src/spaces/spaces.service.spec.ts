@@ -107,3 +107,91 @@ describe('SpacesService — members (Cycle 74-C)', () => {
     ).rejects.toBeInstanceOf(NotFoundException);
   });
 });
+
+// Cycle 74-F — 사이드바 바로가기: 외부 URL 스킴 검증 + reorder.
+describe('SpacesService — shortcuts (Cycle 74-F)', () => {
+  let service: SpacesService;
+  let prismaMock: {
+    spaceShortcut: {
+      count: jest.Mock;
+      create: jest.Mock;
+      findFirst: jest.Mock;
+      update: jest.Mock;
+      deleteMany: jest.Mock;
+      updateMany: jest.Mock;
+    };
+    page: { findFirst: jest.Mock };
+  };
+
+  beforeEach(async () => {
+    prismaMock = {
+      spaceShortcut: {
+        count: jest.fn().mockResolvedValue(0),
+        create: jest.fn().mockResolvedValue({}),
+        findFirst: jest.fn(),
+        update: jest.fn().mockResolvedValue({}),
+        deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+      page: { findFirst: jest.fn().mockResolvedValue({ id: 'pg-1' }) },
+    };
+    const permsMock = {
+      assertCanManage: jest.fn().mockResolvedValue({
+        space: { id: 's', visibility: 'PUBLIC', ownerId: null },
+        role: 'ADMIN',
+      }),
+    };
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        SpacesService,
+        { provide: PrismaService, useValue: prismaMock },
+        { provide: ActivitiesService, useValue: { log: jest.fn() } },
+        { provide: SpacePermissionService, useValue: permsMock },
+      ],
+    }).compile();
+    service = module.get<SpacesService>(SpacesService);
+  });
+
+  const ADMIN = { id: 'a', role: 'ADMIN' };
+
+  it('EXTERNAL_URL javascript: 스킴 → BadRequest', async () => {
+    await expect(
+      service.addShortcut(
+        's',
+        { type: 'EXTERNAL_URL', label: 'x', target: 'javascript:alert(1)' },
+        ADMIN,
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(prismaMock.spaceShortcut.create).not.toHaveBeenCalled();
+  });
+
+  it('EXTERNAL_URL https → 생성', async () => {
+    await service.addShortcut(
+      's',
+      { type: 'EXTERNAL_URL', label: '구글', target: 'https://google.com' },
+      ADMIN,
+    );
+    expect(prismaMock.spaceShortcut.create).toHaveBeenCalled();
+  });
+
+  it('INTERNAL_PAGE 대상이 공간에 없으면 BadRequest', async () => {
+    prismaMock.page.findFirst.mockResolvedValueOnce(null);
+    await expect(
+      service.addShortcut(
+        's',
+        { type: 'INTERNAL_PAGE', label: 'p', target: 'missing' },
+        ADMIN,
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('reorder → ids 순서대로 position 부여', async () => {
+    await service.reorderShortcuts('s', ['c', 'a', 'b'], ADMIN);
+    const calls = prismaMock.spaceShortcut.updateMany.mock.calls;
+    expect(calls).toEqual([
+      [{ where: { id: 'c', spaceId: 's' }, data: { position: 0 } }],
+      [{ where: { id: 'a', spaceId: 's' }, data: { position: 1 } }],
+      [{ where: { id: 'b', spaceId: 's' }, data: { position: 2 } }],
+    ]);
+  });
+});

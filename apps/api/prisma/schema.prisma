@@ -47,6 +47,12 @@ enum SpaceVisibility {
   PERSONAL
 }
 
+// Cycle 74-F — 스페이스 바로가기 종류. 내부 페이지 또는 외부 URL.
+enum SpaceShortcutType {
+  INTERNAL_PAGE
+  EXTERNAL_URL
+}
+
 model User {
   id                         String        @id @default(cuid())
   username                   String        @unique
@@ -109,6 +115,8 @@ model Space {
   owner        User?         @relation("SpaceOwner", fields: [ownerId], references: [id], onDelete: SetNull)
   // Cycle 74-A — 스페이스 멤버(권한). PRIVATE 접근/역할의 출처. 공간 삭제 시 Cascade.
   members      SpaceMember[] @relation("SpaceMembers")
+  // Cycle 74-F — 사이드바 바로가기. 공간 삭제 시 Cascade.
+  shortcuts    SpaceShortcut[] @relation("SpaceShortcuts")
   // Cycle 33 — 공간의 명시적 홈(메인) 페이지. 공간 생성 시 자동 생성.
   // 홈 페이지 삭제 시 SetNull → 사이드바는 첫 루트 페이지로 fallback.
   homePageId   String?       @unique
@@ -132,6 +140,20 @@ model SpaceMember {
 
   @@id([spaceId, userId])
   @@index([userId])
+}
+
+// Cycle 74-F — 스페이스 사이드바 바로가기. target=pageId(INTERNAL_PAGE) 또는 URL(EXTERNAL_URL).
+model SpaceShortcut {
+  id        String            @id @default(cuid())
+  spaceId   String
+  space     Space             @relation("SpaceShortcuts", fields: [spaceId], references: [id], onDelete: Cascade)
+  type      SpaceShortcutType
+  label     String
+  target    String
+  position  Int               @default(0)
+  createdAt DateTime          @default(now())
+
+  @@index([spaceId])
 }
 
 model Page {

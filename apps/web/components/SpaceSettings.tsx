@@ -8,16 +8,16 @@ import { canManageSpace } from "@/lib/spacePermission";
 import SpaceMembersPanel from "@/components/SpaceMembersPanel";
 import SpaceAuditPanel from "@/components/SpaceAuditPanel";
 import SpacePageOrderPanel from "@/components/SpacePageOrderPanel";
+import SpaceSidebarConfigPanel from "@/components/SpaceSidebarConfigPanel";
 import type { SpaceWithPages, SpaceVisibility } from "@/lib/types";
 
-// Cycle 74-B~E — 공간 도구. 개요/권한/감사 로그/페이지 순서 탭.
-//   사이드바 구성 탭은 74-F 에서 채운다.
+// Cycle 74-B~F — 공간 도구. 개요/권한/감사 로그/페이지 순서/사이드바 구성 탭.
 const TABS: { id: string; label: string; enabled: boolean }[] = [
   { id: "overview", label: "개요", enabled: true },
   { id: "permissions", label: "권한", enabled: true },
   { id: "audit", label: "감사 로그", enabled: true },
   { id: "order", label: "페이지 순서", enabled: true },
-  { id: "sidebar", label: "사이드바 구성", enabled: false },
+  { id: "sidebar", label: "사이드바 구성", enabled: true },
 ];
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
@@ -51,7 +51,13 @@ export default function SpaceSettings({ spaceId }: { spaceId: string }) {
 
   // Cycle 74 — 사이드바 드롭다운이 ?tab= 로 진입 탭을 지정. 유효하지 않으면 개요.
   const tabParam = searchParams.get("tab");
-  const ENABLED_TABS = ["overview", "permissions", "audit", "order"];
+  const ENABLED_TABS = [
+    "overview",
+    "permissions",
+    "audit",
+    "order",
+    "sidebar",
+  ];
   const [activeTab, setActiveTab] = useState(
     tabParam && ENABLED_TABS.includes(tabParam) ? tabParam : "overview",
   );
@@ -172,6 +178,9 @@ export default function SpaceSettings({ spaceId }: { spaceId: string }) {
       {activeTab === "permissions" && <SpaceMembersPanel spaceId={spaceId} />}
       {activeTab === "audit" && <SpaceAuditPanel spaceId={spaceId} />}
       {activeTab === "order" && <SpacePageOrderPanel spaceId={spaceId} />}
+      {activeTab === "sidebar" && (
+        <SpaceSidebarConfigPanel spaceId={spaceId} />
+      )}
 
       <div
         className="space-y-5"

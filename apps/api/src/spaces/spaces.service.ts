@@ -33,6 +33,16 @@ const PAGES_INCLUDE = {
   },
 } satisfies Prisma.SpaceInclude;
 
+// Cycle 74-F — 외부 URL 바로가기 보안: http/https 스킴만 허용(javascript: 등 차단).
+function isSafeHttpUrl(s: string): boolean {
+  try {
+    const u = new URL(s);
+    return u.protocol === 'http:' || u.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
 @Injectable()
 export class SpacesService {
   constructor(
@@ -55,6 +65,8 @@ export class SpacesService {
         ...(actor
           ? { members: { where: { userId: actor.id }, select: { role: true } } }
           : {}),
+        // Cycle 74-F — 사이드바 바로가기(순서대로). 멤버 공통.
+        shortcuts: { orderBy: { position: 'asc' } },
       },
     });
   }
@@ -189,6 +201,95 @@ export class SpacesService {
   ) {
     await this.perms.assertCanManage(id, user);
     return this.activities.list({ spaceId: id, ...opts });
+  }
+
+  // ─── Cycle 74-F — 사이드바 바로가기 ───────────────────────────────────────
+  async addShortcut(
+    id: string,
+    dto: {
+      type: 'INTERNAL_PAGE' | 'EXTERNAL_URL';
+      label: string;
+      target: string;
+    },
+    user: Actor,
+  ) {
+    await this.perms.assertCanManage(id, user);
+    if (dto.type === 'EXTERNAL_URL' && !isSafeHttpUrl(dto.target)) {
+      throw new BadRequestException({ error: 'invalid url (http/https only)' });
+    }
+    if (dto.type === 'INTERNAL_PAGE') {
+      const page = await this.prisma.page.findFirst({
+        where: { id: dto.target, spaceId: id, deletedAt: null },
+        select: { id: true },
+      });
+      if (!page) {
+        throw new BadRequestException({ error: 'page not found in this space' });
+      }
+    }
+    const count = await this.prisma.spaceShortcut.count({
+      where: { spaceId: id },
+    });
+    await this.prisma.spaceShortcut.create({
+      data: {
+        spaceId: id,
+        type: dto.type,
+        label: dto.label,
+        target: dto.target,
+        position: count,
+      },
+    });
+    return { ok: true };
+  }
+
+  async updateShortcut(
+    id: string,
+    shortcutId: string,
+    dto: { label?: string; target?: string },
+    user: Actor,
+  ) {
+    await this.perms.assertCanManage(id, user);
+    const sc = await this.prisma.spaceShortcut.findFirst({
+      where: { id: shortcutId, spaceId: id },
+      select: { type: true },
+    });
+    if (!sc) throw new NotFoundException({ error: 'shortcut not found' });
+    if (
+      dto.target !== undefined &&
+      sc.type === 'EXTERNAL_URL' &&
+      !isSafeHttpUrl(dto.target)
+    ) {
+      throw new BadRequestException({ error: 'invalid url (http/https only)' });
+    }
+    await this.prisma.spaceShortcut.update({
+      where: { id: shortcutId },
+      data: {
+        ...(dto.label !== undefined ? { label: dto.label } : {}),
+        ...(dto.target !== undefined ? { target: dto.target } : {}),
+      },
+    });
+    return { ok: true };
+  }
+
+  async removeShortcut(id: string, shortcutId: string, user: Actor) {
+    await this.perms.assertCanManage(id, user);
+    await this.prisma.spaceShortcut.deleteMany({
+      where: { id: shortcutId, spaceId: id },
+    });
+    return { ok: true };
+  }
+
+  // 전체 순서를 ids 배열 순으로 재부여(위/아래 이동도 FE 가 새 순서로 보냄).
+  async reorderShortcuts(id: string, ids: string[], user: Actor) {
+    await this.perms.assertCanManage(id, user);
+    await Promise.all(
+      ids.map((sid, i) =>
+        this.prisma.spaceShortcut.updateMany({
+          where: { id: sid, spaceId: id },
+          data: { position: i },
+        }),
+      ),
+    );
+    return { ok: true };
   }
 
   private async assertNotLastAdmin(spaceId: string) {

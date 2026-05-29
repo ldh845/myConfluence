@@ -19,6 +19,11 @@ import { SetHomePageDto } from './dto/set-home-page.dto';
 import { UpdateSpaceSettingsDto } from './dto/update-space-settings.dto';
 import { AddMemberDto } from './dto/add-member.dto';
 import { UpdateMemberRoleDto } from './dto/update-member-role.dto';
+import {
+  AddShortcutDto,
+  UpdateShortcutDto,
+  ReorderShortcutsDto,
+} from './dto/shortcut.dto';
 
 // Cycle 74-B — 권한 판정용 actor(role 포함).
 function userFromReq(
@@ -152,5 +157,47 @@ export class SpacesController {
       },
       userFromReq(req),
     );
+  }
+
+  // ─── Cycle 74-F — 사이드바 바로가기. 목록은 findAll(GET /spaces) include 로 제공. ───
+  @Post(':id/shortcuts')
+  @UseGuards(JwtAuthGuard)
+  addShortcut(
+    @Param('id') id: string,
+    @Body() dto: AddShortcutDto,
+    @Req() req: Request,
+  ) {
+    return this.spaces.addShortcut(id, dto, userFromReq(req));
+  }
+
+  @Patch(':id/shortcuts/reorder')
+  @UseGuards(JwtAuthGuard)
+  reorderShortcuts(
+    @Param('id') id: string,
+    @Body() dto: ReorderShortcutsDto,
+    @Req() req: Request,
+  ) {
+    return this.spaces.reorderShortcuts(id, dto.ids, userFromReq(req));
+  }
+
+  @Patch(':id/shortcuts/:shortcutId')
+  @UseGuards(JwtAuthGuard)
+  updateShortcut(
+    @Param('id') id: string,
+    @Param('shortcutId') shortcutId: string,
+    @Body() dto: UpdateShortcutDto,
+    @Req() req: Request,
+  ) {
+    return this.spaces.updateShortcut(id, shortcutId, dto, userFromReq(req));
+  }
+
+  @Delete(':id/shortcuts/:shortcutId')
+  @UseGuards(JwtAuthGuard)
+  removeShortcut(
+    @Param('id') id: string,
+    @Param('shortcutId') shortcutId: string,
+    @Req() req: Request,
+  ) {
+    return this.spaces.removeShortcut(id, shortcutId, userFromReq(req));
   }
 }
