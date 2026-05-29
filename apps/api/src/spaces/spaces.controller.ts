@@ -16,6 +16,8 @@ import { SpacesService } from './spaces.service';
 import { CreateSpaceDto } from './dto/create-space.dto';
 import { SetHomePageDto } from './dto/set-home-page.dto';
 import { UpdateSpaceSettingsDto } from './dto/update-space-settings.dto';
+import { AddMemberDto } from './dto/add-member.dto';
+import { UpdateMemberRoleDto } from './dto/update-member-role.dto';
 
 // Cycle 74-B — 권한 판정용 actor(role 포함).
 function userFromReq(
@@ -82,5 +84,43 @@ export class SpacesController {
   @UseGuards(JwtAuthGuard)
   remove(@Param('id') id: string, @Req() req: Request) {
     return this.spaces.remove(id, userFromReq(req));
+  }
+
+  // ─── Cycle 74-C — 멤버 관리(권한 탭). 모두 canManage 는 service 에서. ───
+  @Get(':id/members')
+  @UseGuards(JwtAuthGuard)
+  listMembers(@Param('id') id: string, @Req() req: Request) {
+    return this.spaces.listMembers(id, userFromReq(req));
+  }
+
+  @Post(':id/members')
+  @UseGuards(JwtAuthGuard)
+  addMember(
+    @Param('id') id: string,
+    @Body() dto: AddMemberDto,
+    @Req() req: Request,
+  ) {
+    return this.spaces.addMember(id, dto.userId, dto.role, userFromReq(req));
+  }
+
+  @Patch(':id/members/:userId')
+  @UseGuards(JwtAuthGuard)
+  updateMemberRole(
+    @Param('id') id: string,
+    @Param('userId') userId: string,
+    @Body() dto: UpdateMemberRoleDto,
+    @Req() req: Request,
+  ) {
+    return this.spaces.updateMemberRole(id, userId, dto.role, userFromReq(req));
+  }
+
+  @Delete(':id/members/:userId')
+  @UseGuards(JwtAuthGuard)
+  removeMember(
+    @Param('id') id: string,
+    @Param('userId') userId: string,
+    @Req() req: Request,
+  ) {
+    return this.spaces.removeMember(id, userId, userFromReq(req));
   }
 }

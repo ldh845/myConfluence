@@ -5,13 +5,14 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth/useAuth";
 import { canManageSpace } from "@/lib/spacePermission";
+import SpaceMembersPanel from "@/components/SpaceMembersPanel";
 import type { SpaceWithPages, SpaceVisibility } from "@/lib/types";
 
-// Cycle 74-B — 공간 도구. 현재는 '개요' 탭만(이름/설명/공개범위/삭제).
-//   나머지 탭(권한/감사로그/페이지순서/사이드바구성)은 74-C~F 에서 채운다.
+// Cycle 74-B/C — 공간 도구. 개요(74-B) + 권한(74-C) 탭.
+//   나머지 탭(감사로그/페이지순서/사이드바구성)은 74-D~F 에서 채운다.
 const TABS: { id: string; label: string; enabled: boolean }[] = [
   { id: "overview", label: "개요", enabled: true },
-  { id: "permissions", label: "권한", enabled: false },
+  { id: "permissions", label: "권한", enabled: true },
   { id: "audit", label: "감사 로그", enabled: false },
   { id: "order", label: "페이지 순서", enabled: false },
   { id: "sidebar", label: "사이드바 구성", enabled: false },
@@ -45,6 +46,7 @@ export default function SpaceSettings({ spaceId }: { spaceId: string }) {
     [spaces, spaceId],
   );
 
+  const [activeTab, setActiveTab] = useState("overview");
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [visibility, setVisibility] = useState<SpaceVisibility>("PUBLIC");
@@ -126,9 +128,10 @@ export default function SpaceSettings({ spaceId }: { spaceId: string }) {
             key={t.id}
             type="button"
             disabled={!t.enabled}
+            onClick={() => t.enabled && setActiveTab(t.id)}
             title={t.enabled ? undefined : "준비 중"}
             className={`px-3 py-2 text-[13px] border-b-2 -mb-px ${
-              t.id === "overview"
+              activeTab === t.id
                 ? "border-[#0052cc] text-[#0052cc] font-semibold"
                 : t.enabled
                   ? "border-transparent text-[#42526e] hover:text-[#0052cc]"
@@ -141,7 +144,12 @@ export default function SpaceSettings({ spaceId }: { spaceId: string }) {
         ))}
       </div>
 
-      <div className="space-y-5">
+      {activeTab === "permissions" && <SpaceMembersPanel spaceId={spaceId} />}
+
+      <div
+        className="space-y-5"
+        style={{ display: activeTab === "overview" ? undefined : "none" }}
+      >
         <Field label="스페이스 이름">
           <input
             value={name}

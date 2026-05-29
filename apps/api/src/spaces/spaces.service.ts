@@ -94,6 +94,97 @@ export class SpacesService {
     return { ok: true };
   }
 
+  // ─── Cycle 74-C — 스페이스 멤버 관리 ──────────────────────────────────────
+  //   모두 canManage 가드. 마지막 ADMIN 강등/제거는 금지(최소 1명 유지).
+
+  async listMembers(id: string, user: Actor) {
+    await this.perms.assertCanManage(id, user);
+    return this.prisma.spaceMember.findMany({
+      where: { spaceId: id },
+      orderBy: { createdAt: 'asc' },
+      select: {
+        userId: true,
+        role: true,
+        createdAt: true,
+        user: {
+          select: { id: true, name: true, department: true, email: true },
+        },
+      },
+    });
+  }
+
+  async addMember(
+    id: string,
+    userId: string,
+    role: 'ADMIN' | 'EDITOR' | 'VIEWER',
+    user: Actor,
+  ) {
+    await this.perms.assertCanManage(id, user);
+    const target = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true },
+    });
+    if (!target) throw new NotFoundException({ error: 'user not found' });
+    // 이미 멤버면 역할 갱신(idempotent).
+    await this.prisma.spaceMember.upsert({
+      where: { spaceId_userId: { spaceId: id, userId } },
+      update: { role },
+      create: { spaceId: id, userId, role },
+    });
+    return { ok: true };
+  }
+
+  async updateMemberRole(
+    id: string,
+    userId: string,
+    role: 'ADMIN' | 'EDITOR' | 'VIEWER',
+    user: Actor,
+  ) {
+    await this.perms.assertCanManage(id, user);
+    const current = await this.prisma.spaceMember.findUnique({
+      where: { spaceId_userId: { spaceId: id, userId } },
+      select: { role: true },
+    });
+    if (!current) throw new NotFoundException({ error: 'member not found' });
+    // 마지막 ADMIN 강등 방지.
+    if (current.role === 'ADMIN' && role !== 'ADMIN') {
+      await this.assertNotLastAdmin(id);
+    }
+    await this.prisma.spaceMember.update({
+      where: { spaceId_userId: { spaceId: id, userId } },
+      data: { role },
+    });
+    return { ok: true };
+  }
+
+  async removeMember(id: string, userId: string, user: Actor) {
+    await this.perms.assertCanManage(id, user);
+    const current = await this.prisma.spaceMember.findUnique({
+      where: { spaceId_userId: { spaceId: id, userId } },
+      select: { role: true },
+    });
+    if (!current) throw new NotFoundException({ error: 'member not found' });
+    // 마지막 ADMIN 제거 방지.
+    if (current.role === 'ADMIN') {
+      await this.assertNotLastAdmin(id);
+    }
+    await this.prisma.spaceMember.delete({
+      where: { spaceId_userId: { spaceId: id, userId } },
+    });
+    return { ok: true };
+  }
+
+  private async assertNotLastAdmin(spaceId: string) {
+    const adminCount = await this.prisma.spaceMember.count({
+      where: { spaceId, role: 'ADMIN' },
+    });
+    if (adminCount <= 1) {
+      throw new BadRequestException({
+        error: 'cannot remove or demote the last space admin',
+      });
+    }
+  }
+
   // Cycle 33 — 공간 생성 시 홈(메인) 페이지를 자동 생성하고 homePageId로 지정.
   async create(
     dto: CreateSpaceDto,
