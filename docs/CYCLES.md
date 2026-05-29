@@ -1793,3 +1793,32 @@
   3) 첨부 업로드 / 이미지 삽입 / 버전 복원 / 발행 후 작성자명이 실명
 - **남은 일**: **과거 익명으로 저장된 데이터**(author FK 없이 authorName 만 익명인 옛 첨부/버전)는 소급 변경 안 됨 — 앞으로 생성분만 실명. 서버가 클라 `authorName` 대신 JWT actor 를 강제로 쓰도록 굳히는 건 별도(현재는 클라가 실명을 보냄). **브라우저 시각 확인 미수행**
 - **비고**: `getIdentity()`/`userIdentity.ts` 는 폴백용으로 보존(useIdentity 내부에서만 참조). 댓글/반응은 원래 서버 JWT actor 기반이라 무관.
+
+---
+
+## Cycle 73 — 2026-05-29 — ✅ Done (칸반 보드 사용자 필터)
+- **제목**: 스페이스 칸반 보드에 작성자/편집자 기준 사용자 필터 추가
+- **카테고리**: BE + FE / 기능 (보드 필터)
+- **커밋**: `32a6922`(73-1 코드), 본 CYCLES.md(73-2 Docs)
+- **⚠️ 중복 회피 메모**: 요청서엔 "칸반 보드 + 사용자 필터"로 적혀 있었으나 **보드 본체(라우트 `?view=board`·진입점·DnD·권한 가드·`GET /pages/board`)는 직전 Cycle 71 에서 이미 구현·push 완료**. 사전 조사로 확인 후 사용자에게 보고 → 이번 사이클은 **사용자 필터만** 추가하기로 합의. (페이지 목록 상태 필터(Cycle 71)는 "그대로 둔다", 사용자 검색은 "이름/사용자명만" 결정.)
+- **변경 파일 (BE)**:
+  - `apps/api/src/pages/pages.service.ts` — `boardPages(spaceId, userIds?)`: userIds 있으면 where 에 `OR:[{authorId:{in}},{lastEditorId:{in}}]`(다중 OR)
+  - `apps/api/src/pages/pages.controller.ts` — `@Get('board')` 에 `?userId=` 콤마 파싱
+  - 사용자 검색은 **기존 `GET /api/users?q=` 재활용**(신규 API 없음)
+  - `pages.service.spec.ts` — userIds where + 빈 배열 회귀
+- **변경 파일 (FE)**:
+  - `UserSearchCombobox.tsx` 신규 — `GET /api/users?q=` 검색 팝업(외부클릭/Esc, 이미 선택된 사용자 제외)
+  - `UserFilterChips.tsx` 신규 — 선택 칩+X, '나' 빠른 추가, '+ 사용자 추가', 초기화
+  - `KanbanBoard.tsx` — `?userId=` URL 동기화, 보드 fetch 에 userId 반영(서버사이드 필터), 칩 이름 해석(`users-all` 쿼리 + 현재 사용자), 카운트는 필터된 집합 기준 자동 반영
+- **검증**: web/api `tsc --noEmit` EXIT 0. API jest **123 passed (13 suites)** — 신규 2건 포함. 마이그레이션 **없음**
+- **동작 확인 안내**:
+  1) **마이그레이션 불필요**
+  2) 보드 상단 '+ 사용자 추가' → 검색 → 선택 → 칩 표시
+  3) '+ 나' 로 현재 사용자 즉시 필터
+  4) 다중 선택 OR(선택자 중 누구라도 작성자/편집자인 페이지)
+  5) 칩 X / 초기화 → 즉시 갱신, 컬럼 카운트도 갱신
+  6) `?userId=` URL 동기화(새로고침/공유 유지)
+  7) 상태(컬럼)와 사용자 필터 AND
+  8) draft 제외·권한 가드·DnD 등 보드 기존 동작 회귀 없음
+- **남은 일**: 사이드바 카운트 / 개인 대시보드 / 알림 / 멤버 아바타 필터(스페이스 멤버 모델 필요)는 별 사이클. 이메일 검색은 미도입(이름/사용자명만). 칩 이름 해석용 `users-all` 은 전체 사용자 fetch(소규모 조직 전제) — 대규모 시 id 기반 batch 조회로 대체 여지. **브라우저 시각 확인 미수행**
+- **비고**: 보드는 한 번에 fetch 후 클라 그룹핑이라 사용자 필터를 서버(`?userId=`)에서 적용 → 카운트가 자동으로 필터 반영. 사용자 검색 API 가 email 을 검색/반환하지 않아 칩/검색은 이름·부서 기준.
