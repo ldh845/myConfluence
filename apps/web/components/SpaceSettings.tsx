@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth/useAuth";
 import { canManageSpace } from "@/lib/spacePermission";
 import SpaceMembersPanel from "@/components/SpaceMembersPanel";
@@ -31,6 +31,7 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 
 export default function SpaceSettings({ spaceId }: { spaceId: string }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const { user } = useAuth();
 
@@ -46,7 +47,16 @@ export default function SpaceSettings({ spaceId }: { spaceId: string }) {
     [spaces, spaceId],
   );
 
-  const [activeTab, setActiveTab] = useState("overview");
+  // Cycle 74 — 사이드바 드롭다운이 ?tab= 로 진입 탭을 지정. 유효하지 않으면 개요.
+  const tabParam = searchParams.get("tab");
+  const ENABLED_TABS = ["overview", "permissions"];
+  const [activeTab, setActiveTab] = useState(
+    tabParam && ENABLED_TABS.includes(tabParam) ? tabParam : "overview",
+  );
+  useEffect(() => {
+    if (tabParam && ENABLED_TABS.includes(tabParam)) setActiveTab(tabParam);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tabParam]);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [visibility, setVisibility] = useState<SpaceVisibility>("PUBLIC");

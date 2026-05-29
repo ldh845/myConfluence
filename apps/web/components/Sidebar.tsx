@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useMutation } from "@tanstack/react-query";
 import {
@@ -29,6 +29,15 @@ import { canManageSpace } from "@/lib/spacePermission";
 import SpaceStarButton from "@/components/SpaceStarButton";
 import DeletePageDialog from "@/components/DeletePageDialog";
 import AppIcon from "@/components/AppIcon";
+
+// Cycle 74 — 공간 도구 드롭다운 메뉴 항목(= SpaceSettings 탭). enabled=false 는 준비 중.
+const SPACE_TOOL_ITEMS: { id: string; label: string; enabled: boolean }[] = [
+  { id: "overview", label: "개요", enabled: true },
+  { id: "permissions", label: "권한", enabled: true },
+  { id: "audit", label: "감사 로그", enabled: false },
+  { id: "order", label: "페이지 순서", enabled: false },
+  { id: "sidebar", label: "사이드바 구성", enabled: false },
+];
 
 type Props = {
   space: SpaceWithPages | null;
@@ -281,6 +290,26 @@ export default function Sidebar({
   const { user } = useAuth();
   const canManage =
     !!space && space.type !== "PERSONAL" && canManageSpace(space, user);
+  // Cycle 74 — '공간 도구' 위로 열리는 드롭다운. 외부클릭/Esc 닫힘.
+  const [toolsOpen, setToolsOpen] = useState(false);
+  const toolsRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!toolsOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (toolsRef.current && !toolsRef.current.contains(e.target as Node)) {
+        setToolsOpen(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setToolsOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [toolsOpen]);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   // Cycle 56 — 페이지 삭제 다이얼로그(자식 카운트 + cascade 체크박스) 마운트 후보.
   const [deleteReq, setDeleteReq] = useState<
@@ -641,19 +670,49 @@ export default function Sidebar({
         >
           <AppIcon name="trash" size={15} alt="" /> 휴지통
         </button>
-        {/* Cycle 74-B — Space Admin/전역 ADMIN 에게만 노출. onClick → 설정 뷰. */}
+        {/* Cycle 74-B/74 — Space Admin/전역 ADMIN 에게만 노출. 클릭 → 위로 열리는
+            드롭다운, 항목 선택 시 해당 탭으로 공간 도구 페이지 진입. */}
         {canManage && space && (
-          <button
-            type="button"
-            onClick={() => router.push(`/?spaceId=${space.id}&view=settings`)}
-            className={`flex items-center gap-2 text-sm hover:text-[#0052cc] ${
-              pathname === "/" && view === "settings"
-                ? "text-[#0052cc] font-semibold"
-                : "text-[#172b4d]"
-            }`}
-          >
-            <span>⚙️</span> 공간 도구
-          </button>
+          <div className="relative" ref={toolsRef}>
+            <button
+              type="button"
+              onClick={() => setToolsOpen((v) => !v)}
+              className={`flex items-center gap-2 text-sm hover:text-[#0052cc] ${
+                pathname === "/" && view === "settings"
+                  ? "text-[#0052cc] font-semibold"
+                  : "text-[#172b4d]"
+              }`}
+            >
+              <span>⚙️</span> 공간 도구
+            </button>
+            {toolsOpen && (
+              <div className="absolute left-0 bottom-full mb-1 w-[180px] bg-white border border-[#dfe1e6] rounded-md shadow-lg py-1 z-30">
+                {SPACE_TOOL_ITEMS.map((it) => (
+                  <button
+                    key={it.id}
+                    type="button"
+                    disabled={!it.enabled}
+                    onClick={() => {
+                      if (!it.enabled) return;
+                      setToolsOpen(false);
+                      router.push(
+                        `/?spaceId=${space.id}&view=settings&tab=${it.id}`,
+                      );
+                    }}
+                    title={it.enabled ? undefined : "준비 중"}
+                    className={`w-full text-left px-3 py-1.5 text-[13px] ${
+                      it.enabled
+                        ? "text-[#172b4d] hover:bg-[#deebff]"
+                        : "text-[#a5adba] cursor-not-allowed"
+                    }`}
+                  >
+                    {it.label}
+                    {!it.enabled && " (준비 중)"}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         )}
       </div>
 
