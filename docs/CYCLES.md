@@ -2055,3 +2055,25 @@
   3) 사이드바 페이지 트리에서 행 마우스오버 시 ＋/× 안 뜸(펼침/접기 화살표는 유지)
 - **남은 일**: 없음. **브라우저 시각 확인 미수행**
 - **비고**: 페이지 생성은 TopNav '만들기', 삭제는 페이지 헤더 MoreMenu 로 계속 가능(트리 행 버튼만 제거). 트리 DnD 순서 변경/펼치기는 그대로.
+
+---
+
+## Cycle 78 — 2026-05-29 — ✅ Done (공간 디렉터리/페이지순서/아이콘 기본값 + 페이지 레이블)
+- **제목**: /spaces 비활성 탭 제거 · 페이지순서 홈 조작 · 개요 아이콘 기본값 · 페이지 레이블 기능
+- **카테고리**: BE + FE / UX + 기능 (사용자 4항목)
+- **커밋**: `36628e8`(코드), 본 CYCLES.md
+- **마이그레이션**: `20260529040000_page_labels` (`Page.labels TEXT[] DEFAULT '{}'`). 수기 마이그레이션 + `migrate deploy` 비파괴 적용 + `prisma generate`(API nest-watch/main 프로세스 종료 후 DLL 잠금 해제)
+- **항목별 변경**:
+  - **1. 비활성 탭 제거**: `spaces/page.tsx` 의 `TabId`/`TAB_LABELS`/`TABS` 에서 '개인 공간'(personal)·'보관된 공간'(archived) 제거 + 필터/EmptyState 분기 정리
+  - **2. 페이지 순서 홈 조작**: `SpacePageOrderPanel` 에서 홈 핀(루트 최상단 고정) 제거, `useSortable` 의 `disabled: isHome` 제거, onDragEnd 의 `isHome` 가드 제거, `sortableIds` 에 홈 포함 → 홈도 드래그/들여쓰기 가능. 행에 🏠 + (홈) 표시는 유지
+  - **3. 아이콘 기본값**: `SpaceSettings` 개요 탭(보기/편집) 아이콘 미리보기를 `📄` 회색 placeholder 대신 **`SpaceAvatar`** 로 → 커스텀 아이콘 없으면 파란 배경 + 이름 첫 글자(실제 기본 아바타) 표시
+  - **4. 페이지 레이블**: `Page.labels String[]` 추가. `UpdatePageDto.labels?` (`@IsArray`/`@IsString({each})`) + 서비스 `normalizeLabels`(trim/빈값 제거/라벨 50자/중복 대소문자 무시/최대 20개). `findOne` 은 include 라 scalar 자동 반환. `LabelBar` 컴포넌트 신설(칩 + × 제거 + '＋ 레이블 추가' 팝업, PATCH 낙관 갱신). `page.tsx` 조회 화면에서 **레이블(좌) + 이모지 반응(우)을 같은 줄**(justify-between)에 배치, 기존 '🏷️ 레이블 없음' 푸터 제거. `ReactionBar` 루트의 `mt-2` 제거(정렬용) → 댓글 쪽은 wrapper `mt-2` 로 보존. `lib/types` `PageFull.labels?`
+- **검증**: web/api `tsc --noEmit` EXIT 0, jest **154 passed (15 suites)**
+- **동작 확인 안내**:
+  1) ⚠️ **`cd apps/api && npx prisma migrate deploy`** + `npx prisma generate` (적용 완료, **API dev 서버 재기동 필요** — generate 위해 nest-watch/main 종료함)
+  2) /spaces 상단 탭: 모든/사이트/내 공간 3개만
+  3) 공간 도구 → 페이지 순서: 홈도 드래그/→/← 가능, 🏠 (홈) 표시
+  4) 공간 도구 → 개요: 커스텀 아이콘 없으면 파란 배경 첫 글자 미리보기
+  5) 페이지 조회 하단: 레이블 칩 + '＋ 레이블 추가'(팝업) 와 이모지 반응이 같은 줄, 그 아래 댓글
+- **남은 일**: 없음. **브라우저 시각 확인 미수행**
+- **비고**: 레이블은 페이지 로컬 `String[]`(공간 전역 레이블/검색·필터는 범위 밖). PATCH `/pages/:id { labels }` 는 기존 가드(`assertCanEditPage`)로 보호. `public/icons` 의 신규 에셋(background/image/palette)은 본 커밋에 미포함(출처 불명 — 사용자 확인 필요).
