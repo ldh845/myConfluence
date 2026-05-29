@@ -950,11 +950,11 @@ function TableButton({ editor }: { editor: Editor }) {
 
   return (
     <div className="relative" ref={ref}>
-      {/* Cycle 79 — 클릭 시 아래에 표 크기 선택 팝업이 열림을 알리는 ▼ 동반. */}
+      {/* Cycle 79 — 클릭 시 아래에 표 크기 선택 팝업이 열림을 알리는 화살표 동반. */}
       <TB title="표 삽입" onClick={() => setOpen((v) => !v)}>
         <span className="flex items-center gap-0.5">
           <AppIcon name="table" size={16} alt="표 삽입" />
-          <span className="text-[10px] text-[#6b778c]">▾</span>
+          <AppIcon name="downArrow" size={10} alt="" />
         </span>
       </TB>
       {open && (
