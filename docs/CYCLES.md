@@ -1822,3 +1822,23 @@
   8) draft 제외·권한 가드·DnD 등 보드 기존 동작 회귀 없음
 - **남은 일**: 사이드바 카운트 / 개인 대시보드 / 알림 / 멤버 아바타 필터(스페이스 멤버 모델 필요)는 별 사이클. 이메일 검색은 미도입(이름/사용자명만). 칩 이름 해석용 `users-all` 은 전체 사용자 fetch(소규모 조직 전제) — 대규모 시 id 기반 batch 조회로 대체 여지. **브라우저 시각 확인 미수행**
 - **비고**: 보드는 한 번에 fetch 후 클라 그룹핑이라 사용자 필터를 서버(`?userId=`)에서 적용 → 카운트가 자동으로 필터 반영. 사용자 검색 API 가 email 을 검색/반환하지 않아 칩/검색은 이름·부서 기준.
+
+---
+
+## Cycle 74-A — 2026-05-29 — 🔄 In Progress (스페이스 권한 시스템 기반)
+- **제목**: 스페이스 단위 권한(SpaceMember/visibility) 모델 + 권한 판정 서비스 + 생성자 자동 Admin + 읽기 경로 가드. "공간 도구" 메가 사이클(74)의 **필수 선행 sub-cycle A**.
+- **카테고리**: BE / 권한 (대규모, 회귀 위험 최고)
+- **커밋**: `<74-A 코드>`, 본 CYCLES.md
+- **결정(사전 조사 합의)**: 백필=기존 SITE→PUBLIC·멤버 0명 + 전역 ADMIN override / PERSONAL→PERSONAL. 라우트=`?view=settings`(B에서). 감사로그=ActivityLog 필터뷰. 사이드바 구성=Space 컬럼. **PUBLIC 편집=로그인 사용자(암묵적 Editor)** → 기존 편집 동작 회귀 없음. PRIVATE 만 멤버/역할 제한.
+- **변경 파일**:
+  - `schema.prisma` + 마이그레이션 `20260529010000_space_permissions` — `enum SpaceRole/SpaceVisibility`, `model SpaceMember(@@id[spaceId,userId])`, `Space.visibility(@default PUBLIC)`+members, `User.spaceMemberships`. 백필: PERSONAL→visibility=PERSONAL
+  - `spaces/space-permission.service.ts` 신규 — `canView/canEdit/canManage`(전역 ADMIN override·PUBLIC·PRIVATE·PERSONAL) + assert 헬퍼 + `space/pageVisibilityWhere` 필터. `space-permission.module.ts`(PrismaModule @Global)
+  - `spaces.service.create` — 생성자 actor→`SpaceMember(ADMIN)` 자동 등록. `findAll(actor)` → `spaceVisibilityWhere` 기반(visibility 전환)
+  - `pages.service` — `findOne(id, actor)` canView assert(403), `recent({..., actor})` `pageVisibilityWhere` 필터
+  - `pages.controller` — `@Get('recent')`/`@Get(':id')` 에 `OptionalJwtAuthGuard` + actor 전달. `spaces.controller.findAll` actor 전달
+  - `space-permission.service.spec` 신규(권한 매트릭스 전수) + `pages.service.spec` 권한 서비스 mock 주입
+- **검증**: ⚠️ **`cd apps/api && npx prisma migrate deploy`** + `npx prisma generate` 적용 필수. api `tsc --noEmit` EXIT 0, jest **140 passed (14 suites)**(권한 spec 신규)
+- **현재 효과(회귀 없음)**: 기존 스페이스 전부 PUBLIC → 가드/필터 사실상 no-op. **개선**: 타인 PERSONAL 페이지가 `/home 최근`·`findOne`·`스페이스 목록`에서 더 이상 노출되지 않음(기존 프라이버시 누수 차단)
+- **⚠️ 74-A 잔여(필수 — PRIVATE 토글(74-B) 전 완료)**: ① 읽기 필터 미적용 엔드포인트 — `board`/`search`/`full-search`(현재 타인 PERSONAL 누수 잔존) ② **전 mutation 쓰기 assert**(update/draft/publish/remove/restore/copy/changeStatus 등 — 현재 PUBLIC=로그인 편집이라 행동 동일하나 PRIVATE/PERSONAL 쓰기 보호는 미완). 멤버 CRUD·마지막 Admin 보호는 74-C.
+- **남은 일(메가 사이클)**: 74-B 진입점+개요 / C 권한 탭 / D 감사로그 / E 페이지순서 / F 사이드바구성 / G 아이콘 업로드. **브라우저 시각 확인 미수행**
+- **비고**: 권한 판정은 `SpacePermissionService` 단일 출처. 페이지 상태(Cycle 70) '작성자+ADMIN' 임시 가드는 이번엔 그대로 유지(별도 교체). CLAUDE.md 갱신은 메가 사이클(74) 완료 시 일괄(현재 모델 진화 중).
