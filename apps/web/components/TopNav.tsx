@@ -9,6 +9,7 @@ import { useAuth } from "@/lib/auth/useAuth";
 import { useRecentSpacesStore } from "@/lib/stores/useRecentSpacesStore";
 import { getSpaceHomePageId } from "@/lib/spaceHome";
 import SearchOverlay from "@/components/SearchOverlay";
+import SpaceAvatar from "@/components/SpaceAvatar";
 import NotificationBellButton from "@/components/NotificationBellButton";
 
 type Props = {
@@ -384,9 +385,7 @@ function SpaceCombobox({ spaces, onSelectSpace, onCreateSpace }: Props) {
                   }}
                   className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-[#172b4d] hover:bg-[#ebecf0]"
                 >
-                  <div className="w-6 h-6 rounded bg-[#0052cc] text-white flex items-center justify-center text-[11px] font-bold shrink-0">
-                    {s.name.slice(0, 1).toUpperCase()}
-                  </div>
+                  <SpaceAvatar name={s.name} icon={s.icon} size={24} />
                   <span className="flex-1 min-w-0 truncate font-medium">
                     {s.name}
                   </span>

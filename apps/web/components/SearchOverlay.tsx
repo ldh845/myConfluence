@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { highlightText } from "@/lib/highlight";
+import SpaceAvatar from "@/components/SpaceAvatar";
 import { useRecentSpacesStore } from "@/lib/stores/useRecentSpacesStore";
 import { getSpaceHomePageId } from "@/lib/spaceHome";
 import type { SpaceWithPages } from "@/lib/types";
@@ -374,9 +375,7 @@ export default function SearchOverlay({ open, onClose }: Props) {
                       checked={selectedSpaceIds.includes(s.id)}
                       onChange={() => toggleSpace(s.id)}
                     >
-                      <span className="w-5 h-5 shrink-0 rounded bg-[#0052cc] text-white flex items-center justify-center text-[10px] font-bold">
-                        {s.name.slice(0, 1).toUpperCase()}
-                      </span>
+                      <SpaceAvatar name={s.name} icon={s.icon} size={20} />
                       <span className="truncate">{s.name}</span>
                     </CheckRow>
                   ))
@@ -520,9 +519,7 @@ export default function SearchOverlay({ open, onClose }: Props) {
                           onClick={() => enterSpace(s)}
                           className="w-full text-left flex gap-3 px-3 py-2.5 rounded-md hover:bg-[#f4f5f7]"
                         >
-                          <div className="w-7 h-7 shrink-0 rounded bg-[#0052cc] text-white flex items-center justify-center text-[13px] font-bold">
-                            {s.name.slice(0, 1).toUpperCase()}
-                          </div>
+                          <SpaceAvatar name={s.name} icon={s.icon} size={28} />
                           <div className="flex-1 min-w-0">
                             <div className="text-[14px] font-medium text-[#172b4d] flex items-center gap-2">
                               {highlightText(s.name, debouncedQ)}

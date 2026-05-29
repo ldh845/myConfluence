@@ -9,6 +9,7 @@ import { useAuth } from "@/lib/auth/useAuth";
 import { apiFetch } from "@/lib/api";
 import { getSpaceHomePageId } from "@/lib/spaceHome";
 import SpaceStarButton from "@/components/SpaceStarButton";
+import SpaceAvatar from "@/components/SpaceAvatar";
 
 // Cycle 29 — 시스템 홈(/home) 사이드바.
 // 발견 / 내 작업 sub-item 은 /home?view=<id> 로 view 전환.
@@ -203,9 +204,7 @@ export default function SystemSidebar({
             aria-label={sp.name}
             className="w-9 h-9 flex items-center justify-center rounded hover:bg-[#ebecf0]"
           >
-            <div className="w-6 h-6 rounded bg-[#0052cc] text-white flex items-center justify-center text-[11px] font-bold">
-              {sp.name.slice(0, 1).toUpperCase()}
-            </div>
+            <SpaceAvatar name={sp.name} icon={sp.icon} size={24} />
           </button>
         ))}
       </aside>
@@ -270,9 +269,7 @@ export default function SystemSidebar({
                 title={sp.description ?? sp.name}
                 className="flex-1 flex items-center gap-2 pl-4 pr-1 py-1.5 rounded text-[13px] text-left text-[#172b4d] hover:bg-[#ebecf0]"
               >
-                <div className="w-5 h-5 rounded bg-[#0052cc] text-white flex items-center justify-center text-[10px] font-bold shrink-0">
-                  {sp.name.slice(0, 1).toUpperCase()}
-                </div>
+                <SpaceAvatar name={sp.name} icon={sp.icon} size={20} />
                 <span className="flex-1 truncate">{sp.name}</span>
               </button>
               <SpaceStarButton spaceId={sp.id} size="sm" className="mr-2" />

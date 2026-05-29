@@ -27,6 +27,7 @@ import { useFavoritesStore } from "@/lib/stores/useFavoritesStore";
 import { useAuth } from "@/lib/auth/useAuth";
 import { canManageSpace } from "@/lib/spacePermission";
 import SpaceStarButton from "@/components/SpaceStarButton";
+import SpaceAvatar from "@/components/SpaceAvatar";
 import DeletePageDialog from "@/components/DeletePageDialog";
 import AppIcon from "@/components/AppIcon";
 
@@ -512,21 +513,7 @@ export default function Sidebar({
     <aside className="w-[260px] shrink-0 bg-[#f4f5f7] border-r border-[#dfe1e6] h-full overflow-y-auto flex flex-col">
       {space && (
         <div className="flex items-center gap-2 px-4 py-3 border-b border-[#dfe1e6]">
-          {space.icon && space.icon.startsWith("data:") ? (
-            <img
-              src={space.icon}
-              alt=""
-              className="w-8 h-8 rounded object-cover shrink-0"
-            />
-          ) : space.icon ? (
-            <div className="w-8 h-8 rounded bg-white flex items-center justify-center text-[18px] leading-none shrink-0">
-              {space.icon}
-            </div>
-          ) : (
-            <div className="w-8 h-8 rounded bg-[#0052cc] text-white flex items-center justify-center font-bold shrink-0">
-              {space.name.slice(0, 1).toUpperCase()}
-            </div>
-          )}
+          <SpaceAvatar name={space.name} icon={space.icon} size={32} />
           <div className="flex-1 min-w-0">
             <div className="text-sm font-semibold text-[#172b4d] truncate">
               {space.name}

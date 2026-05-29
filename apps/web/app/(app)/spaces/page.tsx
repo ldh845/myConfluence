@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import SpaceStarButton from "@/components/SpaceStarButton";
+import SpaceAvatar from "@/components/SpaceAvatar";
 import { useStarredSpacesStore } from "@/lib/stores/useStarredSpacesStore";
 import type { SpaceWithPages } from "@/lib/types";
 
@@ -224,21 +225,7 @@ function SpacesDirectory() {
                   className="border-b border-[#dfe1e6] hover:bg-[#f4f5f7]"
                 >
                   <td className="py-3">
-                    {space.icon && space.icon.startsWith("data:") ? (
-                      <img
-                        src={space.icon}
-                        alt=""
-                        className="w-8 h-8 rounded object-cover"
-                      />
-                    ) : space.icon ? (
-                      <div className="w-8 h-8 rounded bg-[#f4f5f7] flex items-center justify-center text-[18px] leading-none">
-                        {space.icon}
-                      </div>
-                    ) : (
-                      <div className="w-8 h-8 rounded bg-[#0052cc] text-white flex items-center justify-center font-bold">
-                        {space.name.slice(0, 1).toUpperCase()}
-                      </div>
-                    )}
+                    <SpaceAvatar name={space.name} icon={space.icon} size={32} />
                   </td>
                   <td>
                     <Link
