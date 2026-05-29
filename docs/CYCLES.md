@@ -2077,3 +2077,25 @@
   5) 페이지 조회 하단: 레이블 칩 + '＋ 레이블 추가'(팝업) 와 이모지 반응이 같은 줄, 그 아래 댓글
 - **남은 일**: 없음. **브라우저 시각 확인 미수행**
 - **비고**: 레이블은 페이지 로컬 `String[]`(공간 전역 레이블/검색·필터는 범위 밖). PATCH `/pages/:id { labels }` 는 기존 가드(`assertCanEditPage`)로 보호. `public/icons` 의 신규 에셋(background/image/palette)은 본 커밋에 미포함(출처 불명 — 사용자 확인 필요).
+
+---
+
+## Cycle 79 — 2026-05-29 — ✅ Done (페이지순서 홈 조작 + Drop 상태 + 툴바 아이콘/문단)
+- **제목**: 페이지순서 홈 들여쓰기 · 페이지 상태 Drop · 에디터 툴바 아이콘 교체 · 제목 드롭다운 문단
+- **카테고리**: BE + FE / UX + 기능 (사용자 4항목)
+- **커밋**: `56f4ff4`(코드), 본 CYCLES.md
+- **마이그레이션**: `20260529050000_page_status_drop` (`ALTER TYPE "PageStatus" ADD VALUE 'DROP'`). 수기 + `migrate deploy` + `prisma generate`(API nest-watch/main 종료 후)
+- **항목별 변경**:
+  - **0. 페이지순서 홈 조작**: `SpacePageOrderPanel` 들여쓰기(→)를 **'인접 형제의 하위로'** 로 일반화 — 이전 형제가 있으면 그 하위로, 첫 항목(홈 등)은 **다음 형제**의 하위로. `canIndent = sibs.length > 1`(첫 항목도 형제만 있으면 가능). 홈 핀은 78에서 이미 제거, 🏠/(홈) 표시 유지. 도움말/버튼 title 을 위치 무관 문구로
+  - **1. Drop 상태**: `PageStatus` enum + `lib/types`/`PageStatusBadge.STATUS_META`(붉은 톤)/`PageStatusDropdown.OPTIONS`/`StatusFilterChips.FILTERS`/`KanbanBoard.COLUMNS`+grouped/`activity-format.STATUS_LABEL`/`pages.controller.parseStatuses` valid set 에 DROP 추가. status PATCH DTO 는 `@IsEnum(PageStatus)` 라 자동 수용
+  - **2. 툴바 아이콘**: `AppIcon` 에 palette/background/image/table 등록. `EditorColorPicker` 트리거 🎨/🖍️ → palette.svg(텍스트색)/background.png(배경색). `EditorToolbar` 이미지 🖼️ → image.png, 표 ▦ → table.png + ▼(크기 선택 팝업 동반 표시). 에셋 `public/icons/{palette.svg,background.png,image.png,table.png}` 커밋 포함
+  - **3. 문단 항목**: `ParagraphStyleDropdown` items 맨 앞에 '문단'(setParagraph, active=현재 라벨이 문단) 추가
+- **검증**: web/api `tsc --noEmit` EXIT 0, jest **154 passed (15 suites)**
+- **동작 확인 안내**:
+  1) ⚠️ **`cd apps/api && npx prisma migrate deploy`** + `npx prisma generate` (적용 완료, **API dev 서버 재기동 필요**)
+  2) 공간 도구 → 페이지 순서: 홈의 → 버튼으로 다음 페이지 하위로 들여쓰기, ← 로 복귀
+  3) 페이지 상태/칸반/목록 필터에 Drop(붉은 배지) 노출 + 변경
+  4) 편집 툴바: 텍스트색/배경색/이미지/표 아이콘 교체, 표는 ▼ 동반
+  5) 제목 드롭다운에 '문단' 노출(제목/인용에서 문단 복귀)
+- **남은 일**: 없음. **브라우저 시각 확인 미수행**
+- **비고**: 들여쓰기 일반화는 홈뿐 아니라 모든 '첫 형제'에 적용(다음 형제 하위로) — 일관성 유지. `public/icons/checkbox.png`(untracked)는 본 작업과 무관해 미포함.
