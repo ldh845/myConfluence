@@ -13,7 +13,7 @@ import PageStatusBadge, { STATUS_META } from "./PageStatusBadge";
 //   optimistic state 로 처리하고 목록/피드 쿼리만 무효화한다.
 //   ⚠️ 권한 가드는 백엔드(PATCH /pages/:id/status)가 최종 — 여기 canEdit 은 UX 용.
 
-const OPTIONS: PageStatus[] = ["TODO", "IN_PROGRESS", "DONE"];
+const OPTIONS: PageStatus[] = ["TODO", "IN_PROGRESS", "DONE", "DROP"];
 
 export default function PageStatusDropdown({
   pageId,

@@ -32,6 +32,7 @@ const COLUMNS: { key: ColumnKey; label: string; color: string }[] = [
     color: STATUS_META.IN_PROGRESS.dot,
   },
   { key: "DONE", label: STATUS_META.DONE.label, color: STATUS_META.DONE.dot },
+  { key: "DROP", label: STATUS_META.DROP.label, color: STATUS_META.DROP.dot },
 ];
 
 const columnOf = (s: PageStatus | null | undefined): ColumnKey => s ?? "NONE";
@@ -105,6 +106,7 @@ export default function KanbanBoard({
       TODO: [],
       IN_PROGRESS: [],
       DONE: [],
+      DROP: [],
     };
     for (const p of pages) g[columnOf(p.status)].push(p);
     return g;

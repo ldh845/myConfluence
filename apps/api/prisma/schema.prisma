@@ -22,6 +22,7 @@ enum PageStatus {
   TODO
   IN_PROGRESS
   DONE
+  DROP
 }
 
 // Cycle 32 — 스페이스 유형. SITE=공용 스페이스, PERSONAL=사용자 개인 공간.

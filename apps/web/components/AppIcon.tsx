@@ -30,6 +30,11 @@ const ICON_SRC = {
   dot: "/icons/dot.png",
   downArrow: "/icons/down-arrow.png",
   chevronDoubleDown: "/icons/chevron-double-down.png",
+  // Cycle 79 — 에디터 툴바 아이콘.
+  palette: "/icons/palette.svg",
+  background: "/icons/background.png",
+  image: "/icons/image.png",
+  table: "/icons/table.png",
 } as const;
 
 export type IconName = keyof typeof ICON_SRC;

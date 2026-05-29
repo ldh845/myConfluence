@@ -559,6 +559,13 @@ function ParagraphStyleDropdown({ editor }: { editor: Editor }) {
   };
 
   const items: Item[] = [
+    // Cycle 79 — '문단'(일반 텍스트) 항목 명시 추가. 제목/인용에서 문단으로 복귀.
+    {
+      label: "문단",
+      preview: <span className="text-[13px] text-[#172b4d]">문단</span>,
+      action: () => editor.chain().focus().setParagraph().run(),
+      active: currentLabel === "문단",
+    },
     ...([1, 2, 3, 4, 5, 6] as const).map<Item>((lvl) => ({
       label: `제목 ${lvl}`,
       preview: (
@@ -852,7 +859,7 @@ function ImageButton({ editor }: { editor: Editor }) {
   return (
     <>
       <TB title="이미지" onClick={openDialog}>
-        🖼️
+        <AppIcon name="image" size={16} alt="이미지" />
       </TB>
       {pageId && (
         <ImageInsertDialog
@@ -943,8 +950,12 @@ function TableButton({ editor }: { editor: Editor }) {
 
   return (
     <div className="relative" ref={ref}>
+      {/* Cycle 79 — 클릭 시 아래에 표 크기 선택 팝업이 열림을 알리는 ▼ 동반. */}
       <TB title="표 삽입" onClick={() => setOpen((v) => !v)}>
-        ▦
+        <span className="flex items-center gap-0.5">
+          <AppIcon name="table" size={16} alt="표 삽입" />
+          <span className="text-[10px] text-[#6b778c]">▾</span>
+        </span>
       </TB>
       {open && (
         <div className="absolute left-0 top-full mt-1 bg-white border border-[#dfe1e6] rounded shadow-lg p-2 z-20 w-fit">

@@ -43,7 +43,7 @@ function userFromReq(
 //   NONE = 상태 없음(null). 그 외는 PageStatus enum 값.
 function parseStatuses(raw?: string): Array<PageStatus | 'NONE'> | undefined {
   if (!raw) return undefined;
-  const valid = new Set(['TODO', 'IN_PROGRESS', 'DONE', 'NONE']);
+  const valid = new Set(['TODO', 'IN_PROGRESS', 'DONE', 'DROP', 'NONE']);
   const list = raw
     .split(',')
     .map((s) => s.trim())

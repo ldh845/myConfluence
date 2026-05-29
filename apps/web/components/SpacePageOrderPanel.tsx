@@ -120,7 +120,7 @@ function Row({
           type="button"
           onClick={onIndent}
           disabled={!canIndent}
-          title="바로 위 페이지의 하위로 (들여쓰기)"
+          title="인접한 페이지의 하위로 (들여쓰기)"
           className="px-1.5 py-0.5 text-[12px] rounded text-[#42526e] hover:bg-[#ebecf0] disabled:text-[#c1c7d0] disabled:hover:bg-transparent"
         >
           →
@@ -171,11 +171,14 @@ export default function SpacePageOrderPanel({ spaceId }: { spaceId: string }) {
   const siblingsOf = (parentId: string | null) =>
     items.filter((i) => i.parentId === parentId);
 
+  // Cycle 79 — 인접 형제의 하위로 들여쓰기. 보통 바로 위(이전) 형제,
+  //   첫 형제(예: 홈)는 위 형제가 없으니 바로 아래(다음) 형제의 하위로.
   const onIndent = (item: FlatItem) => {
     const sibs = siblingsOf(item.parentId);
     const idx = sibs.findIndex((s) => s.id === item.id);
-    if (idx <= 0) return; // 첫 형제는 들여쓰기 불가
-    patch.mutate({ id: item.id, body: { parentId: sibs[idx - 1].id } });
+    const target = idx > 0 ? sibs[idx - 1] : sibs[idx + 1];
+    if (!target) return; // 형제가 하나뿐이면 들여쓸 대상 없음
+    patch.mutate({ id: item.id, body: { parentId: target.id } });
   };
 
   const onOutdent = (item: FlatItem) => {
@@ -213,8 +216,8 @@ export default function SpacePageOrderPanel({ spaceId }: { spaceId: string }) {
   return (
     <div className="space-y-2">
       <p className="text-[12px] text-[#6b778c]">
-        ⠿ 드래그로 같은 상위 안 순서 변경 · → 바로 위 페이지의 하위로 ·
-        ← 상위 밖으로. 변경은 즉시 저장됩니다.
+        ⠿ 드래그로 같은 상위 안 순서 변경 · → 인접한 페이지의 하위로 ·
+        ← 상위 밖으로. 홈 페이지도 동일하게 조절됩니다. 변경은 즉시 저장됩니다.
       </p>
       <DndContext
         sensors={sensors}
@@ -228,12 +231,11 @@ export default function SpacePageOrderPanel({ spaceId }: { spaceId: string }) {
           <div>
             {items.map((it) => {
               const sibs = siblingsOf(it.parentId);
-              const idx = sibs.findIndex((s) => s.id === it.id);
               return (
                 <Row
                   key={it.id}
                   item={it}
-                  canIndent={idx > 0}
+                  canIndent={sibs.length > 1}
                   canOutdent={it.parentId !== null}
                   onIndent={() => onIndent(it)}
                   onOutdent={() => onOutdent(it)}

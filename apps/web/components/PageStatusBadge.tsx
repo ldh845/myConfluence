@@ -16,6 +16,8 @@ export const STATUS_META: Record<
     dot: "#0052cc",
   },
   DONE: { label: "Done", cls: "bg-[#e3fcef] text-[#006644]", dot: "#006644" },
+  // Cycle 79 — Drop(중단/보류). 붉은 톤으로 구분.
+  DROP: { label: "Drop", cls: "bg-[#ffebe6] text-[#bf2600]", dot: "#bf2600" },
 };
 
 export default function PageStatusBadge({

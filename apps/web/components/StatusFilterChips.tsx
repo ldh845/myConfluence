@@ -16,6 +16,7 @@ const FILTERS: { value: StatusToken; label: string; dot?: string }[] = [
     dot: STATUS_META.IN_PROGRESS.dot,
   },
   { value: "DONE", label: STATUS_META.DONE.label, dot: STATUS_META.DONE.dot },
+  { value: "DROP", label: STATUS_META.DROP.label, dot: STATUS_META.DROP.dot },
 ];
 
 function chipCls(active: boolean): string {

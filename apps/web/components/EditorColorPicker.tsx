@@ -8,6 +8,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import AppIcon from "@/components/AppIcon";
 
 // FR-030 부분 — 텍스트/배경 색상 공용 드롭다운.
 // kind='text'   → TextStyle + Color (글자 색)
@@ -43,7 +44,6 @@ type Props = {
 
 export default function EditorColorPicker({ editor, kind }: Props) {
   const presets = kind === "text" ? TEXT_PRESETS : HIGHLIGHT_PRESETS;
-  const triggerLabel = kind === "text" ? "🎨" : "🖍️";
   const triggerTitle = kind === "text" ? "텍스트 색상" : "배경 색상";
 
   const apply = (color: string | null) => {
@@ -65,7 +65,11 @@ export default function EditorColorPicker({ editor, kind }: Props) {
           title={triggerTitle}
           className="min-w-[28px] h-7 px-2 rounded text-[13px] flex items-center justify-center text-[#42526e] hover:bg-[#ebecf0]"
         >
-          {triggerLabel}
+          <AppIcon
+            name={kind === "text" ? "palette" : "background"}
+            size={16}
+            alt={triggerTitle}
+          />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="min-w-[180px]">

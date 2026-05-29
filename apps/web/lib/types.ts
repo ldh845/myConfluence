@@ -1,5 +1,5 @@
 // Cycle 70 — 페이지 작업 상태. null/undefined 면 "상태 없음"(배지 미표시).
-export type PageStatus = "TODO" | "IN_PROGRESS" | "DONE";
+export type PageStatus = "TODO" | "IN_PROGRESS" | "DONE" | "DROP";
 
 export type PageNode = {
   id: string;

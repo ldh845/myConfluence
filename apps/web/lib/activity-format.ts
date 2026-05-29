@@ -43,6 +43,7 @@ const STATUS_LABEL: Record<string, string> = {
   TODO: "To Do",
   IN_PROGRESS: "In Progress",
   DONE: "Done",
+  DROP: "Drop",
 };
 
 export type FormattedActivity = {
