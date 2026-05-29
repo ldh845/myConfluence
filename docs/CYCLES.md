@@ -1703,3 +1703,40 @@
   4) 저장 해제 시 목록에서 사라짐
 - **남은 일**: **Sidebar '즐겨찾기' 섹션**은 여전히 토글 UI 없는 `useFavoritesStore` 를 읽어 비어 있음 — 이번 범위 밖. 필요 시 별도 사이클에서 백엔드 saves 로 통합. `listSaved` 단위 테스트 미추가. **브라우저 시각 확인 미수행**
 - **비고**: 서버(JWT별 SavedPage)를 단일 출처로 채택 — favorites store 의 "user id 기반 모델 마이그레이션 예정"(FR-025 주석) 방향과 일치. `useFavoritesStore` 파일 자체는 Sidebar 가 아직 참조해 보존.
+
+---
+
+## Cycle 70 — 2026-05-29 — ✅ Done (페이지 작업 상태 To Do / In Progress / Done)
+- **제목**: Polarion/Notion 식 페이지 작업 상태 배지 도입 — 표시 + 변경(필터/알림/권한 시스템은 별 사이클)
+- **카테고리**: BE + FE / 기능 (페이지 워크플로 상태)
+- **커밋**: `8ba5cbe`(70-1 코드), 본 CYCLES.md(70-2 Docs)
+- **데이터 모델**: `enum PageStatus { TODO IN_PROGRESS DONE }` + Page 에 `status`(nullable)/`statusAt`/`statusById`/`statusBy`(+ User `@relation("PageStatusBy")` back-relation). null = 상태 없음(배지 미표시)
+- **변경 파일 (BE)**:
+  - `apps/api/prisma/schema.prisma` + 마이그레이션 `20260529000000_page_status` — enum/컬럼/인덱스/FK
+  - `apps/api/src/pages/dto/update-page-status.dto.ts` 신규 — `{ status: PageStatus | null }`(null 허용)
+  - `apps/api/src/pages/pages.service.ts` — `changeStatus(id, status, user)`: **임시 가드(작성자 또는 ADMIN)**, status/statusAt/statusById 갱신, `page.status_changed` 활동 기록(payload `{from,to}`). `recent()` select 에 status
+  - `apps/api/src/pages/pages.controller.ts` — `@Patch(':id/status') @UseGuards(JwtAuthGuard)` + `userFromReq`(role 포함)
+  - `apps/api/src/activities/activities.service.ts` — `ActivityType` union 에 `'page.status_changed'`
+  - `apps/api/src/saves/saves.service.ts` — `listSaved` select 에 status
+  - `apps/api/src/pages/pages.service.spec.ts` — changeStatus 가드(403)/활동기록/no-op 테스트
+- **변경 파일 (FE)**:
+  - `apps/web/components/PageStatusBadge.tsx` 신규 — 색상 배지(To Do 회색/In Progress 파랑/Done 초록, null 미표시)
+  - `apps/web/components/PageStatusDropdown.tsx` 신규 — 배지 클릭 메뉴(현재 ✓, 외부클릭·Esc 닫힘), optimistic 반영 + 목록/피드 쿼리 무효화, 권한 없으면 클릭 불가+툴팁
+  - `PageHeader.tsx`(조회 H1 옆) / `FullScreenEditor.tsx`(편집 제목 옆) 배지 연결, `canEditStatus = ADMIN || author`
+  - `PageCard.tsx` status 배지 / `home/page.tsx` RecentView·SavedView status 전달 + `HOME_ACTIVITY_TYPES` 에 `page.status_changed` / `activity-format.ts` 라벨·케이스 / `lib/types.ts` `PageStatus` + status 필드
+- **검증**: web/api `tsc --noEmit` EXIT 0. API jest **115 passed (13 suites)** — 새 changeStatus 7건 포함
+- **동작 확인 안내**:
+  1) ⚠️ **`cd apps/api && npx prisma migrate deploy`** (+ 필요 시 `npx prisma generate`) — 마이그레이션 적용 필수
+  2) 페이지 제목 옆 배지 — 상태별 색상(회색/파랑/초록)
+  3) 상태 없음(null) 페이지는 배지 미표시(작성자/ADMIN 헤더엔 '+ 상태' 추가 affordance)
+  4) 조회 + 편집 화면 모두 배지 표시
+  5) PageCard(최근 작업/저장 목록)에서도 배지
+  6) 배지 클릭 → 드롭다운, 현재 상태 ✓
+  7) 다른 상태 선택 → 즉시 반영(새로고침 없이, optimistic)
+  8) '상태 제거' → 배지 사라짐
+  9) 작성자/ADMIN 외 사용자 → 배지 클릭 불가 + "상태 변경 권한이 없습니다" 툴팁
+  10) `PATCH /pages/:id/status` 직접 호출 시 비작성자·비ADMIN → 403
+  11) 상태 변경 후 `/home` 활동 피드에 `page.status_changed` 항목 노출
+  12) 활동 사용자 필터(`HOME_ACTIVITY_TYPES`)에 정상 포함
+- **남은 일**: **권한은 임시 가드(작성자/ADMIN)** — 향후 권한 시스템 사이클에서 페이지 단위 권한/자물쇠로 교체. **필터링(상태별 보기)·상태 변경 알림은 별 사이클**. Sidebar 페이지 트리 배지는 범위 외(제외). **브라우저 시각 확인 미수행**(API/DB 기동 필요) — 타입체크·단위테스트만 통과
+- **비고**: 마이그레이션은 `migrate dev` 가 기존 체크섬 드리프트(EOL)로 DB 리셋을 요구해 거부됨 → **수기 마이그레이션 파일 + `migrate deploy`** 로 비파괴 적용(미적용이던 `notifications` 마이그레이션도 함께 적용됨). `ActivityLog.type` 은 enum 이 아니라 `String` 이라 새 type 은 union 추가만으로 충분. 배지 색상 결정: To Do `#dfe1e6/#42526e`, In Progress `#deebff/#0052cc`, Done `#e3fcef/#006644`.
