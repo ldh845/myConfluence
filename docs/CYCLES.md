@@ -1939,3 +1939,30 @@
 - **남은 일**: 계층(재부모) 변경은 이 탭에선 미지원(사이드바 트리 DnD 사용). 74-F 사이드바 구성 / 74-G 아이콘 업로드. **브라우저 시각 확인 미수행**
 - **비고**: 단일 `SortableContext`(flat ids) + dragEnd 에서 같은 parentId 일 때만 형제 인덱스로 PATCH. 계층 재부모는 사이드바가 이미 지원하므로 중복 구현 회피.
 - **74-E followup (피드백 반영)**: ① **홈(메인 페이지)을 최상단에 🏠 고정**(드래그/버튼 비활성), 트리는 실제 parentId 구조 그대로(승격 없이) 표시 — 편집 도구라 raw 구조가 명확. ② **계층(재부모) 지원 추가** — `→`(바로 위 형제의 하위로, parentId=prevSibling) / `←`(상위 밖으로, parentId=조부모) 버튼. 드래그는 같은 상위 순서 변경 유지. PATCH parentId 의 cycle/스페이스 일치 가드는 백엔드 `pages.update` 가 처리. (`69c1611`)
+- **74 followup**: **개인 공간에도 '공간 도구' 노출**(소유자=canManageSpace). 단 개인 공간은 멤버 모델 부적합 → '권한' 탭 + 삭제 섹션 제외(개요/감사로그/페이지순서만). (`017d391`)
+
+---
+
+## Cycle 74-F — 2026-05-29 — ✅ Done (공간 도구 사이드바 구성 — 스페이스 바로가기)
+- **제목**: 스페이스별 사이드바 바로가기(내부 페이지/외부 URL) 관리 + 사이드바 표시
+- **카테고리**: BE + FE / 기능 (사이드바 구성)
+- **커밋**: `62671f5`(74-F 코드), 본 CYCLES.md
+- **마이그레이션**: `20260529020000_space_shortcut` (enum SpaceShortcutType, model SpaceShortcut, Space.shortcuts). migrate dev 가 EOL 드리프트로 리셋 요구 → 수기 마이그레이션 + `migrate deploy` 비파괴 적용
+- **변경 파일 (BE)**:
+  - `schema.prisma` — `enum SpaceShortcutType(INTERNAL_PAGE|EXTERNAL_URL)`, `model SpaceShortcut{id,spaceId,type,label,target,position}`, `Space.shortcuts`
+  - `spaces.service.ts` — `addShortcut`/`updateShortcut`/`removeShortcut`/`reorderShortcuts`(각 canManage). 외부 URL `isSafeHttpUrl`(http/https 만), 내부 페이지는 해당 공간 소속 검증. `findAll` include 에 shortcuts(position asc)
+  - `spaces.controller.ts` — `POST/PATCH/DELETE /spaces/:id/shortcuts[/:shortcutId]` + `PATCH .../reorder`(:shortcutId 위에 선언)
+  - `dto/shortcut.dto.ts` 신규. `spaces.service.spec` — URL 스킴 차단·내부 페이지 검증·reorder
+- **변경 파일 (FE)**:
+  - `SpaceSidebarConfigPanel.tsx` 신규 — 바로가기 추가(내부=공간 페이지 select/외부=URL)+삭제+위/아래 순서(reorder)
+  - `Sidebar.tsx` — '바로가기' 섹션 렌더(내부=페이지 이동 onSelect, 외부=새 탭 `rel=noopener noreferrer`). 드롭다운 '사이드바 구성' 탭 활성화
+  - `SpaceSettings.tsx` — '사이드바 구성' 탭 enabled + 패널 렌더. `lib/types` SpaceShortcut(Type) + `shortcuts`
+- **검증**: web/api `tsc --noEmit` EXIT 0, jest **154 passed (15 suites)**
+- **동작 확인 안내**:
+  1) ⚠️ **`cd apps/api && npx prisma migrate deploy`** + `npx prisma generate` (적용 완료, dev 서버 재기동 필요)
+  2) 공간 도구 → '사이드바 구성' → 내부 페이지/외부 URL 바로가기 추가, 위/아래 순서, 삭제
+  3) 사이드바에 '바로가기' 섹션 노출(내부=페이지 이동, 외부=새 탭)
+  4) 외부 URL 에 `javascript:` 등 비-http(s) → 400(차단). 다른 공간 페이지를 내부 바로가기로 → 400
+  5) 비-canManage 의 shortcut API 직접 호출 → 403
+- **남은 일**: '표시 항목 토글(페이지 트리/최근 활동/즐겨찾기)·트리 표시 방식' 은 현재 사이드바에 해당 토글 섹션이 없어 미구현(필요 시 별도). 74-G 스페이스 아이콘 이미지 업로드. **브라우저 시각 확인 미수행**
+- **비고**: 바로가기 목록은 `GET /spaces`(findAll) include 로 제공(별도 fetch 없이 사이드바·설정 패널 공유). 멤버 공통(Space 종속, 사용자별 아님 — 사이드바 구성 저장 위치 옵션 A).
