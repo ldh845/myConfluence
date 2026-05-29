@@ -335,6 +335,15 @@ export default function Sidebar({
     return null;
   }, [pages, space?.homePageId]);
 
+  // 홈 진입 — '홈' 버튼과 사이드바 공간 이름 클릭이 공유. 미지정이면 안내.
+  const goHome = () => {
+    if (homePageId) onSelect(homePageId);
+    else
+      window.alert(
+        "이 공간의 홈 페이지가 지정되지 않았습니다. 공간 도구에서 홈 페이지를 지정하세요.",
+      );
+  };
+
   // Cycle 75 — 홈 페이지도 트리에 표시(기존의 홈 제외/자식 승격 폐기).
   // Cycle 35 — 미발행 draft(publishedAt=null)만 숨긴다. 발행해야 트리 등장.
   // publishedAt 필드가 응답에 빠진 레거시 페이지는 보수적으로 노출(undefined → 통과).
@@ -507,9 +516,14 @@ export default function Sidebar({
         <div className="flex items-center gap-2 px-4 py-3 border-b border-[#dfe1e6]">
           <SpaceAvatar name={space.name} icon={space.icon} size={32} />
           <div className="flex-1 min-w-0">
-            <div className="text-sm font-semibold text-[#172b4d] truncate">
+            <button
+              type="button"
+              onClick={goHome}
+              title="공간 홈으로 이동"
+              className="block w-full text-left text-sm font-semibold text-[#172b4d] truncate hover:text-[#0052cc]"
+            >
               {space.name}
-            </div>
+            </button>
           </div>
           {/* Cycle 29 (별표) — 스페이스 별표 토글. SystemSidebar/TopNav/홈과 store 공유. */}
           <SpaceStarButton spaceId={space.id} size="md" alwaysVisible />
@@ -526,13 +540,7 @@ export default function Sidebar({
             !!homePageId &&
             selectedPageId === homePageId
           }
-          onClick={() => {
-            if (homePageId) onSelect(homePageId);
-            else
-              window.alert(
-                "이 공간의 홈 페이지가 지정되지 않았습니다. 공간 도구에서 홈 페이지를 지정하세요.",
-              );
-          }}
+          onClick={goHome}
         />
         {/* Cycle 51 — "페이지" 메뉴 동작 변경: 첫 페이지 자동 이동 폐기.
             이제는 그 공간의 최근 업데이트 페이지 목록 화면(SpacePagesView,
