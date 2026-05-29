@@ -116,13 +116,6 @@ export default function SpaceSettings({ spaceId }: { spaceId: string }) {
     }
   }, [space]);
 
-  // Cycle 74 — 개인 공간엔 권한(멤버) 탭이 없으므로 진입 시 개요로 폴백.
-  useEffect(() => {
-    if (space?.type === "PERSONAL" && activeTab === "permissions") {
-      setActiveTab("overview");
-    }
-  }, [space, activeTab]);
-
   const canManage = canManageSpace(space, user);
 
   const saveMutation = useMutation({
@@ -187,11 +180,9 @@ export default function SpaceSettings({ spaceId }: { spaceId: string }) {
     );
   }
 
-  // 개인 공간은 멤버 권한 개념이 없어 '권한' 탭 제외.
-  const visibleTabs =
-    space.type === "PERSONAL"
-      ? TABS.filter((t) => t.id !== "permissions")
-      : TABS;
+  // Cycle 75 followup — 개인 공간도 모든 탭(권한 포함) 노출(사용자 요청).
+  //   단 개인 공간 멤버 추가는 권한 모델상 실제 접근을 부여하지 않음(표시용).
+  const visibleTabs = TABS;
 
   return (
     <div className="px-6 pt-6 pb-16 max-w-[760px]">
@@ -419,9 +410,8 @@ export default function SpaceSettings({ spaceId }: { spaceId: string }) {
           </>
         )}
 
-        {/* 스페이스 삭제 — 별도 버튼으로 분리. 개인 공간은 삭제 불가. */}
-        {space.type !== "PERSONAL" && (
-          <div className="mt-8 border-t border-[#dfe1e6] pt-6">
+        {/* Cycle 75 followup — 개인 공간도 삭제 버튼 노출(사용자 요청). */}
+        <div className="mt-8 border-t border-[#dfe1e6] pt-6">
             {!showDelete ? (
               <button
                 type="button"
@@ -437,6 +427,13 @@ export default function SpaceSettings({ spaceId }: { spaceId: string }) {
                 </h3>
                 <p className="text-[12px] text-[#6b778c] mb-3">
                   이 공간과 모든 페이지가 영구 삭제됩니다. 되돌릴 수 없습니다.
+                  {space.type === "PERSONAL" && (
+                    <>
+                      {" "}
+                      개인 공간은 다음 로그인 시 빈 상태로 자동 재생성되지만,
+                      현재 페이지는 복구되지 않습니다.
+                    </>
+                  )}{" "}
                   확인을 위해 공간 이름{" "}
                   <strong className="text-[#172b4d]">{space.name}</strong>{" "}
                   을(를) 입력하세요.
@@ -479,8 +476,7 @@ export default function SpaceSettings({ spaceId }: { spaceId: string }) {
                 </div>
               </div>
             )}
-          </div>
-        )}
+        </div>
       </div>
     </div>
   );
