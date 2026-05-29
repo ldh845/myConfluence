@@ -1,5 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { PagesService } from './pages.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { AttachmentsService } from '../attachments/attachments.service';
@@ -329,5 +333,128 @@ describe('PagesService — remove (Cycle 56 cascade option)', () => {
     expect(activitiesMock.log.mock.calls[1][0].payload).not.toHaveProperty(
       'descendants',
     );
+  });
+});
+
+// Cycle 70 — changeStatus(id, status, user) 검증.
+//   - 임시 가드: 작성자(authorId===user.id) 또는 ADMIN 만 허용, 그 외 Forbidden
+//   - 비로그인(user=null) Forbidden / 미존재 NotFound
+//   - 성공 시 status/statusAt/statusById 갱신 + page.status_changed 활동 기록(payload from/to)
+//   - 동일 상태(no-op) → update/log 미호출
+describe('PagesService — changeStatus (Cycle 70)', () => {
+  let service: PagesService;
+  let prismaMock: {
+    page: { findFirst: jest.Mock; update: jest.Mock };
+  };
+  let activitiesMock: { log: jest.Mock };
+
+  beforeEach(async () => {
+    prismaMock = {
+      page: {
+        findFirst: jest.fn(),
+        update: jest.fn().mockResolvedValue({}),
+      },
+    };
+    activitiesMock = { log: jest.fn().mockResolvedValue(undefined) };
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        PagesService,
+        { provide: PrismaService, useValue: prismaMock },
+        { provide: AttachmentsService, useValue: {} },
+        { provide: ActivitiesService, useValue: activitiesMock },
+        {
+          provide: NotificationsService,
+          useValue: { notifyMentions: jest.fn() },
+        },
+      ],
+    }).compile();
+    service = module.get<PagesService>(PagesService);
+  });
+
+  const AUTHOR = { id: 'u-author', name: '작성자', role: 'DEVELOPER' };
+  const ADMIN = { id: 'u-admin', name: '관리자', role: 'ADMIN' };
+  const OTHER = { id: 'u-other', name: '타인', role: 'DEVELOPER' };
+
+  // 첫 findFirst = 가드용(select), 둘째 findFirst = findOne(반환값).
+  const seed = (authorId: string | null, status: string | null) => {
+    prismaMock.page.findFirst
+      .mockResolvedValueOnce({ id: 'p-1', spaceId: 'sp-1', authorId, status })
+      .mockResolvedValueOnce({ id: 'p-1', status });
+  };
+
+  it('비로그인(user=null) → Forbidden', async () => {
+    await expect(
+      service.changeStatus('p-1', 'TODO', null),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it('작성자/ADMIN 아님 → Forbidden, update·log 미호출', async () => {
+    prismaMock.page.findFirst.mockResolvedValueOnce({
+      id: 'p-1',
+      spaceId: 'sp-1',
+      authorId: 'u-author',
+      status: null,
+    });
+    await expect(
+      service.changeStatus('p-1', 'TODO', OTHER),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(prismaMock.page.update).not.toHaveBeenCalled();
+    expect(activitiesMock.log).not.toHaveBeenCalled();
+  });
+
+  it('미존재 페이지 → NotFound', async () => {
+    prismaMock.page.findFirst.mockResolvedValueOnce(null);
+    await expect(
+      service.changeStatus('missing', 'TODO', ADMIN),
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('작성자 → 상태 변경 + page.status_changed 기록(payload from/to)', async () => {
+    seed('u-author', null);
+    await service.changeStatus('p-1', 'IN_PROGRESS', AUTHOR);
+    expect(prismaMock.page.update).toHaveBeenCalledWith({
+      where: { id: 'p-1' },
+      data: {
+        status: 'IN_PROGRESS',
+        statusAt: expect.any(Date),
+        statusById: 'u-author',
+      },
+    });
+    expect(activitiesMock.log).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'page.status_changed',
+        pageId: 'p-1',
+        actorId: 'u-author',
+        payload: { from: null, to: 'IN_PROGRESS' },
+      }),
+    );
+  });
+
+  it('ADMIN(작성자 아님) → 허용', async () => {
+    seed('u-author', 'TODO');
+    await service.changeStatus('p-1', 'DONE', ADMIN);
+    expect(prismaMock.page.update).toHaveBeenCalled();
+    expect(activitiesMock.log).toHaveBeenCalledWith(
+      expect.objectContaining({ payload: { from: 'TODO', to: 'DONE' } }),
+    );
+  });
+
+  it('상태 제거(null) → status:null 갱신 + payload to:null', async () => {
+    seed('u-author', 'DONE');
+    await service.changeStatus('p-1', null, AUTHOR);
+    expect(prismaMock.page.update).toHaveBeenCalledWith({
+      where: { id: 'p-1' },
+      data: { status: null, statusAt: expect.any(Date), statusById: 'u-author' },
+    });
+    expect(activitiesMock.log).toHaveBeenCalledWith(
+      expect.objectContaining({ payload: { from: 'DONE', to: null } }),
+    );
+  });
+
+  it('동일 상태(no-op) → update·log 미호출', async () => {
+    seed('u-author', 'TODO');
+    await service.changeStatus('p-1', 'TODO', AUTHOR);
+    expect(prismaMock.page.update).not.toHaveBeenCalled();
+    expect(activitiesMock.log).not.toHaveBeenCalled();
   });
 });

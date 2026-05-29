@@ -1,9 +1,10 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import type { Prisma } from '@prisma/client';
+import { type Prisma, type PageStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AttachmentsService } from '../attachments/attachments.service';
 import { ActivitiesService } from '../activities/activities.service';
@@ -123,6 +124,8 @@ export class PagesService {
         title: true,
         spaceId: true,
         updatedAt: true,
+        // Cycle 70 — 카드 배지용 작업 상태.
+        status: true,
         space: { select: { name: true } },
         author: { select: { id: true, name: true } },
         lastEditor: { select: { id: true, name: true } },
@@ -281,6 +284,47 @@ export class PagesService {
     });
     if (!page) throw new NotFoundException({ error: 'not found' });
     return page;
+  }
+
+  // Cycle 70 — 페이지 작업 상태(To Do / In Progress / Done) 변경. status=null 이면 제거.
+  //   ⚠️ 임시 가드: 페이지 작성자(authorId) 또는 ADMIN 만 변경 가능. 향후 권한
+  //   시스템 사이클에서 페이지 단위 권한/자물쇠 정책으로 교체 예정.
+  async changeStatus(
+    id: string,
+    status: PageStatus | null,
+    user: { id: string; name: string; role: string } | null,
+  ) {
+    if (!user) throw new ForbiddenException({ error: 'unauthorized' });
+    const page = await this.prisma.page.findFirst({
+      where: { id, deletedAt: null },
+      select: { id: true, spaceId: true, authorId: true, status: true },
+    });
+    if (!page) throw new NotFoundException({ error: 'not found' });
+
+    const isAdmin = user.role === 'ADMIN';
+    const isAuthor = page.authorId != null && page.authorId === user.id;
+    if (!isAdmin && !isAuthor) {
+      throw new ForbiddenException({
+        error: 'forbidden: not page author or admin',
+      });
+    }
+
+    const from = page.status ?? null;
+    if (from !== status) {
+      await this.prisma.page.update({
+        where: { id },
+        data: { status, statusAt: new Date(), statusById: user.id },
+      });
+      await this.activities.log({
+        type: 'page.status_changed',
+        spaceId: page.spaceId,
+        pageId: page.id,
+        actorId: user.id,
+        actorName: user.name,
+        payload: { from, to: status },
+      });
+    }
+    return this.findOne(id);
   }
 
   // FR-001 (Cycle 27c) — author/lastEditor 자동 세팅.

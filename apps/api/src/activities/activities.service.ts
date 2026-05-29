@@ -13,6 +13,7 @@ export type ActivityType =
   | 'page.soft_deleted'
   | 'page.restored'
   | 'page.permanent_deleted'
+  | 'page.status_changed'
   | 'comment.created';
 
 @Injectable()

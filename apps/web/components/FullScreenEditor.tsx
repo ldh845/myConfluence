@@ -28,6 +28,8 @@ import type {
   SaveStatus,
 } from "@/components/CollaborativeEditor";
 import type { PageFull, SpaceWithPages } from "@/lib/types";
+import { useAuth } from "@/lib/auth/useAuth";
+import PageStatusDropdown from "@/components/PageStatusDropdown";
 
 // 본문 에디터는 SSR에서 제외 (Yjs/IndexedDB가 window 의존).
 const CollaborativeEditor = dynamic(
@@ -69,6 +71,10 @@ export default function FullScreenEditor({
   // 편집기 인스턴스 — 툴바를 상단 sticky 영역에 분리 배치하기 위해
   // CollaborativeEditor가 onEditor로 위로 끌어올린 ref를 받는다.
   const [editor, setEditor] = useState<Editor | null>(null);
+  // Cycle 70 — 편집 화면 제목 옆 상태 배지. 변경 권한은 작성자/ADMIN(임시 가드).
+  const { user } = useAuth();
+  const canEditStatus =
+    !!user && (user.role === "ADMIN" || page.author?.id === user.id);
   // 제목은 우리가 별도로 들고 있다가 commit 시점(blur/Enter)에 부모로 흘려보낸다.
   // Cycle 36-followup — TopNav 만들기로 갓 만든 draft는 title="제목 없음"
   // 기본값으로 들어오는데, 그대로 보여주면 사용자가 placeholder처럼 인식해
@@ -243,26 +249,34 @@ export default function FullScreenEditor({
               </button>
             </div>
           )}
-          <input
-            ref={titleInputRef}
-            value={title}
-            onChange={(e) => {
-              setTitle(e.target.value);
-              if (e.target.value.trim() && titleError) setTitleError(false);
-            }}
-            onBlur={commitTitle}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                commitTitle();
-                editor?.commands.focus("start");
-              }
-            }}
-            placeholder="페이지 제목"
-            className={`w-full text-[32px] leading-tight font-bold text-[#172b4d] bg-transparent outline-none border-0 px-0 py-2 placeholder-[#a5adba] ${
-              titleError ? "underline decoration-[#de350b] decoration-2" : ""
-            }`}
-          />
+          <div className="flex items-center gap-2">
+            <input
+              ref={titleInputRef}
+              value={title}
+              onChange={(e) => {
+                setTitle(e.target.value);
+                if (e.target.value.trim() && titleError) setTitleError(false);
+              }}
+              onBlur={commitTitle}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  commitTitle();
+                  editor?.commands.focus("start");
+                }
+              }}
+              placeholder="페이지 제목"
+              className={`flex-1 min-w-0 text-[32px] leading-tight font-bold text-[#172b4d] bg-transparent outline-none border-0 px-0 py-2 placeholder-[#a5adba] ${
+                titleError ? "underline decoration-[#de350b] decoration-2" : ""
+              }`}
+            />
+            {/* Cycle 70 — 편집 화면에서도 제목 옆 상태 배지 + 변경. */}
+            <PageStatusDropdown
+              pageId={page.id}
+              status={page.status}
+              canEdit={canEditStatus}
+            />
+          </div>
           <div className="mt-2">
             <CollaborativeEditor
               key={`fs-${page.id}`}

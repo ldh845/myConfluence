@@ -1,3 +1,6 @@
+// Cycle 70 — 페이지 작업 상태. null/undefined 면 "상태 없음"(배지 미표시).
+export type PageStatus = "TODO" | "IN_PROGRESS" | "DONE";
+
 export type PageNode = {
   id: string;
   title: string;
@@ -9,6 +12,8 @@ export type PageNode = {
   // Cycle 35 — 발행 시각. null이면 미발행 draft → Sidebar 페이지 트리에서 숨김.
   // 첫 publish 시 백엔드가 채운다. 백엔드 응답에서 빠져있을 수도 있어 optional.
   publishedAt?: string | null;
+  // Cycle 70 — 작업 상태(카드 배지용). 백엔드 select 에 따라 빠질 수 있어 optional.
+  status?: PageStatus | null;
 };
 
 export type SpaceWithPages = {
@@ -48,4 +53,6 @@ export type PageFull = {
   publishedAt?: string | null;
   author?: PageUserSummary | null;
   lastEditor?: PageUserSummary | null;
+  // Cycle 70 — 작업 상태. findOne 은 scalar 자동 포함이라 항상 옴(상태 없으면 null).
+  status?: PageStatus | null;
 };

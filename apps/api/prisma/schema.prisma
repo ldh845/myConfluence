@@ -17,6 +17,13 @@ enum Role {
   PM
 }
 
+// Cycle 70 — 페이지 작업 상태. null(컬럼 nullable)이면 "상태 없음" → 배지 미표시.
+enum PageStatus {
+  TODO
+  IN_PROGRESS
+  DONE
+}
+
 // Cycle 32 — 스페이스 유형. SITE=공용 스페이스, PERSONAL=사용자 개인 공간.
 enum SpaceType {
   SITE
@@ -48,6 +55,8 @@ model User {
   updatedAt                  DateTime      @updatedAt
   authoredPages              Page[]        @relation("PageAuthor")
   editedPages                Page[]        @relation("PageEditor")
+  // Cycle 70 — 페이지 상태 변경자 back-relation. user 삭제 시 SetNull.
+  statusChangedPages         Page[]        @relation("PageStatusBy")
   // FR-001 / FR-002 (Cycle 27d) — Comment / PageShare 작성자 양방향 관계.
   // user 삭제 시 SetNull → authorName / 시스템 표기로 fallback.
   authoredComments           Comment[]     @relation("CommentAuthor")
@@ -119,6 +128,12 @@ model Page {
   author       User?         @relation("PageAuthor", fields: [authorId], references: [id], onDelete: SetNull)
   lastEditorId String?
   lastEditor   User?         @relation("PageEditor", fields: [lastEditorId], references: [id], onDelete: SetNull)
+  // Cycle 70 — 작업 상태(To Do / In Progress / Done). null = 상태 없음(배지 미표시).
+  //   statusAt/statusById = 마지막 상태 변경 시각/변경자. 변경자 삭제 시 SetNull.
+  status       PageStatus?
+  statusAt     DateTime?
+  statusById   String?
+  statusBy     User?         @relation("PageStatusBy", fields: [statusById], references: [id], onDelete: SetNull)
   // Cycle 33 — 이 페이지가 어느 공간의 홈 페이지인지 (back-relation).
   homeOfSpace  Space?        @relation("SpaceHomePage")
   // Cycle 35 — 발행 시각. null이면 아직 한 번도 발행되지 않은 draft 페이지로,
@@ -139,6 +154,7 @@ model Page {
   @@index([parentId, position], map: "Page_parent_position_idx")
   @@index([authorId])
   @@index([lastEditorId])
+  @@index([statusById])
   // FR-090 (Cycle 15-1a / 17) — 한글 부분 일치 ILIKE 가속용 GIN trigram 인덱스.
   // schema에 명시함으로써 향후 prisma migrate가 자동 DROP하지 않도록 차단.
   @@index([title(ops: raw("gin_trgm_ops"))], type: Gin, map: "Page_title_trgm_idx")

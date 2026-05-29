@@ -12,6 +12,7 @@ import { downloadPageMarkdown } from "@/lib/export/markdown";
 import { openPrintDialog } from "@/lib/export/print";
 import { useAuth } from "@/lib/auth/useAuth";
 import AppIcon from "@/components/AppIcon";
+import PageStatusDropdown from "@/components/PageStatusDropdown";
 
 function relativeTime(iso: string): string {
   const diffSec = Math.max(
@@ -94,6 +95,9 @@ export default function PageHeader({
   const [draft, setDraft] = useState(page.title);
   const inputRef = useRef<HTMLInputElement>(null);
   const { user } = useAuth();
+  // Cycle 70 — 상태 변경 권한(임시 가드: 작성자 또는 ADMIN). 백엔드가 최종 검증.
+  const canEditStatus =
+    !!user && (user.role === "ADMIN" || page.author?.id === user.id);
   const queryClient = useQueryClient();
 
   // Cycle 53 — '나중을 위해 저장' 상태. 로그인 사용자만 의미가 있다.
@@ -287,9 +291,17 @@ export default function PageHeader({
             className="flex-1 text-[32px] leading-tight font-bold text-[#172b4d] bg-white outline-none border-2 border-[#0052cc] rounded px-2 py-1 ring-2 ring-[#deebff]"
           />
         ) : (
-          <h1 className="flex-1 text-[32px] leading-tight font-bold text-[#172b4d] py-1 px-0.5">
-            {page.title}
-          </h1>
+          <div className="flex-1 min-w-0 flex items-center gap-2 py-1 px-0.5">
+            <h1 className="text-[32px] leading-tight font-bold text-[#172b4d] min-w-0">
+              {page.title}
+            </h1>
+            {/* Cycle 70 — 제목 옆 작업 상태 배지 + 변경 드롭다운. */}
+            <PageStatusDropdown
+              pageId={page.id}
+              status={page.status}
+              canEdit={canEditStatus}
+            />
+          </div>
         )}
         <div className="flex items-center gap-2 pt-3 shrink-0">
           <PresenceStrip users={presence} />

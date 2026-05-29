@@ -33,8 +33,16 @@ export const ACTIVITY_TYPES: Array<{ value: string; label: string }> = [
   { value: "page.soft_deleted", label: "휴지통 이동" },
   { value: "page.restored", label: "휴지통 복구" },
   { value: "page.permanent_deleted", label: "영구 삭제" },
+  { value: "page.status_changed", label: "상태 변경" },
   { value: "comment.created", label: "댓글" },
 ];
+
+// Cycle 70 — 활동 피드 텍스트용 상태 라벨.
+const STATUS_LABEL: Record<string, string> = {
+  TODO: "To Do",
+  IN_PROGRESS: "In Progress",
+  DONE: "Done",
+};
 
 export type FormattedActivity = {
   icon: string;
@@ -72,6 +80,20 @@ export function formatActivity(item: ActivityItem): FormattedActivity {
         spaceName,
         actor,
       };
+    case "page.status_changed": {
+      const to = typeof payload.to === "string" ? payload.to : null;
+      const toLabel = to ? (STATUS_LABEL[to] ?? to) : null;
+      return {
+        icon: "🏷️",
+        text: toLabel
+          ? `${actor}이(가) '${pageTitle}' 상태를 '${toLabel}'(으)로 변경했습니다`
+          : `${actor}이(가) '${pageTitle}' 상태를 제거했습니다`,
+        pageId: item.pageId,
+        pageTitle,
+        spaceName,
+        actor,
+      };
+    }
     case "page.published":
       return {
         icon: "🚀",

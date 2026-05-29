@@ -46,6 +46,8 @@ export class SavesService {
           select: {
             id: true,
             title: true,
+            // Cycle 70 — 카드 배지용 작업 상태.
+            status: true,
             space: { select: { id: true, name: true } },
           },
         },
@@ -54,6 +56,7 @@ export class SavesService {
     return rows.map((r) => ({
       id: r.page.id,
       title: r.page.title,
+      status: r.page.status,
       spaceId: r.page.space.id,
       spaceName: r.page.space.name,
     }));

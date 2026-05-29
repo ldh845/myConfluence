@@ -6,7 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { useRecentPagesStore } from "@/lib/stores/useRecentPagesStore";
 import PageCard from "@/components/PageCard";
-import type { SpaceWithPages, PageNode } from "@/lib/types";
+import type { SpaceWithPages, PageNode, PageStatus } from "@/lib/types";
 import {
   formatActivity,
   relativeTime,
@@ -34,6 +34,8 @@ type RecentApiPage = {
   spaceId: string;
   updatedAt: string;
   space: { name: string };
+  // Cycle 70 — 카드 배지용 작업 상태.
+  status?: PageStatus | null;
 };
 
 function timeAgo(iso: string): string {
@@ -153,6 +155,8 @@ export default function HomePage() {
 const HOME_ACTIVITY_TYPES = [
   "page.created",
   "comment.created",
+  // Cycle 70 — 페이지 상태 변경도 사용자 활동 피드에 노출.
+  "page.status_changed",
 ] as const;
 
 // ── 모든 변경사항 (default) ──────────────────────────────────────────────
@@ -262,6 +266,7 @@ function RecentView() {
                   spaceName={p.space?.name}
                   subtitle={timeAgo(p.updatedAt)}
                   icon="✏️"
+                  status={p.status}
                 />
               ))}
             </div>
@@ -359,6 +364,8 @@ type SavedPageItem = {
   title: string;
   spaceId: string;
   spaceName: string;
+  // Cycle 70 — 카드 배지용 작업 상태.
+  status?: PageStatus | null;
 };
 
 function SavedView() {
@@ -388,6 +395,7 @@ function SavedView() {
           title={p.title}
           spaceName={p.spaceName}
           icon="⭐"
+          status={p.status}
         />
       ))}
     </div>

@@ -20,10 +20,20 @@ import { UpdateDraftDto } from './dto/update-draft.dto';
 import { PublishPageDto } from './dto/publish-page.dto';
 import { CreateDiagramDto } from './dto/create-diagram.dto';
 import { CopyPageDto } from './dto/copy-page.dto';
+import { UpdatePageStatusDto } from './dto/update-page-status.dto';
 
 // FR-001 (Cycle 27e) — actor 헬퍼 통일. 모든 mutation이 같은 형태로 전달.
 function actorFromReq(req: Request): { id: string; name: string } | null {
   return req.user ? { id: req.user.id, name: req.user.name } : null;
+}
+
+// Cycle 70 — 상태 변경 가드(작성자/ADMIN)용. actor 에 role 까지 포함.
+function userFromReq(
+  req: Request,
+): { id: string; name: string; role: string } | null {
+  return req.user
+    ? { id: req.user.id, name: req.user.name, role: req.user.role }
+    : null;
 }
 
 @Controller('pages')
@@ -129,6 +139,17 @@ export class PagesController {
     @Req() req: Request,
   ) {
     return this.pages.update(id, dto, actorFromReq(req));
+  }
+
+  // Cycle 70 — 페이지 작업 상태 변경. 가드(작성자/ADMIN)는 service 에서.
+  @Patch(':id/status')
+  @UseGuards(JwtAuthGuard)
+  changeStatus(
+    @Param('id') id: string,
+    @Body() dto: UpdatePageStatusDto,
+    @Req() req: Request,
+  ) {
+    return this.pages.changeStatus(id, dto.status, userFromReq(req));
   }
 
   // 이슈 2 (Cycle 10-1) — 임시 저장. PageVersion 미적재.
