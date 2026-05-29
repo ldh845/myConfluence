@@ -1740,3 +1740,37 @@
   12) 활동 사용자 필터(`HOME_ACTIVITY_TYPES`)에 정상 포함
 - **남은 일**: **권한은 임시 가드(작성자/ADMIN)** — 향후 권한 시스템 사이클에서 페이지 단위 권한/자물쇠로 교체. **필터링(상태별 보기)·상태 변경 알림은 별 사이클**. Sidebar 페이지 트리 배지는 범위 외(제외). **브라우저 시각 확인 미수행**(API/DB 기동 필요) — 타입체크·단위테스트만 통과
 - **비고**: 마이그레이션은 `migrate dev` 가 기존 체크섬 드리프트(EOL)로 DB 리셋을 요구해 거부됨 → **수기 마이그레이션 파일 + `migrate deploy`** 로 비파괴 적용(미적용이던 `notifications` 마이그레이션도 함께 적용됨). `ActivityLog.type` 은 enum 이 아니라 `String` 이라 새 type 은 union 추가만으로 충분. 배지 색상 결정: To Do `#dfe1e6/#42526e`, In Progress `#deebff/#0052cc`, Done `#e3fcef/#006644`.
+
+---
+
+## Cycle 71 — 2026-05-29 — ✅ Done (칸반 보드 뷰 + 페이지 목록 상태 필터)
+- **제목**: Cycle 70 Page.status 를 활용한 ① 페이지 목록 상태 필터 ② 스페이스 칸반 보드(드래그앤드롭)
+- **카테고리**: BE + FE / 기능 (상태 뷰)
+- **커밋**: `de9d9e8`(71-1 코드), 본 CYCLES.md(71-2 Docs)
+- **마이그레이션 없음** — 신규 모델 X, Page.status 재활용 + BE 쿼리 메서드만 추가
+- **결정**: 라우트는 `?spaceId=X&view=board`(코드베이스에 동적 라우트 없음, 기존 view 쿼리 컨벤션 일치). 필터는 다중 선택(서버사이드 `?status=`, 오프셋 페이징과 일관). 'NONE'=상태 없음(null)
+- **변경 파일 (BE)**:
+  - `apps/api/src/pages/pages.service.ts` — `statusWhere()`(NONE=null + enum in, 혼합 OR) + `recent()` 에 `statuses?` 필터 + `boardPages(spaceId)`(발행·비삭제 전체 cap 500)
+  - `apps/api/src/pages/pages.controller.ts` — `@Get('recent')` `?status=` 콤마 파싱(`parseStatuses`, `:id` 위) + 신규 `@Get('board')`
+  - `apps/api/src/pages/pages.service.spec.ts` — status where 3종 + board 2종 + 미지정 1종
+- **변경 파일 (FE)**:
+  - `StatusFilterChips.tsx` 신규 — 다중 선택 칩(전체/상태없음/To Do/In Progress/Done)
+  - `SpacePagesView.tsx` — 필터 칩 + `?status=` URL 동기화(서버 필터) + PageCard status 배지
+  - `KanbanBoard/KanbanColumn/KanbanCard.tsx` 신규 — 4컬럼 + 헤더 색상·카운트 + `@dnd-kit/core` DnD(드롭 → `PATCH /pages/:id/status` optimistic + recent/activities 무효화), 권한 없으면 드래그 비활성+툴팁, 빈 컬럼 안내, 카드 클릭 시 페이지 이동
+  - `page.tsx` — `isBoardView`(`view==='board'`) 분기 + 페이지 fetch 가드에 포함(view=pages 와 동일)
+  - `Sidebar.tsx` — '보드' NavItem(`chart` 아이콘, `?spaceId=X&view=board`)
+- **검증**: web/api `tsc --noEmit` EXIT 0. API jest **121 passed (13 suites)** — 신규 6건 포함
+- **동작 확인 안내**:
+  1) **마이그레이션 불필요**(신규 마이그레이션 없음)
+  2) 페이지 목록 상단 필터 칩 선택 → 결과 즉시 반영, `?status=` URL 동기화
+  3) 새로고침/뒤로가기 시 필터 유지(URL 단일 출처)
+  4) 다중 선택(예: To Do + Done) 정상
+  5) 스페이스 사이드바 '보드' 항목 → `view=board`
+  6) 보드 4컬럼(상태없음/To Do/In Progress/Done) + 카드 렌더
+  7) 컬럼 헤더 카운트(draft 제외)
+  8) 카드 드래그 → 다른 컬럼 드롭 → 상태 변경 + 카운트 갱신(optimistic)
+  9) 권한 없는 사용자 → 드래그 비활성 + "상태 변경 권한이 없습니다" 툴팁
+  10) 빈 컬럼 "이 상태의 페이지가 없습니다"
+  11) draft(미발행)는 필터·보드 어디에도 안 보임
+- **남은 일**: 사이드바 상태별 카운트 / 개인 대시보드 / 상태 변경 알림은 별 사이클. 보드 카드 클릭 vs 드래그는 PointerSensor 8px 임계로 구분(드래그 후 stray click 가능성은 미세 — 실사용 확인 권장). **브라우저 시각 확인 미수행**(API/DB 기동 필요) — 타입체크·단위테스트만 통과
+- **비고**: dnd-kit 은 `@dnd-kit/core`(DndContext/useDraggable/useDroppable) 사용 — 사이드바의 sortable 과 별개 패턴. `@dnd-kit/utilities` 의존 회피 위해 transform 을 `translate3d` 문자열로 직접 생성. 보드는 한 번에 fetch 후 클라 그룹핑(cap 500). 권한 가드는 Cycle 70 그대로(작성자/ADMIN), 백엔드 PATCH 가 최종 검증.
