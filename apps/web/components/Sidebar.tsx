@@ -571,42 +571,6 @@ export default function Sidebar({
         />
       </div>
 
-      {/* Cycle 74-F — 스페이스 바로가기(공간 도구 > 사이드바 구성에서 관리). */}
-      {space && (space.shortcuts?.length ?? 0) > 0 && (
-        <>
-          <div className="border-t border-[#dfe1e6] mx-2" />
-          <div className="px-4 pt-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-[#6b778c]">
-            바로가기
-          </div>
-          <ul className="px-2 pb-1 space-y-0.5">
-            {space.shortcuts!.map((s) =>
-              s.type === "INTERNAL_PAGE" ? (
-                <li key={s.id}>
-                  <button
-                    type="button"
-                    onClick={() => onSelect(s.target)}
-                    className="w-full text-left px-2 py-1 text-sm rounded truncate text-[#172b4d] hover:bg-[#ebecf0]"
-                  >
-                    🔗 {s.label}
-                  </button>
-                </li>
-              ) : (
-                <li key={s.id}>
-                  <a
-                    href={s.target}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="block px-2 py-1 text-sm rounded truncate text-[#172b4d] hover:bg-[#ebecf0]"
-                  >
-                    ↗ {s.label}
-                  </a>
-                </li>
-              ),
-            )}
-          </ul>
-        </>
-      )}
-
       {favPages.length > 0 && (
         <>
           <div className="border-t border-[#dfe1e6] mx-2" />
@@ -638,9 +602,39 @@ export default function Sidebar({
       <div className="px-4 pt-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-[#6b778c]">
         공간 바로가기
       </div>
-      <div className="px-2 pb-1 text-[12px] text-[#6b778c]">
-        <div className="px-3 py-1">빠른 링크가 없습니다</div>
-      </div>
+      {/* Cycle 74-F — 공간 도구 > 사이드바 구성에서 추가한 바로가기. */}
+      {space && (space.shortcuts?.length ?? 0) > 0 ? (
+        <ul className="px-2 pb-1 space-y-0.5">
+          {space.shortcuts!.map((s) =>
+            s.type === "INTERNAL_PAGE" ? (
+              <li key={s.id}>
+                <button
+                  type="button"
+                  onClick={() => onSelect(s.target)}
+                  className="w-full text-left px-2 py-1 text-sm rounded truncate text-[#172b4d] hover:bg-[#ebecf0]"
+                >
+                  🔗 {s.label}
+                </button>
+              </li>
+            ) : (
+              <li key={s.id}>
+                <a
+                  href={s.target}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block px-2 py-1 text-sm rounded truncate text-[#172b4d] hover:bg-[#ebecf0]"
+                >
+                  ↗ {s.label}
+                </a>
+              </li>
+            ),
+          )}
+        </ul>
+      ) : (
+        <div className="px-2 pb-1 text-[12px] text-[#6b778c]">
+          <div className="px-3 py-1">빠른 링크가 없습니다</div>
+        </div>
+      )}
 
       <div className="border-t border-[#dfe1e6] mx-2 my-1" />
 
