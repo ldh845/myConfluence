@@ -2099,3 +2099,26 @@
   5) 제목 드롭다운에 '문단' 노출(제목/인용에서 문단 복귀)
 - **남은 일**: 없음. **브라우저 시각 확인 미수행**
 - **비고**: 들여쓰기 일반화는 홈뿐 아니라 모든 '첫 형제'에 적용(다음 형제 하위로) — 일관성 유지. `public/icons/checkbox.png`(untracked)는 본 작업과 무관해 미포함.
+
+---
+
+## Cycle 80 — 2026-05-29 — ✅ Done (공간 만들기 / 만들기 모달 — prompt 제거)
+- **제목**: '공간 만들기' 모달(이름/스페이스 키/설명) + '만들기' 모달(빈 페이지 카드)
+- **카테고리**: BE + FE / UX (네이티브 prompt → 모달)
+- **커밋**: `6a556e6`(코드), 본 CYCLES.md
+- **마이그레이션**: `20260529060000_space_key` (`Space.key TEXT` + unique index, nullable→다중 null 허용). 수기 + `migrate deploy` + `prisma generate`(API 프로세스 종료 후)
+- **변경 (BE)**:
+  - `schema.prisma` — `Space.key String? @unique`
+  - `dto/create-space.dto.ts` — `key?`(`@MaxLength(20)`, `@Matches(/^[A-Za-z0-9]*$/)`)
+  - `spaces.service.create` — 키 trim/대문자 정규화, 빈 값=null, 중복 시 400(`space key already in use`)
+- **변경 (FE)**:
+  - `CreateSpaceDialog.tsx` 신규 — 공간 이름(필수)/스페이스 키(선택, 이름에서 자동 제안·수정 시 고정)/설명. POST `/api/spaces`, 중복 키 400 안내. `layout.tsx`(TopNav 경로)·`/spaces` 디렉터리 둘 다 이 모달 사용 → 기존 `prompt` 체인 2곳 제거
+  - `CreatePageDialog.tsx` 신규 — '만들기' 모달. 카드 그리드(현재 '빈 페이지' 1개, 향후 템플릿). `TopNav.CreateSplitButton` ⋯ 가 드롭다운(새 페이지/새 공간) 대신 이 모달을 열고 '빈 페이지' → `handleQuickCreate`. `onCreateSpace` prop 은 SpaceCombobox 만 사용하도록 정리
+  - `lib/types` `SpaceWithPages.key?`
+- **검증**: web/api `tsc --noEmit` EXIT 0, jest **154 passed (15 suites)**
+- **동작 확인 안내**:
+  1) ⚠️ **`cd apps/api && npx prisma migrate deploy`** + `npx prisma generate` (적용 완료, **API dev 서버 재기동 필요**)
+  2) 공간 메뉴/‘새 공간’/‘+ 공간 만들기’ → '공간 만들기' 모달(이름·키·설명). 같은 키로 재생성 시 400 안내
+  3) 네비 '만들기' 옆 ⋯ → '만들기' 모달의 '빈 페이지' 카드 → draft 생성+편집 진입
+- **남은 일**: 페이지 템플릿 카드(추후). **브라우저 시각 확인 미수행**
+- **비고**: 스페이스 키는 nullable unique(기존 공간 null 유지). '공간 만들기'의 ‘새 공간’ 항목은 ⋯ 모달에서 제외(공간 생성은 공간 메뉴/디렉터리 경로 유지).
