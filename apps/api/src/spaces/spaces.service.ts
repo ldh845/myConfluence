@@ -400,7 +400,16 @@ export class SpacesService {
       where: { type: 'PERSONAL', ownerId: user.id },
       include: PAGES_INCLUDE,
     });
-    if (existing) return existing;
+    if (existing) {
+      // Cycle 75 — 개인 공간 소유자를 SpaceMember(ADMIN) 로 보장(권한 탭 표시).
+      //   매 로그인 호출이라 기존 개인 공간도 자연 백필됨(idempotent upsert).
+      await this.prisma.spaceMember.upsert({
+        where: { spaceId_userId: { spaceId: existing.id, userId: user.id } },
+        update: {},
+        create: { spaceId: existing.id, userId: user.id, role: 'ADMIN' },
+      });
+      return existing;
+    }
 
     const result = await this.prisma.$transaction(async (tx) => {
       const space = await tx.space.create({
@@ -410,6 +419,10 @@ export class SpacesService {
           type: 'PERSONAL',
           ownerId: user.id,
         },
+      });
+      // Cycle 75 — 개인 공간 소유자를 ADMIN 멤버로 부트스트랩(SITE create 와 동일).
+      await tx.spaceMember.create({
+        data: { spaceId: space.id, userId: user.id, role: 'ADMIN' },
       });
       const homePage = await tx.page.create({
         data: {

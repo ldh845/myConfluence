@@ -2,11 +2,10 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import type { SpaceWithPages } from "@/lib/types";
 import { useStarredSpacesStore } from "@/lib/stores/useStarredSpacesStore";
 import { useAuth } from "@/lib/auth/useAuth";
-import { apiFetch } from "@/lib/api";
 import { getSpaceHomePageId } from "@/lib/spaceHome";
 import SpaceStarButton from "@/components/SpaceStarButton";
 import SpaceAvatar from "@/components/SpaceAvatar";
@@ -130,7 +129,6 @@ export default function SystemSidebar({
   // invalidate 로 즉시 갱신.
   const starredIds = useStarredSpacesStore((s) => s.ids);
   const { user } = useAuth();
-  const queryClient = useQueryClient();
   const all = spacesData ?? [];
   const personalSpace =
     user?.showPersonalSpaceInSidebar
@@ -143,23 +141,6 @@ export default function SystemSidebar({
         ...starredSpaces.filter((s) => s.id !== personalSpace.id),
       ]
     : starredSpaces;
-
-  const togglePersonalSpace = useMutation<void, Error>({
-    mutationFn: async () => {
-      const r = await apiFetch("/api/auth/me/prefs", {
-        method: "PATCH",
-        body: JSON.stringify({
-          showPersonalSpaceInSidebar: !user?.showPersonalSpaceInSidebar,
-        }),
-      });
-      if (!r.ok) throw new Error("설정 저장 실패");
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["me"] });
-      queryClient.invalidateQueries({ queryKey: ["spaces"] });
-    },
-    onError: (err) => window.alert(err.message),
-  });
 
   const enterSpace = (sp: SpaceWithPages) => {
     // Cycle 32 — 공간의 홈(메인) 페이지로 진입.
@@ -235,25 +216,10 @@ export default function SystemSidebar({
       </div>
 
       {/* 내 공간 — 별표한 스페이스 (+ Cycle 49 토글 ON 시 본인 personal space) */}
-      <div className="px-4 pt-4 pb-1 flex items-center justify-between">
+      <div className="px-4 pt-4 pb-1">
         <span className="text-[11px] font-semibold uppercase tracking-wide text-[#6b778c]">
           내 공간
         </span>
-        {user && (
-          <button
-            type="button"
-            onClick={() => togglePersonalSpace.mutate()}
-            disabled={togglePersonalSpace.isPending}
-            title={
-              user.showPersonalSpaceInSidebar
-                ? "내 개인 공간 숨기기"
-                : "내 개인 공간 추가"
-            }
-            className="text-[10px] text-[#6b778c] hover:text-[#172b4d] disabled:opacity-50"
-          >
-            {user.showPersonalSpaceInSidebar ? "개인 공간 ✓" : "+ 내 공간 추가"}
-          </button>
-        )}
       </div>
       <div className="px-2 pb-4 space-y-0.5">
         {spaces.length === 0 ? (

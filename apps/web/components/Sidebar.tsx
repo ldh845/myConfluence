@@ -290,12 +290,10 @@ export default function Sidebar({
   // Cycle 74-B — '공간 도구'는 SITE 공간을 관리할 수 있는 사용자에게만 노출.
   const { user } = useAuth();
   // Cycle 74 (개정) — 개인 공간도 소유자에게 '공간 도구' 노출(canManageSpace 가
-  //   PERSONAL=소유자 판정). 단 권한(멤버) 탭은 개인 공간엔 부적합 → 드롭다운에서 제외.
+  //   PERSONAL=소유자 판정).
+  // Cycle 75 — 개인 공간도 소유자가 ADMIN 멤버로 부트스트랩되므로 '권한' 탭 포함.
   const canManage = !!space && canManageSpace(space, user);
-  const toolItems =
-    space?.type === "PERSONAL"
-      ? SPACE_TOOL_ITEMS.filter((i) => i.id !== "permissions")
-      : SPACE_TOOL_ITEMS;
+  const toolItems = SPACE_TOOL_ITEMS;
   // Cycle 74 — '공간 도구' 위로 열리는 드롭다운. 외부클릭/Esc 닫힘.
   const [toolsOpen, setToolsOpen] = useState(false);
   const toolsRef = useRef<HTMLDivElement>(null);
@@ -328,28 +326,22 @@ export default function Sidebar({
 
   const pages = space?.pages ?? [];
 
-  // "홈" — 이 공간의 메인 페이지. Cycle 33: Space.homePageId 명시적 지정 우선,
-  // 없으면(백필 누락 등) 첫 루트 페이지로 fallback.
-  const mainPageId = useMemo(() => {
+  // "홈" — 이 공간의 메인 페이지. Cycle 75: 명시적으로 지정된 homePageId 만 인정
+  //   (첫 루트 페이지 fallback 폐기). 미지정이면 null → '홈' 클릭 시 안내 문구.
+  const homePageId = useMemo(() => {
     if (space?.homePageId && pages.some((p) => p.id === space.homePageId)) {
       return space.homePageId;
     }
-    const roots = pages.filter((p) => !p.parentId);
-    return roots[0]?.id ?? null;
+    return null;
   }, [pages, space?.homePageId]);
 
-  // 페이지 트리에는 메인 페이지를 제외. 메인 페이지의 직계 자식은 루트로 승격.
-  // Cycle 35 — 미발행 draft(publishedAt=null)도 숨긴다. 발행해야 트리 등장.
+  // Cycle 75 — 홈 페이지도 트리에 표시(기존의 홈 제외/자식 승격 폐기).
+  // Cycle 35 — 미발행 draft(publishedAt=null)만 숨긴다. 발행해야 트리 등장.
   // publishedAt 필드가 응답에 빠진 레거시 페이지는 보수적으로 노출(undefined → 통과).
-  const treePages = useMemo(() => {
-    const filtered = pages.filter(
-      (p) => p.id !== mainPageId && p.publishedAt !== null,
-    );
-    if (!mainPageId) return filtered;
-    return filtered.map((p) =>
-      p.parentId === mainPageId ? { ...p, parentId: null } : p,
-    );
-  }, [pages, mainPageId]);
+  const treePages = useMemo(
+    () => pages.filter((p) => p.publishedAt !== null),
+    [pages],
+  );
 
   const visible = useMemo(
     () => flattenVisible(treePages, collapsed),
@@ -518,9 +510,6 @@ export default function Sidebar({
             <div className="text-sm font-semibold text-[#172b4d] truncate">
               {space.name}
             </div>
-            <div className="text-[11px] text-[#6b778c] truncate">
-              {space.description ?? "공간"}
-            </div>
           </div>
           {/* Cycle 29 (별표) — 스페이스 별표 토글. SystemSidebar/TopNav/홈과 store 공유. */}
           <SpaceStarButton spaceId={space.id} size="md" alwaysVisible />
@@ -528,18 +517,21 @@ export default function Sidebar({
       )}
 
       <div className="px-2 py-2 space-y-0.5">
-        {/* 홈 — 이 공간의 메인 페이지(첫 루트 페이지)로 이동. */}
+        {/* 홈 — 이 공간의 지정된 홈 페이지로 이동. 미지정이면 안내 문구. */}
         <NavItem
           icon={<AppIcon name="home" size={15} alt="" />}
           label="홈"
           active={
             pathname === "/" &&
-            !!mainPageId &&
-            selectedPageId === mainPageId
+            !!homePageId &&
+            selectedPageId === homePageId
           }
           onClick={() => {
-            if (mainPageId) onSelect(mainPageId);
-            else if (space) router.push(`/?spaceId=${space.id}`);
+            if (homePageId) onSelect(homePageId);
+            else
+              window.alert(
+                "이 공간의 홈 페이지가 지정되지 않았습니다. 공간 도구에서 홈 페이지를 지정하세요.",
+              );
           }}
         />
         {/* Cycle 51 — "페이지" 메뉴 동작 변경: 첫 페이지 자동 이동 폐기.

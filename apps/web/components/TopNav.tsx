@@ -40,7 +40,7 @@ export default function TopNav({
   }, []);
 
   return (
-    <header className="h-14 shrink-0 flex items-center gap-4 px-4 bg-white border-b border-[#dfe1e6]">
+    <header className="relative z-50 h-14 shrink-0 flex items-center gap-4 px-4 bg-white border-b border-[#dfe1e6]">
       {/* FR-130 (Cycle 22) — 로고 클릭 시 홈으로. /home에 이미 있을 때도 full reload. */}
       <a
         href="/home"

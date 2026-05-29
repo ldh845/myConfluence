@@ -664,6 +664,16 @@ export default function HomePage() {
                     내용으로만 노출. */}
                 {/* FR-073 (Cycle 25) — 페이지 이모지 반응 바. */}
                 <ReactionBar target="page" targetId={currentPage.id} />
+                {/* Cycle 75 — 좋아요/레이블 줄을 댓글 위로 이동(댓글이 최하단). */}
+                <div className="mt-10 flex items-center justify-between border-t border-[#dfe1e6] pt-4">
+                  <div className="flex items-center gap-2 text-[13px] text-[#6b778c]">
+                    <button className="hover:text-[#0052cc]">👍</button>
+                    <span>처음으로 좋아하는 사람이 돼볼까요?</span>
+                  </div>
+                  <div className="text-[13px] text-[#6b778c]">
+                    🏷️ 레이블 없음
+                  </div>
+                </div>
                 {/* Fix — 댓글은 조회 모드에서도 로그인 사용자면 작성 가능
                     (Confluence 표준). 기존 editable={isBodyEditable} 은 편집
                     모드에서만 작성 가능해 댓글 창이 비활성으로 보였음. */}
@@ -675,15 +685,6 @@ export default function HomePage() {
               <aside className="hidden lg:block sticky top-4 h-fit max-h-[calc(100vh-2rem)] overflow-y-auto pl-4 border-l border-[#dfe1e6]">
                 <TableOfContents editor={editor} />
               </aside>
-            </div>
-            <div className="mt-10 flex items-center justify-between border-t border-[#dfe1e6] pt-4">
-              <div className="flex items-center gap-2 text-[13px] text-[#6b778c]">
-                <button className="hover:text-[#0052cc]">👍</button>
-                <span>처음으로 좋아하는 사람이 돼볼까요?</span>
-              </div>
-              <div className="text-[13px] text-[#6b778c]">
-                🏷️ 레이블 없음
-              </div>
             </div>
             {/* Fix — 비활성 더미 '댓글 작성...' input 제거 (Cycle 16 이전
                 placeholder). 실제 댓글 작성은 위 PageComments 가 담당. */}
