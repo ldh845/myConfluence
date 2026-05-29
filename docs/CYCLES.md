@@ -1918,3 +1918,23 @@
   5) 비-canManage 의 `GET /spaces/:id/audit` 직접 호출 → 403
 - **남은 일**: 74-E 페이지 순서 / F 사이드바 구성 / G 아이콘 업로드. **브라우저 시각 확인 미수행**
 - **비고**: 감사 로그는 ActivityLog 재활용이라 기록되는 활동(page.created/published/moved/copied/soft_deleted/restored/permanent_deleted/status_changed/comment.created)만 노출. 멤버/권한 변경 활동 로그는 미기록 — 필요 시 별도 type 추가(후속).
+- **74-D followup**: ① 감사 로그를 **날짜·작성자·분류·요약 4열 표**로 변경. ② 내용 편집이 발행으로만 남아 생성/수정이 안 갈리던 문제 → publish() 가 **이미 발행됐던 페이지의 재발행을 `page.updated`('페이지 수정')** 로 로깅(첫 발행만 `page.published`). ActivityType union + activity-format 라벨/케이스 추가. (`565e747`) 과거 데이터는 소급 변경 없음.
+
+---
+
+## Cycle 74-E — 2026-05-29 — ✅ Done (공간 도구 페이지 순서 탭)
+- **제목**: 스페이스 페이지 트리 형제 순서 드래그 재정렬(즉시 저장)
+- **카테고리**: FE / 기능 (페이지 순서)
+- **커밋**: `b0217b3`(74-E 코드), 본 CYCLES.md
+- **변경 파일 (FE 전용)**:
+  - `SpacePageOrderPanel.tsx` 신규 — 발행 페이지 트리를 들여쓰기 flat 리스트로 표시, `@dnd-kit/sortable` 로 **같은 상위 페이지 안에서** 순서 변경 → `PATCH /pages/:id {position}` 즉시 반영 + `["spaces"]` invalidate. 다른 상위로 드롭은 안내 후 무시
+  - `SpaceSettings.tsx`/`Sidebar.tsx` 드롭다운에 '페이지 순서' 탭 활성화(`?tab=order`)
+- **BE 변경 없음**: 기존 `pages.update` 의 position 정규화(형제 그룹 재부여, Cycle 19a) 재활용. canEdit 가드(74-A)가 PATCH 를 보호
+- **검증**: web `tsc --noEmit` EXIT 0. 마이그레이션 없음
+- **동작 확인 안내**:
+  1) **마이그레이션 불필요**
+  2) 공간 도구 → '페이지 순서' 탭 → 트리 표시
+  3) 같은 상위 안에서 드래그 → 순서 변경 즉시 저장(사이드바 트리에도 반영)
+  4) 다른 상위로 드롭 → "같은 상위 안에서만" 안내
+- **남은 일**: 계층(재부모) 변경은 이 탭에선 미지원(사이드바 트리 DnD 사용). 74-F 사이드바 구성 / 74-G 아이콘 업로드. **브라우저 시각 확인 미수행**
+- **비고**: 단일 `SortableContext`(flat ids) + dragEnd 에서 같은 parentId 일 때만 형제 인덱스로 PATCH. 계층 재부모는 사이드바가 이미 지원하므로 중복 구현 회피.
