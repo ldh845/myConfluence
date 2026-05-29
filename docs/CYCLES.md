@@ -1842,3 +1842,28 @@
 - **74-A followup (완료)**: 읽기 필터를 전 목록 엔드포인트에 확장(`findAll`/`search`/`full-search` 가시성 필터 + `board` canView assert), 쓰기 assert 를 전 mutation 컨트롤러에 적용(`create`=canEdit(spaceId), `update`/`draft`/`publish`/`remove`/`restore`/`permanentDelete`/`copy`/`restoreVersion`/`createDiagram`=`assertCanEditPage`). **무가드였던 `createDiagram`·`restoreVersion` 에 JwtAuthGuard 추가**(기존 구멍 차단). `changeStatus` 는 Cycle 70 임시 가드(작성자/ADMIN) 유지. api jest 140 passed.
 - **남은 일**: 멤버 CRUD·마지막 Admin 보호=74-C. 첨부 업로드/삭제(attachments.controller) 쓰기 가드 + `listTrash`/`listDiagrams`/`listVersions` 읽기 필터는 소규모 후속(현재 PUBLIC 이라 무영향). 메가 사이클: 74-B 진입점+개요 / C 권한 / D 감사로그 / E 페이지순서 / F 사이드바구성 / G 아이콘. **브라우저 시각 확인 미수행**
 - **비고**: 권한 판정은 `SpacePermissionService` 단일 출처. 페이지 상태(Cycle 70) '작성자+ADMIN' 임시 가드는 이번엔 그대로 유지(별도 교체). CLAUDE.md 갱신은 메가 사이클(74) 완료 시 일괄(현재 모델 진화 중).
+
+---
+
+## Cycle 74-B — 2026-05-29 — ✅ Done (공간 도구 진입점 + 개요 탭)
+- **제목**: 권한 기반(74-A) 위에 '공간 도구' 화면 도입 — 진입점 + 개요 탭(이름/설명/공개범위/삭제)
+- **카테고리**: BE + FE / 기능 (스페이스 관리)
+- **커밋**: `e79dbb8`(74-B 코드), 본 CYCLES.md
+- **변경 파일 (BE)**:
+  - `spaces.service.ts` — `findAll` 에 현재 사용자 membership role include(공간 도구 노출 판정용). `updateSettings(id,dto,user)`=`assertCanManage` + 이름/설명/visibility 갱신(PERSONAL visibility 변경 금지). `remove(id,user)`=`assertCanManage` + `space.delete`(FK Cascade)
+  - `spaces.controller.ts` — `PATCH /spaces/:id/settings`, `DELETE /spaces/:id`(JwtAuthGuard, canManage 는 service)
+  - `dto/update-space-settings.dto.ts` 신규 — visibility 는 PUBLIC|PRIVATE 만
+- **변경 파일 (FE)**:
+  - `lib/types.ts` — `SpaceVisibility`/`SpaceRole` + `Space.visibility`/`members`. `lib/spacePermission.ts` 신규 — `canManageSpace`(전역 ADMIN/PERSONAL 소유자/멤버 ADMIN)
+  - `Sidebar.tsx` — '공간 도구' 버튼을 `canManage && SITE` 에만 노출 + `?view=settings` 이동
+  - `page.tsx` — `view=settings` 분기(board 와 동일 가드)
+  - `SpaceSettings.tsx` 신규 — 탭바(개요 활성, 권한/감사로그/페이지순서/사이드바구성 '준비 중' 비활성) + 개요 탭(이름/설명/공개범위 토글/이름 입력 확인식 삭제). 비-canManage 접근 시 안내
+- **검증**: web/api `tsc --noEmit` EXIT 0, jest **140 passed**. **마이그레이션 없음**(74-A 스키마 재사용)
+- **동작 확인 안내**:
+  1) **마이그레이션 불필요**. dev 서버 재기동 필요(74-A 에서 Prisma generate 위해 API 종료함)
+  2) SITE 공간에서 Space Admin/전역 ADMIN 이면 사이드바 하단 '⚙️ 공간 도구' 노출(그 외엔 DOM 미생성)
+  3) 클릭 → 개요 탭. 이름/설명 저장, 공개범위 PUBLIC↔PRIVATE 저장
+  4) 삭제: 공간 이름 입력 + 확인 → 삭제 후 /home 이동
+  5) 비-관리자가 URL 직접 진입(`?view=settings`) → "권한 없음" 안내. 백엔드 PATCH/DELETE 는 canManage 로 403
+- **남은 일**: 74-C 권한(멤버 CRUD + 마지막 Admin 보호) / D 감사로그 / E 페이지순서 / F 사이드바구성 / G 아이콘. PRIVATE 전환이 이제 가능해졌으므로 멤버 관리(74-C)가 자연스러운 다음 순서. spaces.service.updateSettings/remove 단위 spec 미추가(canManage 매트릭스는 space-permission spec 이 커버). **브라우저 시각 확인 미수행**
+- **비고**: '공간 도구'는 PERSONAL 공간엔 미노출(개인 공간은 관리 대상 아님). 기존 SITE 공간은 멤버 0명이라 **전역 ADMIN 만** 공간 도구 접근 — 신규 생성 공간은 생성자가 ADMIN 멤버라 접근 가능.
