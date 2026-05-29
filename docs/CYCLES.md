@@ -1774,3 +1774,22 @@
   11) draft(미발행)는 필터·보드 어디에도 안 보임
 - **남은 일**: 사이드바 상태별 카운트 / 개인 대시보드 / 상태 변경 알림은 별 사이클. 보드 카드 클릭 vs 드래그는 PointerSensor 8px 임계로 구분(드래그 후 stray click 가능성은 미세 — 실사용 확인 권장). **브라우저 시각 확인 미수행**(API/DB 기동 필요) — 타입체크·단위테스트만 통과
 - **비고**: dnd-kit 은 `@dnd-kit/core`(DndContext/useDraggable/useDroppable) 사용 — 사이드바의 sortable 과 별개 패턴. `@dnd-kit/utilities` 의존 회피 위해 transform 을 `translate3d` 문자열로 직접 생성. 보드는 한 번에 fetch 후 클라 그룹핑(cap 500). 권한 가드는 Cycle 70 그대로(작성자/ADMIN), 백엔드 PATCH 가 최종 검증.
+
+---
+
+## Cycle 72 — 2026-05-29 — ✅ Done (프레즌스·authorName 실명 표시)
+- **제목**: 협업 커서·authorName 에 랜덤 익명 이름('부지런한 다람쥐') 대신 로그인 사용자 실명 사용
+- **카테고리**: FE / 버그 (인증 잔재 정리)
+- **커밋**: `c9f8d1d`(72-1 코드), 본 CYCLES.md(72-2 Docs)
+- **원인**: `lib/userIdentity.ts` 의 `getIdentity()` 가 localStorage 에 랜덤 익명 이름(형용사+동물+suffix)을 만들어 사용 — Keycloak 인증(Cycle 43) 이전 잔재. 노출 지점: 협업 프레즌스 커서 라벨(타 사용자에게 보임), 첨부/이미지 업로드·버전 복원·발행 시 클라이언트 전송 `authorName`
+- **변경 파일**:
+  - `apps/web/lib/useIdentity.ts` **신규** — `useAuth()` 기반 훅. 로그인 사용자의 실제 `name`/`id` + id 해시 결정적 색상(같은 사용자=항상 같은 프레즌스 색). 비로그인/로딩/SSR 만 `getIdentity()` 익명 폴백
+  - `CollaborativeEditor.tsx` — `useMemo(getIdentity)` → `useIdentity()`(프레즌스 awareness + autosave authorName)
+  - `AttachmentList.tsx` / `ImageInsertDialog.tsx` / `PageVersionHistory.tsx` / `app/(app)/page.tsx` — `getIdentity().name` → `identity.name`(useIdentity)
+- **검증**: web `tsc --noEmit` EXIT 0. 마이그레이션 **없음**(FE 전용)
+- **동작 확인 안내**:
+  1) **마이그레이션 불필요**
+  2) 두 사용자가 같은 페이지 동시 편집 → 커서 라벨에 상대 **실명** 표시(익명 아님)
+  3) 첨부 업로드 / 이미지 삽입 / 버전 복원 / 발행 후 작성자명이 실명
+- **남은 일**: **과거 익명으로 저장된 데이터**(author FK 없이 authorName 만 익명인 옛 첨부/버전)는 소급 변경 안 됨 — 앞으로 생성분만 실명. 서버가 클라 `authorName` 대신 JWT actor 를 강제로 쓰도록 굳히는 건 별도(현재는 클라가 실명을 보냄). **브라우저 시각 확인 미수행**
+- **비고**: `getIdentity()`/`userIdentity.ts` 는 폴백용으로 보존(useIdentity 내부에서만 참조). 댓글/반응은 원래 서버 JWT actor 기반이라 무관.
