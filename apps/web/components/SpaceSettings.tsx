@@ -72,6 +72,13 @@ export default function SpaceSettings({ spaceId }: { spaceId: string }) {
     }
   }, [space]);
 
+  // Cycle 74 — 개인 공간엔 권한(멤버) 탭이 없으므로 진입 시 개요로 폴백.
+  useEffect(() => {
+    if (space?.type === "PERSONAL" && activeTab === "permissions") {
+      setActiveTab("overview");
+    }
+  }, [space, activeTab]);
+
   const canManage = canManageSpace(space, user);
 
   const saveMutation = useMutation({
@@ -125,6 +132,12 @@ export default function SpaceSettings({ spaceId }: { spaceId: string }) {
     );
   }
 
+  // 개인 공간은 멤버 권한 개념이 없어 '권한' 탭 제외.
+  const visibleTabs =
+    space.type === "PERSONAL"
+      ? TABS.filter((t) => t.id !== "permissions")
+      : TABS;
+
   return (
     <div className="px-6 pt-6 pb-16 max-w-[760px]">
       <h1 className="text-[22px] font-semibold text-[#172b4d] mb-1">
@@ -135,7 +148,7 @@ export default function SpaceSettings({ spaceId }: { spaceId: string }) {
       </p>
 
       <div className="flex gap-1 border-b border-[#dfe1e6] mb-5">
-        {TABS.map((t) => (
+        {visibleTabs.map((t) => (
           <button
             key={t.id}
             type="button"
@@ -208,6 +221,8 @@ export default function SpaceSettings({ spaceId }: { spaceId: string }) {
           </button>
         </div>
 
+        {/* 개인 공간은 삭제 불가(자동 생성/재생성되는 핵심 공간). */}
+        {space.type !== "PERSONAL" && (
         <div className="mt-8 border border-[#ffbdad] rounded-md p-4">
           <h3 className="text-[14px] font-semibold text-[#bf2600] mb-1">
             스페이스 삭제
@@ -242,6 +257,7 @@ export default function SpaceSettings({ spaceId }: { spaceId: string }) {
             </button>
           </div>
         </div>
+        )}
       </div>
     </div>
   );

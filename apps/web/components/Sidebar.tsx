@@ -288,8 +288,13 @@ export default function Sidebar({
   const view = searchParams.get("view");
   // Cycle 74-B — '공간 도구'는 SITE 공간을 관리할 수 있는 사용자에게만 노출.
   const { user } = useAuth();
-  const canManage =
-    !!space && space.type !== "PERSONAL" && canManageSpace(space, user);
+  // Cycle 74 (개정) — 개인 공간도 소유자에게 '공간 도구' 노출(canManageSpace 가
+  //   PERSONAL=소유자 판정). 단 권한(멤버) 탭은 개인 공간엔 부적합 → 드롭다운에서 제외.
+  const canManage = !!space && canManageSpace(space, user);
+  const toolItems =
+    space?.type === "PERSONAL"
+      ? SPACE_TOOL_ITEMS.filter((i) => i.id !== "permissions")
+      : SPACE_TOOL_ITEMS;
   // Cycle 74 — '공간 도구' 위로 열리는 드롭다운. 외부클릭/Esc 닫힘.
   const [toolsOpen, setToolsOpen] = useState(false);
   const toolsRef = useRef<HTMLDivElement>(null);
@@ -687,7 +692,7 @@ export default function Sidebar({
             </button>
             {toolsOpen && (
               <div className="absolute left-0 bottom-full mb-1 w-[180px] bg-white border border-[#dfe1e6] rounded-md shadow-lg py-1 z-30">
-                {SPACE_TOOL_ITEMS.map((it) => (
+                {toolItems.map((it) => (
                   <button
                     key={it.id}
                     type="button"
