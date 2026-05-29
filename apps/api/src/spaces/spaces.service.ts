@@ -79,6 +79,7 @@ export class SpacesService {
       name?: string;
       description?: string | null;
       visibility?: 'PUBLIC' | 'PRIVATE';
+      icon?: string | null;
     },
     user: Actor,
   ) {
@@ -92,6 +93,18 @@ export class SpacesService {
     if (dto.name !== undefined) data.name = dto.name;
     if (dto.description !== undefined) data.description = dto.description;
     if (dto.visibility !== undefined) data.visibility = dto.visibility;
+    if (dto.icon !== undefined) {
+      // Cycle 74-G — 아이콘은 이모지(짧은 문자) 또는 data:image URL 만 허용. 빈 값=제거.
+      const icon = dto.icon;
+      if (icon && icon.length > 0) {
+        const isImage = icon.startsWith('data:image/');
+        const isShort = icon.length <= 16;
+        if (!isImage && !isShort) {
+          throw new BadRequestException({ error: 'invalid icon' });
+        }
+      }
+      data.icon = icon && icon.length > 0 ? icon : null;
+    }
     return this.prisma.space.update({
       where: { id },
       data,

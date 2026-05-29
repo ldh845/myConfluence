@@ -32,6 +32,8 @@ export type SpaceWithPages = {
   id: string;
   name: string;
   description: string | null;
+  // Cycle 74-G — 아이콘(이모지 또는 data:image URL).
+  icon?: string | null;
   createdAt: string;
   pages: PageNode[];
   // Cycle 33 — 공간의 명시적 홈(메인) 페이지. 없으면(백필 누락/페이지 없음) null.

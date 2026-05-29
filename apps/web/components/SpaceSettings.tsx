@@ -20,6 +20,38 @@ const TABS: { id: string; label: string; enabled: boolean }[] = [
   { id: "sidebar", label: "사이드바 구성", enabled: true },
 ];
 
+// Cycle 74-G — 이모지 프리셋.
+const ICON_PRESETS = ["📄", "📁", "📚", "💡", "🚀", "⭐", "🔧", "🎯", "🧭", "🗂️"];
+
+// 이미지를 128px 이내로 리사이즈한 data URL 로 변환(DB·전송 부담 최소화).
+function fileToIconDataUrl(file: File, max = 128): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, max / Math.max(img.width, img.height));
+      const w = Math.max(1, Math.round(img.width * scale));
+      const h = Math.max(1, Math.round(img.height * scale));
+      const canvas = document.createElement("canvas");
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext("2d");
+      URL.revokeObjectURL(url);
+      if (!ctx) {
+        reject(new Error("canvas unsupported"));
+        return;
+      }
+      ctx.drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL("image/png"));
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("image load failed"));
+    };
+    img.src = url;
+  });
+}
+
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div>
@@ -68,6 +100,7 @@ export default function SpaceSettings({ spaceId }: { spaceId: string }) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [visibility, setVisibility] = useState<SpaceVisibility>("PUBLIC");
+  const [icon, setIcon] = useState<string | null>(null);
   const [confirmName, setConfirmName] = useState("");
 
   useEffect(() => {
@@ -75,6 +108,7 @@ export default function SpaceSettings({ spaceId }: { spaceId: string }) {
       setName(space.name);
       setDescription(space.description ?? "");
       setVisibility((space.visibility as SpaceVisibility) ?? "PUBLIC");
+      setIcon(space.icon ?? null);
     }
   }, [space]);
 
@@ -96,6 +130,7 @@ export default function SpaceSettings({ spaceId }: { spaceId: string }) {
         body: JSON.stringify({
           name: name.trim(),
           description,
+          icon,
           ...(space?.type !== "PERSONAL" ? { visibility } : {}),
         }),
       });
@@ -186,6 +221,69 @@ export default function SpaceSettings({ spaceId }: { spaceId: string }) {
         className="space-y-5"
         style={{ display: activeTab === "overview" ? undefined : "none" }}
       >
+        <Field label="아이콘">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 shrink-0 rounded border border-[#dfe1e6] bg-[#f4f5f7] flex items-center justify-center overflow-hidden text-[24px]">
+              {icon ? (
+                icon.startsWith("data:") ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={icon}
+                    alt=""
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <span>{icon}</span>
+                )
+              ) : (
+                <span className="text-[#a5adba]">📄</span>
+              )}
+            </div>
+            <div className="flex flex-wrap items-center gap-1">
+              {ICON_PRESETS.map((e) => (
+                <button
+                  key={e}
+                  type="button"
+                  onClick={() => setIcon(e)}
+                  className="w-8 h-8 rounded border border-[#dfe1e6] hover:bg-[#deebff] text-[18px]"
+                >
+                  {e}
+                </button>
+              ))}
+              <label className="px-2 py-1 text-[12px] rounded border border-[#dfe1e6] hover:bg-[#f4f5f7] cursor-pointer">
+                이미지 업로드
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={async (e) => {
+                    const f = e.target.files?.[0];
+                    e.target.value = "";
+                    if (!f) return;
+                    try {
+                      setIcon(await fileToIconDataUrl(f));
+                    } catch {
+                      window.alert("이미지를 불러올 수 없습니다.");
+                    }
+                  }}
+                />
+              </label>
+              {icon && (
+                <button
+                  type="button"
+                  onClick={() => setIcon(null)}
+                  className="px-2 py-1 text-[12px] text-[#6b778c] hover:underline"
+                >
+                  제거
+                </button>
+              )}
+            </div>
+          </div>
+          <p className="text-[11px] text-[#6b778c] mt-1">
+            이모지를 고르거나 이미지를 올리세요. 이미지는 128px 로 축소돼
+            저장됩니다. (&lsquo;저장&rsquo; 을 눌러야 반영)
+          </p>
+        </Field>
         <Field label="스페이스 이름">
           <input
             value={name}

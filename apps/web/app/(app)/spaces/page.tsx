@@ -224,9 +224,21 @@ function SpacesDirectory() {
                   className="border-b border-[#dfe1e6] hover:bg-[#f4f5f7]"
                 >
                   <td className="py-3">
-                    <div className="w-8 h-8 rounded bg-[#0052cc] text-white flex items-center justify-center font-bold">
-                      {space.name.slice(0, 1).toUpperCase()}
-                    </div>
+                    {space.icon && space.icon.startsWith("data:") ? (
+                      <img
+                        src={space.icon}
+                        alt=""
+                        className="w-8 h-8 rounded object-cover"
+                      />
+                    ) : space.icon ? (
+                      <div className="w-8 h-8 rounded bg-[#f4f5f7] flex items-center justify-center text-[18px] leading-none">
+                        {space.icon}
+                      </div>
+                    ) : (
+                      <div className="w-8 h-8 rounded bg-[#0052cc] text-white flex items-center justify-center font-bold">
+                        {space.name.slice(0, 1).toUpperCase()}
+                      </div>
+                    )}
                   </td>
                   <td>
                     <Link

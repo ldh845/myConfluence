@@ -17,4 +17,10 @@ export class UpdateSpaceSettingsDto {
   @IsOptional()
   @IsIn(['PUBLIC', 'PRIVATE'])
   visibility?: 'PUBLIC' | 'PRIVATE';
+
+  // Cycle 74-G — 아이콘: 이모지(짧은 문자) 또는 data:image URL(클라 리사이즈). 빈 값=제거.
+  @IsOptional()
+  @IsString()
+  @MaxLength(300000)
+  icon?: string | null;
 }
