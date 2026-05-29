@@ -158,10 +158,25 @@ export class PagesService {
 
   // Cycle 71 — 칸반 보드용. 공간의 발행·비삭제 페이지 전체(상태별 컬럼 그룹핑은 FE).
   //   페이지가 많은 공간 대비 상한 500. draft/휴지통은 제외(기존 정책).
-  async boardPages(spaceId: string) {
+  async boardPages(spaceId: string, userIds?: string[]) {
     if (!spaceId) return [];
+    const where: Prisma.PageWhereInput = {
+      spaceId,
+      deletedAt: null,
+      NOT: { publishedAt: null },
+      // Cycle 73 — 사용자 필터(보드 상단 칩). 선택 사용자가 작성자(authorId)
+      //   또는 마지막 편집자(lastEditorId)인 페이지만. 다중 선택은 OR.
+      ...(userIds && userIds.length
+        ? {
+            OR: [
+              { authorId: { in: userIds } },
+              { lastEditorId: { in: userIds } },
+            ],
+          }
+        : {}),
+    };
     return this.prisma.page.findMany({
-      where: { spaceId, deletedAt: null, NOT: { publishedAt: null } },
+      where,
       orderBy: { updatedAt: 'desc' },
       take: 500,
       select: {

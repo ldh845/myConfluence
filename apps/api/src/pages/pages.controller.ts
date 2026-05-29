@@ -143,9 +143,16 @@ export class PagesController {
   }
 
   // Cycle 71 — 칸반 보드: 공간 전체 발행 페이지(상태 그룹핑은 FE). :id 위에 선언.
+  // Cycle 73 — ?userId= 콤마 목록(작성자/마지막 편집자 OR 필터).
   @Get('board')
-  board(@Query('spaceId') spaceId?: string) {
-    return this.pages.boardPages(spaceId || '');
+  board(
+    @Query('spaceId') spaceId?: string,
+    @Query('userId') userId?: string,
+  ) {
+    const userIds = userId
+      ? userId.split(',').map((s) => s.trim()).filter(Boolean)
+      : undefined;
+    return this.pages.boardPages(spaceId || '', userIds);
   }
 
   @Get(':id')

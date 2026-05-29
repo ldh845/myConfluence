@@ -163,6 +163,22 @@ describe('PagesService — recent', () => {
     expect(r).toEqual([]);
     expect(prismaMock.page.findMany).not.toHaveBeenCalled();
   });
+
+  // Cycle 73 — 사용자 필터.
+  it('boardPages(spaceId, userIds) → where 에 author/lastEditor OR', () => {
+    void service.boardPages('sp-1', ['u-1', 'u-2']);
+    const where = findManyArg().where;
+    expect(where).toMatchObject({ spaceId: 'sp-1', deletedAt: null });
+    expect(where.OR).toEqual([
+      { authorId: { in: ['u-1', 'u-2'] } },
+      { lastEditorId: { in: ['u-1', 'u-2'] } },
+    ]);
+  });
+
+  it('boardPages(spaceId, []) → userId 필터 없음(OR 없음)', () => {
+    void service.boardPages('sp-1', []);
+    expect(findManyArg().where).not.toHaveProperty('OR');
+  });
 });
 
 // Cycle 56 — remove(id, opts.cascade) 검증.

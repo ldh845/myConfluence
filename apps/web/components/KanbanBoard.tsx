@@ -8,17 +8,20 @@ import {
   useSensors,
   type DragEndEvent,
 } from "@dnd-kit/core";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth/useAuth";
 import KanbanColumn, { type ColumnKey } from "./KanbanColumn";
 import type { BoardPage } from "./KanbanCard";
+import UserFilterChips from "./UserFilterChips";
 import { STATUS_META } from "./PageStatusBadge";
 import type { PageStatus } from "@/lib/types";
 
 // Cycle 71 — 스페이스 칸반 보드. /?spaceId=X&view=board 에서 마운트.
-//   GET /pages/board 로 공간 전체 발행 페이지를 받아 4컬럼(상태 없음/To Do/
-//   In Progress/Done)으로 그룹핑. 카드 드래그 → 다른 컬럼 드롭 시 PATCH
-//   /pages/:id/status (optimistic). 권한(작성자/ADMIN) 없는 카드는 드래그 비활성.
+//   GET /pages/board 로 공간 전체 발행 페이지를 받아 4컬럼으로 그룹핑. 카드
+//   드래그 → 다른 컬럼 드롭 시 PATCH /pages/:id/status (optimistic).
+// Cycle 73 — 사용자 필터(작성자/편집자). ?userId= 콤마 URL 동기화 → 보드 fetch
+//   서버사이드 필터. 상태(컬럼)와 AND. 권한 무관, 모든 로그인 사용자 사용 가능.
 
 const COLUMNS: { key: ColumnKey; label: string; color: string }[] = [
   { key: "NONE", label: "상태 없음", color: "#c1c7d0" },
@@ -41,14 +44,44 @@ export default function KanbanBoard({
   spaceName?: string;
 }) {
   const { user } = useAuth();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const [pages, setPages] = useState<BoardPage[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // URL ?userId= 가 사용자 필터의 단일 출처.
+  const userParam = searchParams.get("userId") ?? "";
+  const selectedIds = useMemo(
+    () => (userParam ? userParam.split(",").filter(Boolean) : []),
+    [userParam],
+  );
+
+  // 칩 이름 해석용 — 전체 사용자 목록(소규모 조직 전제). 현재 사용자도 합친다.
+  const { data: allUsers } = useQuery<{ id: string; name: string }[]>({
+    queryKey: ["users-all"],
+    queryFn: async () => {
+      const r = await fetch("/api/users", { credentials: "include" });
+      return r.ok ? ((await r.json()) as { id: string; name: string }[]) : [];
+    },
+    staleTime: 60_000,
+  });
+  const usersById = useMemo(() => {
+    const m = new Map<string, string>();
+    (allUsers ?? []).forEach((u) => m.set(u.id, u.name));
+    if (user) m.set(user.id, user.name);
+    return m;
+  }, [allUsers, user]);
+  const selectedUsers = useMemo(
+    () => selectedIds.map((id) => ({ id, name: usersById.get(id) ?? id })),
+    [selectedIds, usersById],
+  );
+
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    fetch(`/api/pages/board?spaceId=${encodeURIComponent(spaceId)}`, {
+    const qs = userParam ? `&userId=${encodeURIComponent(userParam)}` : "";
+    fetch(`/api/pages/board?spaceId=${encodeURIComponent(spaceId)}${qs}`, {
       credentials: "include",
     })
       .then((r) => (r.ok ? r.json() : []))
@@ -61,7 +94,7 @@ export default function KanbanBoard({
     return () => {
       cancelled = true;
     };
-  }, [spaceId]);
+  }, [spaceId, userParam]);
 
   const canEdit = (p: BoardPage) =>
     !!user && (user.role === "ADMIN" || p.author?.id === user.id);
@@ -80,6 +113,14 @@ export default function KanbanBoard({
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
   );
+
+  const onChangeUsers = (next: { id: string; name: string }[]) => {
+    const params = new URLSearchParams();
+    params.set("spaceId", spaceId);
+    params.set("view", "board");
+    if (next.length) params.set("userId", next.map((u) => u.id).join(","));
+    router.replace(`/?${params.toString()}`);
+  };
 
   const onDragEnd = async (e: DragEndEvent) => {
     if (!e.over) return;
@@ -111,9 +152,19 @@ export default function KanbanBoard({
 
   return (
     <div className="px-6 pt-6 pb-16">
-      <h1 className="text-[22px] font-semibold text-[#172b4d] mb-4">
+      <h1 className="text-[22px] font-semibold text-[#172b4d] mb-3">
         {spaceName ? `${spaceName} · 보드` : "보드"}
       </h1>
+
+      {/* Cycle 73 — 사용자 필터 칩 바. */}
+      <div className="mb-4">
+        <UserFilterChips
+          selected={selectedUsers}
+          currentUser={user ? { id: user.id, name: user.name } : null}
+          onChange={onChangeUsers}
+        />
+      </div>
+
       {loading ? (
         <div className="text-[12px] text-[#6b778c]">불러오는 중...</div>
       ) : (
