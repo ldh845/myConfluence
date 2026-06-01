@@ -2222,3 +2222,4 @@
 - **84 followup 11 (피드백 반영)**: 팝오버가 컬럼 상단(top-0)에 뜨던 문제 → 클릭한 아이콘 버튼의 `offsetTop` 을 capture 해 inline `top` 으로 적용 → 아이콘 바로 옆에 정렬. state 를 `{ kind, top }` 로 확장, `IconBtn.onClick` 에 MouseEvent 추가. 패널 높이 한도 `max-h-full → max-h-[60vh]`(아래 잘림 방지). (`7cece4c`)
 - **84 followup 12 (피드백 반영)**: 접힌 사이드바의 **휴지통/공간 도구**를 `mt-auto` 컨테이너로 묶어 **하단 고정** — 펴진 상태와 같은 위치. 위쪽 항목(홈/페이지/보드/캘린더/공간 바로가기/페이지 트리)은 상단 유지. (`56ae494`)
 - **84 followup 13 (피드백 반영)**: 접힌 사이드바에서 **공간 도구 클릭 시 사이드바 펴기 대신 옆 메뉴**. `compactPopover.kind` 에 `'tools'` 추가, 펴진 사이드바의 '공간 도구' 위로-열림 드롭다운과 같은 `toolItems`(개요/권한/감사 로그/페이지 순서/사이드바 구성)를 옆에 렌더. 항목 클릭 시 `?view=settings&tab=` 로 이동하며 팝오버 닫힘. (`a0c2bf3`)
+- **84 followup 14 (피드백 반영)**: 사이드바 하단 아이콘(휴지통/공간 도구) 클릭 시 팝오버가 viewport 아래로 잘리던 문제 → `togglePopover` 가 추정 패널 높이로 컨테이너 잔여 공간을 검사한 뒤 자동으로 **top 또는 bottom 앵커**를 선택. state 를 `{ kind, style: CSSProperties }` 로 일반화. tools 220px / shortcuts·tree min(360, 60vh) 추정. (`6160ce0`)
