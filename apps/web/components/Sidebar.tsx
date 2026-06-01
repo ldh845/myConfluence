@@ -300,7 +300,8 @@ export default function Sidebar({
   const [dropHint, setDropHint] = useState<DropHint>(null);
   // Cycle 84 followup 10 — compact 모드에서 옆에 뜨는 floating 패널.
   //   클릭한 아이콘 옆에 뜨도록 그 버튼의 offsetTop 함께 저장.
-  type CompactPopoverKind = "shortcuts" | "tree";
+  // followup 13 — 공간 도구도 옆 메뉴로 노출.
+  type CompactPopoverKind = "shortcuts" | "tree" | "tools";
   const [compactPopover, setCompactPopover] = useState<
     { kind: CompactPopoverKind; top: number } | null
   >(null);
@@ -620,9 +621,12 @@ export default function Sidebar({
             {canManage && space && (
               <IconBtn
                 icon={<AppIcon name="settings" size={15} alt="" />}
-                label="공간 도구 (펴기)"
-                active={pathname === "/" && view === "settings"}
-                onClick={onExpand}
+                label="공간 도구"
+                active={
+                  compactPopover?.kind === "tools" ||
+                  (pathname === "/" && view === "settings")
+                }
+                onClick={togglePopover("tools")}
               />
             )}
           </div>
@@ -734,6 +738,36 @@ export default function Sidebar({
                 ))}
               </ul>
             )}
+          </div>
+        )}
+        {compactPopover?.kind === "tools" && canManage && space && (
+          <div
+            style={{ top: compactPopover.top }}
+            className="absolute left-14 ml-1 w-[180px] bg-white border border-[#dfe1e6] rounded-md shadow-lg z-30 py-1"
+          >
+            {toolItems.map((it) => (
+              <button
+                key={it.id}
+                type="button"
+                disabled={!it.enabled}
+                onClick={() => {
+                  if (!it.enabled) return;
+                  setCompactPopover(null);
+                  router.push(
+                    `/?spaceId=${space.id}&view=settings&tab=${it.id}`,
+                  );
+                }}
+                title={it.enabled ? undefined : "준비 중"}
+                className={`w-full text-left px-3 py-1.5 text-[13px] ${
+                  it.enabled
+                    ? "text-[#172b4d] hover:bg-[#deebff]"
+                    : "text-[#a5adba] cursor-not-allowed"
+                }`}
+              >
+                {it.label}
+                {!it.enabled && " (준비 중)"}
+              </button>
+            ))}
           </div>
         )}
       </div>
