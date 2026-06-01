@@ -82,6 +82,27 @@ export default function SpaceAuditPanel({ spaceId }: { spaceId: string }) {
   const startIdx = safePage * LIMIT;
   const endIdx = Math.min(startIdx + items.length, total);
 
+  // 표시할 페이지 번호 계산 (1-indexed). 7개 초과 시 ... 로 축약.
+  //   예: 1 ... 4 5 [6] 7 8 ... 20
+  const pagesToShow: (number | "…")[] = (() => {
+    if (totalPages <= 7) {
+      return Array.from({ length: totalPages }, (_, i) => i + 1);
+    }
+    const cur = safePage + 1;
+    const out: (number | "…")[] = [1];
+    if (cur > 3) out.push("…");
+    for (
+      let i = Math.max(2, cur - 1);
+      i <= Math.min(totalPages - 1, cur + 1);
+      i++
+    ) {
+      out.push(i);
+    }
+    if (cur < totalPages - 2) out.push("…");
+    out.push(totalPages);
+    return out;
+  })();
+
   return (
     <div className="space-y-4">
       {/* 필터 */}
@@ -212,31 +233,61 @@ export default function SpaceAuditPanel({ spaceId }: { spaceId: string }) {
       )}
 
       {total > 0 && (
-        <div className="flex items-center justify-between text-[12px] text-[#6b778c]">
-          <span>
-            총 {total}건 · {startIdx + 1}–{endIdx}건 ({safePage + 1}/
-            {totalPages} 페이지)
+        <div className="flex items-center justify-between gap-3 text-[12px] text-[#6b778c]">
+          <span className="shrink-0">
+            총 {total}건 · {startIdx + 1}–{endIdx}건
           </span>
-          <span className="flex items-center gap-1">
+          <nav
+            className="flex items-center gap-1"
+            aria-label="페이지 탐색"
+          >
             <button
               type="button"
               onClick={() => setPage((p) => Math.max(0, p - 1))}
               disabled={loading || safePage === 0}
-              className="px-3 py-1 rounded border border-[#dfe1e6] disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#f4f5f7]"
+              className="px-2.5 py-1 rounded border border-[#dfe1e6] disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#f4f5f7]"
+              aria-label="이전 페이지"
             >
-              이전
+              ‹
             </button>
+            {pagesToShow.map((p, i) =>
+              p === "…" ? (
+                <span
+                  key={`e${i}`}
+                  className="px-1 text-[#a5adba] select-none"
+                  aria-hidden
+                >
+                  …
+                </span>
+              ) : (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => setPage(p - 1)}
+                  disabled={loading}
+                  aria-current={p === safePage + 1 ? "page" : undefined}
+                  className={`min-w-[28px] px-2 py-1 rounded border text-center ${
+                    p === safePage + 1
+                      ? "border-[#0052cc] bg-[#deebff] text-[#0052cc] font-semibold"
+                      : "border-[#dfe1e6] hover:bg-[#f4f5f7]"
+                  } disabled:opacity-50 disabled:cursor-not-allowed`}
+                >
+                  {p}
+                </button>
+              ),
+            )}
             <button
               type="button"
               onClick={() =>
                 setPage((p) => Math.min(totalPages - 1, p + 1))
               }
               disabled={loading || safePage >= totalPages - 1}
-              className="px-3 py-1 rounded border border-[#dfe1e6] disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#f4f5f7]"
+              className="px-2.5 py-1 rounded border border-[#dfe1e6] disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#f4f5f7]"
+              aria-label="다음 페이지"
             >
-              다음
+              ›
             </button>
-          </span>
+          </nav>
         </div>
       )}
     </div>
