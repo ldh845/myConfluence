@@ -236,9 +236,11 @@ export default function HomePage() {
 
   // 자동저장 성공 → draft 존재. (currentPage는 자동저장으로 갱신되지 않으므로
   // saveStatus 전이로 보강한다.)
+  // Cycle 84 followup 3 — **편집 모드에서만** 처리. 발행 직후 view 모드로 리마운트
+  //   되는 에디터가 초기 동기화로 "saved" 를 발화해 미발행 태그가 잘못 켜지던 문제 fix.
   useEffect(() => {
-    if (saveStatus === "saved") setHasDraft(true);
-  }, [saveStatus]);
+    if (isBodyEditable && saveStatus === "saved") setHasDraft(true);
+  }, [saveStatus, isBodyEditable]);
 
   // Cycle 29 — 최근 사용한 공간 기록. 페이지가 로드되면 그 페이지의 공간,
   // 빈 스페이스로 진입(/?spaceId=X)했으면 그 spaceId 를 기록.
