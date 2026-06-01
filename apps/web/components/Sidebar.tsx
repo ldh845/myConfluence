@@ -301,9 +301,11 @@ export default function Sidebar({
   // Cycle 84 followup 10 — compact 모드에서 옆에 뜨는 floating 패널.
   //   클릭한 아이콘 옆에 뜨도록 그 버튼의 offsetTop 함께 저장.
   // followup 13 — 공간 도구도 옆 메뉴로 노출.
+  // followup 14 — 아래로 넘쳐 잘리던 문제: 추정 높이로 viewport 검사 후
+  //   top 또는 bottom 앵커 자동 선택(상단/하단 위치).
   type CompactPopoverKind = "shortcuts" | "tree" | "tools";
   const [compactPopover, setCompactPopover] = useState<
-    { kind: CompactPopoverKind; top: number } | null
+    { kind: CompactPopoverKind; style: React.CSSProperties } | null
   >(null);
   const compactPopoverRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -546,13 +548,25 @@ export default function Sidebar({
       </button>
     );
 
-    // 클릭한 아이콘의 offsetTop 으로 패널을 그 옆에 정렬.
+    // 클릭한 아이콘 옆에 정렬. 아래 공간이 모자라면 위쪽 앵커(bottom)로 자동 전환.
     const togglePopover =
       (kind: CompactPopoverKind) =>
       (e: React.MouseEvent<HTMLButtonElement>) => {
-        const top = e.currentTarget.offsetTop;
+        const btn = e.currentTarget;
+        const top = btn.offsetTop;
+        const height = btn.offsetHeight;
+        const containerH = compactPopoverRef.current?.clientHeight ?? 0;
+        // 추정 패널 높이. tools 메뉴는 작고, shortcuts/tree 는 가변(최대 60vh).
+        const estimate =
+          kind === "tools"
+            ? 220
+            : Math.min(360, Math.round(window.innerHeight * 0.6));
+        const wouldOverflow = top + estimate > containerH - 8;
+        const style: React.CSSProperties = wouldOverflow
+          ? { bottom: Math.max(8, containerH - (top + height)) }
+          : { top };
         setCompactPopover((prev) =>
-          prev?.kind === kind ? null : { kind, top },
+          prev?.kind === kind ? null : { kind, style },
         );
       };
     return (
@@ -636,7 +650,7 @@ export default function Sidebar({
             followup 11 — 클릭한 아이콘 옆에 뜨도록 inline top 적용. */}
         {compactPopover?.kind === "shortcuts" && (
           <div
-            style={{ top: compactPopover.top }}
+            style={compactPopover.style}
             className="absolute left-14 ml-1 w-72 max-h-[60vh] overflow-y-auto bg-white border border-[#dfe1e6] rounded-md shadow-lg z-30"
           >
             <div className="px-3 pt-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-[#6b778c]">
@@ -682,7 +696,7 @@ export default function Sidebar({
         )}
         {compactPopover?.kind === "tree" && (
           <div
-            style={{ top: compactPopover.top }}
+            style={compactPopover.style}
             className="absolute left-14 ml-1 w-72 max-h-[60vh] overflow-y-auto bg-white border border-[#dfe1e6] rounded-md shadow-lg z-30"
           >
             <div className="px-3 pt-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-[#6b778c]">
@@ -742,7 +756,7 @@ export default function Sidebar({
         )}
         {compactPopover?.kind === "tools" && canManage && space && (
           <div
-            style={{ top: compactPopover.top }}
+            style={compactPopover.style}
             className="absolute left-14 ml-1 w-[180px] bg-white border border-[#dfe1e6] rounded-md shadow-lg z-30 py-1"
           >
             {toolItems.map((it) => (
