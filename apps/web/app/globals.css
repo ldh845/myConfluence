@@ -315,3 +315,16 @@ body {
 .cf-article th {
   background: #f4f5f7;
 }
+
+/* Cycle 87 — 반응형 표 모드. data-width-mode='responsive' (기본) 면 셀 내용
+   기준 폭 (table-layout:auto, width:auto). resizable=true 가 박은 colwidth 도
+   col 의 width:auto 강제로 무력화. 고정폭 모드(=fixed)에서만 기존 동작 유지. */
+.ProseMirror table[data-width-mode="responsive"] {
+  table-layout: auto !important;
+  width: auto !important;
+}
+.ProseMirror table[data-width-mode="responsive"] col {
+  width: auto !important;
+}
+/* Cycle 87 — TableCell/Header 의 verticalAlign attr 시각화는 inline style 로
+   처리되므로 별도 CSS 불필요. (style="vertical-align: top|middle|bottom") */

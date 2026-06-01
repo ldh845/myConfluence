@@ -78,7 +78,8 @@ export default function EditorToolbar({ editor }: Props) {
   };
 
   return (
-    <div className="bg-white border-b border-[#dfe1e6] px-3 py-1.5 flex flex-wrap items-center gap-1">
+    <div className="bg-white border-b border-[#dfe1e6]">
+      <div className="px-3 py-1.5 flex flex-wrap items-center gap-1">
       {/* Cycle 85 — 상태/정보 매크로 다이얼로그 마운트(슬래시/＋ 메뉴에서 store 신호로 열림). */}
       <MacroDialogsMount editor={editor} />
       {/* G1: 문단 스타일 드롭다운 — 제목 1~4 / 인용 / 코드 블록 / 문단 */}
@@ -204,76 +205,7 @@ export default function EditorToolbar({ editor }: Props) {
           <ImageCaptionButton editor={editor} />
         </>
       )}
-      {editor.isActive("table") && (
-        <>
-          <Divider />
-          {/* FR-032 (Cycle 14) — 행/열 추가·삭제 + 셀 병합/분할 + 표 삭제. */}
-          <BtnGroup>
-            <TB
-              title="행 추가 (위)"
-              onClick={run(() =>
-                editor.chain().focus().addRowBefore().run()
-              )}
-            >
-              ⬆+
-            </TB>
-            <TB
-              title="행 추가 (아래)"
-              onClick={run(() => editor.chain().focus().addRowAfter().run())}
-            >
-              ⬇+
-            </TB>
-            <TB
-              title="행 삭제"
-              onClick={run(() => editor.chain().focus().deleteRow().run())}
-            >
-              ⬌−
-            </TB>
-            <TB
-              title="열 추가 (왼쪽)"
-              onClick={run(() =>
-                editor.chain().focus().addColumnBefore().run()
-              )}
-            >
-              ⬅+
-            </TB>
-            <TB
-              title="열 추가 (오른쪽)"
-              onClick={run(() =>
-                editor.chain().focus().addColumnAfter().run()
-              )}
-            >
-              ➡+
-            </TB>
-            <TB
-              title="열 삭제"
-              onClick={run(() =>
-                editor.chain().focus().deleteColumn().run()
-              )}
-            >
-              ⬍−
-            </TB>
-            <TB
-              title="셀 병합 (먼저 두 개 이상 셀 드래그 선택)"
-              onClick={run(() => editor.chain().focus().mergeCells().run())}
-            >
-              ⊞⊟
-            </TB>
-            <TB
-              title="셀 분할"
-              onClick={run(() => editor.chain().focus().splitCell().run())}
-            >
-              ⊟⊞
-            </TB>
-            <TB
-              title="표 삭제"
-              onClick={run(() => editor.chain().focus().deleteTable().run())}
-            >
-              <AppIcon name="trash" size={16} alt="표 삭제" />
-            </TB>
-          </BtnGroup>
-        </>
-      )}
+      {/* Cycle 87 — 표 컨텍스트 도구는 두 번째 라인(아래)으로 분리. 여기서는 제거. */}
 
       <div className="flex-1" />
 
@@ -292,6 +224,13 @@ export default function EditorToolbar({ editor }: Props) {
           ↷
         </TB>
       </BtnGroup>
+      </div>
+      {/* Cycle 87 — 표 안에 커서가 있을 때만 두 번째 라인으로 표 전용 툴바 노출. */}
+      {editor.isActive("table") && (
+        <div className="border-t border-[#dfe1e6] px-3 py-1.5 flex flex-wrap items-center gap-1">
+          <TableContextToolbar editor={editor} />
+        </div>
+      )}
     </div>
   );
 }
@@ -1131,6 +1070,212 @@ function InsertMoreButton({ editor }: { editor: Editor }) {
               })
             )}
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Cycle 87 — 표 안에 커서가 있을 때만 노출되는 두 번째 라인 툴바.
+//   ① 반응형/고정폭 드롭다운 (기본 반응형)
+//   ② 좌/우 열 추가 (columns_left.png / columns.png)
+//   ③ 위/아래 행 추가 (텍스트 화살표)
+//   ④ 행 삭제 / 열 삭제
+//   ⑤ 셀 병합 / 분할
+//   ⑥ 정렬 (위/가운데/아래) — TableCell.verticalAlign attr
+//   ⑦ 머릿행 / 머릿열 토글 (TipTap 기본 명령)
+//   ⑧ 표 삭제
+//   ※ 행/열 잘라내기·복사, 번호 열, 셀 색상은 Cycle 88 followup.
+function TableContextToolbar({ editor }: { editor: Editor }) {
+  const run = (fn: () => void) => () => {
+    fn();
+    editor.chain().focus().run();
+  };
+  const widthMode =
+    (editor.getAttributes("table").widthMode as string | undefined) ??
+    "responsive";
+  const setWidthMode = (mode: "responsive" | "fixed") => {
+    editor.chain().focus().updateAttributes("table", { widthMode: mode }).run();
+  };
+  const va =
+    (editor.getAttributes("tableCell").verticalAlign as string | undefined) ??
+    (editor.getAttributes("tableHeader").verticalAlign as string | undefined) ??
+    null;
+  const setVAlign = (v: "top" | "middle" | "bottom") => {
+    editor.chain().focus().setCellAttribute("verticalAlign", v).run();
+  };
+
+  return (
+    <>
+      <WidthModeDropdown mode={widthMode} onChange={setWidthMode} />
+      <Divider />
+      <BtnGroup>
+        <TB
+          title="왼쪽 열 추가"
+          onClick={run(() => editor.chain().focus().addColumnBefore().run())}
+        >
+          <AppIcon name="columns_left" size={16} alt="왼쪽 열 추가" />
+        </TB>
+        <TB
+          title="오른쪽 열 추가"
+          onClick={run(() => editor.chain().focus().addColumnAfter().run())}
+        >
+          <AppIcon name="columns" size={16} alt="오른쪽 열 추가" />
+        </TB>
+        <TB
+          title="위쪽 행 추가"
+          onClick={run(() => editor.chain().focus().addRowBefore().run())}
+        >
+          <span className="inline-block" style={{ transform: "rotate(90deg)" }}>
+            <AppIcon name="columns_left" size={16} alt="위쪽 행 추가" />
+          </span>
+        </TB>
+        <TB
+          title="아래쪽 행 추가"
+          onClick={run(() => editor.chain().focus().addRowAfter().run())}
+        >
+          <span className="inline-block" style={{ transform: "rotate(90deg)" }}>
+            <AppIcon name="columns" size={16} alt="아래쪽 행 추가" />
+          </span>
+        </TB>
+      </BtnGroup>
+      <Divider />
+      <BtnGroup>
+        <TB
+          title="행 삭제"
+          onClick={run(() => editor.chain().focus().deleteRow().run())}
+        >
+          행−
+        </TB>
+        <TB
+          title="열 삭제"
+          onClick={run(() => editor.chain().focus().deleteColumn().run())}
+        >
+          열−
+        </TB>
+      </BtnGroup>
+      <Divider />
+      <BtnGroup>
+        <TB
+          title="셀 병합 (먼저 두 개 이상 셀 드래그 선택)"
+          onClick={run(() => editor.chain().focus().mergeCells().run())}
+        >
+          ⊞⊟
+        </TB>
+        <TB
+          title="병합된 셀 나누기"
+          onClick={run(() => editor.chain().focus().splitCell().run())}
+        >
+          ⊟⊞
+        </TB>
+      </BtnGroup>
+      <Divider />
+      <BtnGroup>
+        <TB
+          title="위쪽 정렬"
+          active={va === "top"}
+          onClick={run(() => setVAlign("top"))}
+        >
+          ⤒
+        </TB>
+        <TB
+          title="가운데 정렬"
+          active={va === "middle" || va === null}
+          onClick={run(() => setVAlign("middle"))}
+        >
+          ⇳
+        </TB>
+        <TB
+          title="아래쪽 정렬"
+          active={va === "bottom"}
+          onClick={run(() => setVAlign("bottom"))}
+        >
+          ⤓
+        </TB>
+      </BtnGroup>
+      <Divider />
+      <BtnGroup>
+        <TB
+          title="머릿행 토글"
+          onClick={run(() => editor.chain().focus().toggleHeaderRow().run())}
+        >
+          머릿행
+        </TB>
+        <TB
+          title="머릿열 토글"
+          onClick={run(() => editor.chain().focus().toggleHeaderColumn().run())}
+        >
+          머릿열
+        </TB>
+      </BtnGroup>
+      <Divider />
+      <BtnGroup>
+        <TB
+          title="표 삭제"
+          onClick={run(() => editor.chain().focus().deleteTable().run())}
+        >
+          <AppIcon name="trash" size={16} alt="표 삭제" />
+        </TB>
+      </BtnGroup>
+    </>
+  );
+}
+
+// Cycle 87 — 표 폭 모드(반응형/고정폭) 드롭다운. 디폴트 '반응형'.
+function WidthModeDropdown({
+  mode,
+  onChange,
+}: {
+  mode: string;
+  onChange: (m: "responsive" | "fixed") => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node))
+        setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+  const label = mode === "fixed" ? "고정폭" : "반응형";
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="px-2 py-1 rounded text-[12px] text-[#172b4d] hover:bg-[#ebecf0] flex items-center gap-1 border border-[#dfe1e6]"
+        title="표 폭 모드"
+      >
+        {label}
+        <AppIcon name="downArrow" size={10} alt="" />
+      </button>
+      {open && (
+        <div className="absolute left-0 top-full mt-1 bg-white border border-[#dfe1e6] rounded shadow-lg z-20 min-w-[100px]">
+          {(["responsive", "fixed"] as const).map((m) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => {
+                onChange(m);
+                setOpen(false);
+              }}
+              className={`block w-full text-left px-3 py-1.5 text-[12px] hover:bg-[#ebecf0] ${
+                mode === m ? "text-[#0052cc] font-medium" : "text-[#172b4d]"
+              }`}
+            >
+              {m === "responsive" ? "반응형" : "고정폭"}
+            </button>
+          ))}
         </div>
       )}
     </div>

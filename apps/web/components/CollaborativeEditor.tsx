@@ -10,10 +10,12 @@ import StarterKit from "@tiptap/starter-kit";
 import Collaboration from "@tiptap/extension-collaboration";
 import CollaborationCursor from "@tiptap/extension-collaboration-cursor";
 import Link from "@tiptap/extension-link";
-import Table from "@tiptap/extension-table";
 import TableRow from "@tiptap/extension-table-row";
-import TableCell from "@tiptap/extension-table-cell";
-import TableHeader from "@tiptap/extension-table-header";
+import {
+  TableExtended,
+  TableCellExtended,
+  TableHeaderExtended,
+} from "@/lib/tiptap/table-extensions";
 import { Markdown } from "tiptap-markdown";
 import TaskList from "@tiptap/extension-task-list";
 import TaskItem from "@tiptap/extension-task-item";
@@ -520,10 +522,10 @@ export default function CollaborativeEditor({
           autolink: true,
           HTMLAttributes: { rel: "noopener noreferrer" },
         }),
-        Table.configure({ resizable: true }),
+        TableExtended.configure({ resizable: true }),
         TableRow,
-        TableHeader,
-        TableCell,
+        TableHeaderExtended,
+        TableCellExtended,
         Markdown.configure({
           // Cycle 55 followup 5 — html: true → false 롤백.
           //   followup 3 의 html:true 변경이 자동저장 markdown 직렬화에 부작용

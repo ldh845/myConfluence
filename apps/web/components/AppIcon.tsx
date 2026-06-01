@@ -47,6 +47,9 @@ const ICON_SRC = {
   // Cycle 84 followup 9 — 접힌 스페이스 사이드바 섹션 아이콘.
   externalLink: "/icons/external-link.png",
   node: "/icons/node.png",
+  // Cycle 87 — 표 컨텍스트 툴바 아이콘(좌/우 열 추가). 행 추가는 같은 자산을 90° 회전.
+  columns: "/icons/columns.png",
+  columns_left: "/icons/columns_left.png",
 } as const;
 
 export type IconName = keyof typeof ICON_SRC;
