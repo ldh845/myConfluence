@@ -2267,3 +2267,4 @@
   3) 본문 편집 중 Ctrl+S(macOS Cmd+S) → 즉시 SaveStatus '저장 중 → 저장됨' 전환. 브라우저 '페이지 저장' 다이얼로그는 뜨지 않음.
 - **남은 일**: 편집 모드 종료는 이제 '×/완료' 버튼(또는 'e' 토글 키) 으로만 가능 — 별도 UX 가이드 필요 시 추후. **브라우저 시각 확인 미수행**
 - **비고**: 'e' 키 토글(보기 ↔ 편집)은 그대로 유지. ESC 가 페이지 편집을 끝내는 동작은 ConflInternal UX 기대와 다르고 다이얼로그 동작과 충돌해 제거함. Ctrl+S 는 발행(handlePublish) 이 아닌 draft 즉시 저장이라 자동저장 의미와 일치.
+- **86 fix (피드백 반영 — Ctrl+S 미발화)**: ① 키 검사를 `e.key === 's'` 에서 `e.code === 'KeyS'` (물리 키 위치) 우선으로 변경 — 한글 IME 켜진 상태에서 `e.key === 'ㄴ'` 로 들어와 매칭이 실패하던 문제. `e.key` 는 fallback 유지. ② `window` keydown 만으론 ProseMirror 가 capture 단계에서 가로채는 케이스에서 발화 누락 가능 → `editor.view.dom` 의 capture phase 에도 등록하고 `stopPropagation` 으로 중복 발화 방지. (`23eba94`)
