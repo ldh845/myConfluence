@@ -2252,3 +2252,18 @@
 - **비고**: 슬래시는 모든 항목 노출이 표준이고 '＋ 더 많은 내용 삽입' 은 툴바 중복 항목만 제외하는 정책이라 매크로 3 종은 양쪽 모두에 자연 노출(별도 처리 없음). 본문은 ProseMirror JSON(Cycle 57)으로 저장돼 새 노드 라운드트립 보장. 옛 페이지에 해당 노드 없음 — 영향 0.
 - **85 followup (피드백 반영)**: `@` 뒤 텍스트가 일치 사용자 없는('일치하는 사용자가 없습니다') 상태일 때 `MentionSuggestionPopup.onKeyDown` 이 Enter/ArrowUp/Down 을 `true` 로 가로채 줄바꿈/커서 이동이 막히던 문제 → `items.length===0` 이면 `false` 반환해 에디터 기본 동작 진행. 즉, 일반 텍스트로 자연히 입력 가능. (`2a2dcec`)
 - **85 followup 2 (피드백 반영)**: ① `EditorToolbar.tsx` 의 InsertMoreButton 드롭다운 max-h `260→420px` 로 확장, 항목별 설명 줄 제거(제목만 표시) — 더 많은 항목이 한 눈에. ② `lib/tiptap/info-panel.ts` 에 `addKeyboardShortcuts.ArrowRight` 추가 — 정보 패널의 마지막 leaf 끝에서 ArrowRight 누르면 패널 밖으로 커서 탈출(다음 노드 없으면 빈 paragraph 삽입). 코드 블록(Cycle 84) 의 탈출 패턴과 동일. `tsc --noEmit` EXIT 0. (`8e591bb`)
+
+## Cycle 86 — 2026-06-01 — ✅ Done (편집 모드 ESC 동작 보정 + Ctrl/Cmd+S 즉시 저장)
+- **제목**: ESC 는 열린 다이얼로그/팝업만 닫고 페이지 편집을 종료하지 않음. 본문에서 Ctrl/Cmd+S 누르면 디바운스 대기 없이 즉시 저장.
+- **카테고리**: FE 전용 / UX(키 동작)
+- **커밋**: `6e402a5`(코드), 본 CYCLES.md
+- **변경 파일 (FE)**:
+  - `app/(app)/page.tsx` — 글로벌 keydown ESC 분기 제거. 이전엔 `inBody && isBodyEditable` 일 때 `exitEditMode()` 를 호출했는데, 사용자가 다이얼로그를 닫으려고 ESC 를 누르면 편집 컨텍스트까지 잃었음. 다이얼로그/팝업은 각각 자체 ESC 로 닫히므로(`shadcn Dialog`/`SearchOverlay`/`MentionEditPopover` 등), 글로벌 ESC 핸들러는 더 이상 편집 모드를 종료하지 않는다. effect deps 에서 `isBodyEditable`/`exitEditMode` 제거.
+  - `components/CollaborativeEditor.tsx` — 자동저장 effect 안에 `window` keydown 의 `Ctrl/Cmd+S` 핸들러 추가. 디바운스 타이머 clear → 즉시 `flush()`(`/api/pages/:id/draft` PATCH). 브라우저 기본 '페이지 저장' 다이얼로그는 `preventDefault` 로 차단. 사용자가 아직 한 글자도 안 친 상태(`latestMd === ""`)면 현재 doc 을 직렬화 후 flush. cleanup 에서 리스너 해제.
+- **검증**: web `tsc --noEmit` EXIT 0.
+- **동작 확인 안내**:
+  1) 페이지 편집 모드 진입 → 어떤 다이얼로그(예: '＋ 더 많은 내용 삽입 → 상태') 열기 → ESC → 다이얼로그만 닫히고 편집 모드 유지
+  2) 다이얼로그가 없는 상태에서 본문에 커서를 두고 ESC → 편집 모드 종료되지 않음(아무 일도 일어나지 않음)
+  3) 본문 편집 중 Ctrl+S(macOS Cmd+S) → 즉시 SaveStatus '저장 중 → 저장됨' 전환. 브라우저 '페이지 저장' 다이얼로그는 뜨지 않음.
+- **남은 일**: 편집 모드 종료는 이제 '×/완료' 버튼(또는 'e' 토글 키) 으로만 가능 — 별도 UX 가이드 필요 시 추후. **브라우저 시각 확인 미수행**
+- **비고**: 'e' 키 토글(보기 ↔ 편집)은 그대로 유지. ESC 가 페이지 편집을 끝내는 동작은 ConflInternal UX 기대와 다르고 다이얼로그 동작과 충돌해 제거함. Ctrl+S 는 발행(handlePublish) 이 아닌 draft 즉시 저장이라 자동저장 의미와 일치.
