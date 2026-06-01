@@ -1,7 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import AppIcon from "@/components/AppIcon";
 import UserSearchCombobox from "@/components/UserSearchCombobox";
 import type {
@@ -69,9 +75,11 @@ export default function RestrictButton({ pageId }: { pageId?: string }) {
 
 function PlaceholderRestrictButton() {
   return (
-    <span className="inline-flex items-center gap-1 px-2 py-1 rounded text-[12px] text-[#a5adba]">
-      <AppIcon name="unlock" size={14} alt="제한" />
-      제한
+    <span
+      title="페이지 제한"
+      className="inline-flex items-center px-2 py-1 rounded text-[#a5adba]"
+    >
+      <AppIcon name="unlock" size={14} alt="페이지 제한" />
     </span>
   );
 }
@@ -80,7 +88,6 @@ function RealRestrictButton({ pageId }: { pageId: string }) {
   const [open, setOpen] = useState(false);
   const [adding, setAdding] = useState(false);
   const [addRole, setAddRole] = useState<PageRestrictionRole>("VIEW");
-  const ref = useRef<HTMLDivElement>(null);
   const qc = useQueryClient();
 
   const queryKey = ["page-restriction", pageId];
@@ -95,26 +102,9 @@ function RealRestrictButton({ pageId }: { pageId: string }) {
     },
   });
 
+  // 다이얼로그 닫힐 때 사용자 추가 UI 초기화.
   useEffect(() => {
-    if (!open) return;
-    const onDown = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setOpen(false);
-        setAdding(false);
-      }
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        setOpen(false);
-        setAdding(false);
-      }
-    };
-    document.addEventListener("mousedown", onDown);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDown);
-      document.removeEventListener("keydown", onKey);
-    };
+    if (!open) setAdding(false);
   }, [open]);
 
   const mode = data?.mode ?? "NONE";
@@ -185,31 +175,29 @@ function RealRestrictButton({ pageId }: { pageId: string }) {
   });
 
   return (
-    <div className="relative shrink-0" ref={ref}>
+    <>
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => setOpen(true)}
         title="페이지 제한"
-        className={`inline-flex items-center gap-1 px-2 py-1 rounded text-[12px] hover:bg-[#ebecf0] ${
-          isLocked ? "text-[#de350b] font-semibold" : "text-[#42526e]"
-        }`}
+        aria-label="페이지 제한"
+        className="inline-flex items-center px-2 py-1 rounded hover:bg-[#ebecf0] shrink-0"
       >
         {isLocked ? (
           <RedLockIcon size={14} />
         ) : (
-          <AppIcon name="unlock" size={14} alt="제한" />
+          <AppIcon name="unlock" size={14} alt="페이지 제한" />
         )}
-        <span>제한</span>
       </button>
-      {open && (
-        <div className="absolute right-0 top-full mt-1 z-20 w-80 bg-white border border-[#dfe1e6] rounded-md shadow-lg p-3 text-[12px]">
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>페이지 제한</DialogTitle>
+          </DialogHeader>
           {isLoading ? (
-            <div className="text-[#6b778c]">불러오는 중...</div>
+            <div className="text-[12px] text-[#6b778c]">불러오는 중...</div>
           ) : (
-            <>
-              <div className="text-[11px] font-semibold uppercase tracking-wide text-[#6b778c] mb-2">
-                페이지 제한
-              </div>
+            <div className="text-[12px]">
               <div className="space-y-1.5">
                 {MODE_OPTIONS.map((opt) => {
                   const active = mode === opt.value;
@@ -377,10 +365,10 @@ function RealRestrictButton({ pageId }: { pageId: string }) {
                   제한 변경 권한이 없습니다 (페이지 작성자 또는 공간 관리자만).
                 </div>
               )}
-            </>
+            </div>
           )}
-        </div>
-      )}
-    </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
