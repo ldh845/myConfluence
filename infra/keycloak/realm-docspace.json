@@ -5,6 +5,14 @@
   "loginWithEmailAllowed": true,
   "registrationAllowed": false,
   "sslRequired": "none",
+  "roles": {
+    "realm": [
+      {
+        "name": "admin",
+        "description": "DocSpace ADMIN 권한"
+      }
+    ]
+  },
   "clients": [
     {
       "clientId": "docspace-web",
@@ -46,6 +54,22 @@
           "temporary": false
         }
       ]
+    },
+    {
+      "username": "admin",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "admin@samsung.com",
+      "firstName": "Admin",
+      "lastName": "User",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "admin",
+          "temporary": true
+        }
+      ],
+      "realmRoles": ["admin"]
     }
   ]
 }
