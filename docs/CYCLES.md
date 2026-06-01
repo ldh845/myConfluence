@@ -2270,3 +2270,24 @@
 - **86 fix (피드백 반영 — Ctrl+S 미발화)**: ① 키 검사를 `e.key === 's'` 에서 `e.code === 'KeyS'` (물리 키 위치) 우선으로 변경 — 한글 IME 켜진 상태에서 `e.key === 'ㄴ'` 로 들어와 매칭이 실패하던 문제. `e.key` 는 fallback 유지. ② `window` keydown 만으론 ProseMirror 가 capture 단계에서 가로채는 케이스에서 발화 누락 가능 → `editor.view.dom` 의 capture phase 에도 등록하고 `stopPropagation` 으로 중복 발화 방지. (`23eba94`)
 - **86 fix2 (피드백 반영 — Ctrl+S = 발행 의도)**: 사용자가 원하는 동작은 draft '변경 사항 저장됨' 이 아니라 페이지 **발행**. CollaborativeEditor 의 자동저장 effect 안 Ctrl+S 핸들러를 제거하고, 대신 prop `onSaveShortcut?: () => void` 를 노출(별도 effect 에서 키만 잡고 외부 콜백 위임 — IME 대응/ProseMirror capture 는 유지). 인라인 CollaborativeEditor 사용처(`app/(app)/page.tsx`)에서 `onSaveShortcut={() => { if (hasDraft && !publish.isPending) handlePublish(); }}` 로 발행 버튼과 동일한 가드. `tsc --noEmit` EXIT 0. (`439d422`)
 - **86 fix3 (피드백 반영 — '다른 이름으로 저장' 다이얼로그가 뜸)**: 편집 모드는 `app/(app)/page.tsx:584` 에서 항상 `FullScreenEditor` 로 분기되므로, fix2 에서 인라인 CollaborativeEditor 에만 단 `onSaveShortcut` 은 발화되지 않았다(브라우저 기본 페이지 저장 다이얼로그 그대로 노출). `FullScreenEditor` Props 에 `onSaveShortcut?: () => void` 추가하고 내부 CollaborativeEditor 로 전달. page.tsx FullScreenEditor 사용처에도 동일한 가드(`hasDraft && !publish.isPending → handlePublish()`) 로 prop 전달. (`a4ccbf5`)
+
+## Cycle 87 — 2026-06-01 — ✅ Done (표 두 번째 라인 툴바 + 반응형/고정폭 + 셀 세로 정렬)
+- **제목**: 표 삽입 시 가로로 가득 차던 문제 해결 + Confluence 식 두 번째 라인 표 전용 툴바 도입(골격)
+- **카테고리**: FE 전용 / UX(편집기 표)
+- **커밋**: `be7dcd8`(코드), 본 CYCLES.md
+- **변경 파일 (FE)**:
+  - `lib/tiptap/table-extensions.ts` 신규 — `TableExtended` (`widthMode` attr, 기본 'responsive'), `TableCellExtended`/`TableHeaderExtended` (`verticalAlign` attr — `setCellAttribute` 로 변경, inline style 렌더)
+  - `components/CollaborativeEditor.tsx` — `Table`/`TableCell`/`TableHeader` 를 Extended 로 교체
+  - `app/globals.css` — `.ProseMirror table[data-width-mode="responsive"]` 에 `table-layout:auto; width:auto` + col 의 colwidth 무력화(반응형 모드에선 셀 내용 기준 폭)
+  - `components/EditorToolbar.tsx` — outer wrapper 를 두 줄 구조(flex-col)로 변경. 첫 줄 안의 표 컨텍스트 블록 제거. `editor.isActive('table')` 일 때만 두 번째 라인에 `<TableContextToolbar/>`: 반응형/고정폭 드롭다운, 좌/우 열 추가(`columns_left.png`/`columns.png`), 위/아래 행 추가(같은 자산 90° 회전), 행 삭제, 열 삭제, 셀 병합/분할, 위/가운데/아래 정렬(`verticalAlign`), 머릿행/머릿열 토글, 표 삭제
+  - `components/AppIcon.tsx` — name map 에 `columns`, `columns_left` 추가
+  - `public/icons/columns.png` / `public/icons/columns_left.png` 자산 커밋
+- **검증**: web `tsc --noEmit` EXIT 0. 마이그레이션 없음(클라이언트 노드 attr 만 확장 — ProseMirror JSON 라운드트립).
+- **동작 확인 안내**:
+  1) **마이그레이션 불필요**
+  2) 표 삽입 → 가로 가득 차지 않고 셀 내용 기준 폭(반응형 기본). 두 번째 라인 툴바 등장.
+  3) '반응형/고정폭' 드롭다운으로 폭 모드 전환. 고정폭 시 기존 resizable 동작 복귀.
+  4) 셀 안 커서/선택 → 위/가운데/아래 정렬 → 셀 vertical-align inline style 반영.
+  5) 머릿행/머릿열 토글, 좌/우 열·위/아래 행 추가, 삭제, 병합/분할, 표 삭제.
+- **남은 일**: ① 행 잘라내기/복사, ② 열 잘라내기/복사, ③ 번호 열 삽입(첫 열 자동 1,2,3...), ④ 셀 색상 변경 — Cycle 88 followup. **브라우저 시각 확인 미수행**
+- **비고**: 옛 페이지의 표 노드는 widthMode 가 없으므로 parseHTML 가 'responsive' 로 채우고 즉시 반응형 폭. col width 가 박혀 있어도 CSS 가 무력화. 사용자가 폭이 갑자기 줄어든다고 느낄 수 있으나 의도된 동작(셀 가득 차지 않음). 필요 시 페이지에서 '고정폭' 으로 명시 토글.
