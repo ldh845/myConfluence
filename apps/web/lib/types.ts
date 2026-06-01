@@ -1,6 +1,21 @@
 // Cycle 70 — 페이지 작업 상태. null/undefined 면 "상태 없음"(배지 미표시).
 export type PageStatus = "TODO" | "IN_PROGRESS" | "DONE" | "DROP";
 
+// Cycle 83 — 페이지 단위 제한.
+export type PageRestrictionMode = "NONE" | "EDIT" | "VIEW_EDIT";
+export type PageRestrictionRole = "EDIT" | "VIEW";
+export type PageRestrictionMember = {
+  userId: string;
+  role: PageRestrictionRole;
+  name: string;
+  department: string | null;
+};
+export type PageRestrictionState = {
+  mode: PageRestrictionMode;
+  canManage: boolean;
+  members: PageRestrictionMember[];
+};
+
 export type PageNode = {
   id: string;
   title: string;

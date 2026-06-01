@@ -24,6 +24,11 @@ import { PublishPageDto } from './dto/publish-page.dto';
 import { CreateDiagramDto } from './dto/create-diagram.dto';
 import { CopyPageDto } from './dto/copy-page.dto';
 import { UpdatePageStatusDto } from './dto/update-page-status.dto';
+import {
+  AddPageRestrictionMemberDto,
+  UpdatePageRestrictionMemberDto,
+  UpdatePageRestrictionModeDto,
+} from './dto/update-page-restriction.dto';
 
 // FR-001 (Cycle 27e) — actor 헬퍼 통일. 모든 mutation이 같은 형태로 전달.
 function actorFromReq(req: Request): { id: string; name: string } | null {
@@ -203,6 +208,64 @@ export class PagesController {
     @Req() req: Request,
   ) {
     return this.pages.changeStatus(id, dto.status, userFromReq(req));
+  }
+
+  // ─── Cycle 83 — 페이지 단위 제한 ──────────────────────────────────────────
+  @Get(':id/restriction')
+  @UseGuards(JwtAuthGuard)
+  getRestriction(@Param('id') id: string, @Req() req: Request) {
+    return this.pages.getRestriction(id, userFromReq(req));
+  }
+
+  @Patch(':id/restriction')
+  @UseGuards(JwtAuthGuard)
+  updateRestrictionMode(
+    @Param('id') id: string,
+    @Body() dto: UpdatePageRestrictionModeDto,
+    @Req() req: Request,
+  ) {
+    return this.pages.updateRestrictionMode(id, dto.mode, userFromReq(req));
+  }
+
+  @Post(':id/restriction/members')
+  @UseGuards(JwtAuthGuard)
+  addRestrictionMember(
+    @Param('id') id: string,
+    @Body() dto: AddPageRestrictionMemberDto,
+    @Req() req: Request,
+  ) {
+    return this.pages.addRestrictionMember(
+      id,
+      dto.userId,
+      dto.role,
+      userFromReq(req),
+    );
+  }
+
+  @Patch(':id/restriction/members/:userId')
+  @UseGuards(JwtAuthGuard)
+  updateRestrictionMember(
+    @Param('id') id: string,
+    @Param('userId') userId: string,
+    @Body() dto: UpdatePageRestrictionMemberDto,
+    @Req() req: Request,
+  ) {
+    return this.pages.updateRestrictionMember(
+      id,
+      userId,
+      dto.role,
+      userFromReq(req),
+    );
+  }
+
+  @Delete(':id/restriction/members/:userId')
+  @UseGuards(JwtAuthGuard)
+  removeRestrictionMember(
+    @Param('id') id: string,
+    @Param('userId') userId: string,
+    @Req() req: Request,
+  ) {
+    return this.pages.removeRestrictionMember(id, userId, userFromReq(req));
   }
 
   // 이슈 2 (Cycle 10-1) — 임시 저장. PageVersion 미적재.

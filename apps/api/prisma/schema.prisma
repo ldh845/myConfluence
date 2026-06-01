@@ -25,6 +25,22 @@ enum PageStatus {
   DROP
 }
 
+// Cycle 83 — 페이지 단위 제한 모드.
+//   NONE      : 공간 권한 그대로 따름(누구나 보기·편집)
+//   EDIT      : 모두 보기 가능, 일부 사용자만 편집
+//   VIEW_EDIT : 일부 사용자만 보기/편집(사용자별 VIEW or EDIT 역할)
+enum PageRestrictionMode {
+  NONE
+  EDIT
+  VIEW_EDIT
+}
+
+// Cycle 83 — 제한 멤버의 페이지별 역할.
+enum PageRestrictionRole {
+  EDIT
+  VIEW
+}
+
 // Cycle 32 — 스페이스 유형. SITE=공용 스페이스, PERSONAL=사용자 개인 공간.
 enum SpaceType {
   SITE
@@ -93,6 +109,8 @@ model User {
   ownedSpaces                Space[]       @relation("SpaceOwner")
   // Cycle 74-A — 스페이스 멤버십(권한). user 삭제 시 Cascade.
   spaceMemberships           SpaceMember[] @relation("UserSpaceMember")
+  // Cycle 83 — 페이지 단위 제한 멤버.
+  pageRestrictions           PageRestriction[] @relation("UserPageRestrictions")
   // Cycle 53 — 사용자별 '나중을 위해 저장' / '지켜보기' 페이지 목록.
   // 본인 데이터라 user 삭제 시 Cascade.
   savedPages                 SavedPage[]   @relation("UserSaved")
@@ -207,6 +225,9 @@ model Page {
   publishedAt  DateTime?
   // Cycle 78 — 페이지 레이블(태그). 페이지 조회 화면에서 추가/제거. 단순 문자열 배열.
   labels       String[]      @default([])
+  // Cycle 83 — 페이지 단위 제한. NONE 이면 공간 권한 그대로, EDIT/VIEW_EDIT 면 restrictions 가 게이트.
+  restrictionMode PageRestrictionMode @default(NONE)
+  restrictions    PageRestriction[]   @relation("PageRestrictions")
   // Cycle 53 — '나중을 위해 저장' / '지켜보기' back-relation. 페이지 삭제 시 Cascade.
   savedBy      SavedPage[]   @relation("PageSaved")
   watchers     WatchList[]   @relation("PageWatching")
@@ -428,4 +449,18 @@ model WatchList {
   @@id([userId, pageId])
   @@index([userId])
   @@index([pageId])
+}
+
+// Cycle 83 — 페이지 단위 제한 멤버(사용자 ↔ 페이지, 역할 VIEW/EDIT).
+model PageRestriction {
+  pageId    String
+  page      Page                @relation("PageRestrictions", fields: [pageId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User                @relation("UserPageRestrictions", fields: [userId], references: [id], onDelete: Cascade)
+  role      PageRestrictionRole
+  createdAt DateTime            @default(now())
+
+  @@id([pageId, userId])
+  @@index([pageId])
+  @@index([userId])
 }

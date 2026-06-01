@@ -276,7 +276,7 @@ export default function PageHeader({
               {page.title}
             </span>
           </nav>
-          <RestrictButton />
+          <RestrictButton pageId={page.id} />
         </div>
         <div className="flex items-center gap-2 shrink-0 ml-auto">
           <PresenceStrip users={presence} />

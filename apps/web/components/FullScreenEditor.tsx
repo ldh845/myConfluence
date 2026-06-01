@@ -219,7 +219,7 @@ export default function FullScreenEditor({
             labels={page.labels ?? []}
             editable={true}
           />
-          <RestrictButton />
+          <RestrictButton pageId={page.id} />
         </div>
       </div>
 

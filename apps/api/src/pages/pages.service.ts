@@ -4,7 +4,12 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { type Prisma, type PageStatus } from '@prisma/client';
+import {
+  type Prisma,
+  type PageStatus,
+  type PageRestrictionMode,
+  type PageRestrictionRole,
+} from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AttachmentsService } from '../attachments/attachments.service';
 import { ActivitiesService } from '../activities/activities.service';
@@ -386,6 +391,19 @@ export class PagesService {
     );
     if (access && !this.perms.canView(access, actor)) {
       throw new ForbiddenException({ error: 'forbidden' });
+    }
+    // Cycle 83 — VIEW_EDIT 모드면 페이지 제한 멤버 또는 작성자/관리자/전역 ADMIN 만.
+    if (access) {
+      await this.perms.assertCanViewPageRestriction(
+        {
+          id: page.id,
+          spaceId: page.spaceId,
+          authorId: page.authorId,
+          restrictionMode: page.restrictionMode,
+        },
+        actor,
+        access,
+      );
     }
     return page;
   }
@@ -1227,6 +1245,105 @@ export class PagesService {
     return this.prisma.diagram.create({
       data: { pageId, title, data },
     });
+  }
+
+  // ─── Cycle 83 — 페이지 단위 제한 API ──────────────────────────────────────
+
+  async getRestriction(pageId: string, actor: Actor) {
+    const page = await this.prisma.page.findFirst({
+      where: { id: pageId, deletedAt: null },
+      select: {
+        id: true,
+        spaceId: true,
+        authorId: true,
+        restrictionMode: true,
+      },
+    });
+    if (!page) throw new NotFoundException({ error: 'page not found' });
+    const access = await this.perms.loadAccess(page.spaceId, actor?.id ?? null);
+    if (!access) throw new NotFoundException({ error: 'space not found' });
+    if (!this.perms.canView(access, actor)) {
+      throw new ForbiddenException({ error: 'forbidden' });
+    }
+    await this.perms.assertCanViewPageRestriction(page, actor, access);
+    const members = await this.prisma.pageRestriction.findMany({
+      where: { pageId },
+      include: {
+        user: { select: { id: true, name: true, department: true } },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+    const canManage = await this.perms.canManagePageRestriction(pageId, actor);
+    return {
+      mode: page.restrictionMode,
+      canManage,
+      members: members.map((m) => ({
+        userId: m.userId,
+        role: m.role,
+        name: m.user.name,
+        department: m.user.department ?? null,
+      })),
+    };
+  }
+
+  async updateRestrictionMode(
+    pageId: string,
+    mode: PageRestrictionMode,
+    actor: Actor,
+  ) {
+    await this.perms.assertCanManagePageRestriction(pageId, actor);
+    await this.prisma.page.update({
+      where: { id: pageId },
+      data: { restrictionMode: mode },
+    });
+    return { ok: true };
+  }
+
+  async addRestrictionMember(
+    pageId: string,
+    userId: string,
+    role: PageRestrictionRole,
+    actor: Actor,
+  ) {
+    await this.perms.assertCanManagePageRestriction(pageId, actor);
+    const target = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true },
+    });
+    if (!target) throw new NotFoundException({ error: 'user not found' });
+    await this.prisma.pageRestriction.upsert({
+      where: { pageId_userId: { pageId, userId } },
+      update: { role },
+      create: { pageId, userId, role },
+    });
+    return { ok: true };
+  }
+
+  async updateRestrictionMember(
+    pageId: string,
+    userId: string,
+    role: PageRestrictionRole,
+    actor: Actor,
+  ) {
+    await this.perms.assertCanManagePageRestriction(pageId, actor);
+    const existing = await this.prisma.pageRestriction.findUnique({
+      where: { pageId_userId: { pageId, userId } },
+      select: { role: true },
+    });
+    if (!existing) throw new NotFoundException({ error: 'member not found' });
+    await this.prisma.pageRestriction.update({
+      where: { pageId_userId: { pageId, userId } },
+      data: { role },
+    });
+    return { ok: true };
+  }
+
+  async removeRestrictionMember(pageId: string, userId: string, actor: Actor) {
+    await this.perms.assertCanManagePageRestriction(pageId, actor);
+    await this.prisma.pageRestriction.deleteMany({
+      where: { pageId, userId },
+    });
+    return { ok: true };
   }
 }
 
