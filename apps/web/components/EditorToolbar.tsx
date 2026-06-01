@@ -18,6 +18,8 @@ import { useEffect, useRef, useState } from "react";
 import EditorColorPicker from "@/components/EditorColorPicker";
 import InternalPageLinkDialog from "@/components/InternalPageLinkDialog";
 import ImageInsertDialog from "@/components/ImageInsertDialog";
+import StatusMacroDialog from "@/components/StatusMacroDialog";
+import InfoPanelDialog from "@/components/InfoPanelDialog";
 import AppIcon from "@/components/AppIcon";
 import { usePageStore } from "@/lib/stores/usePageStore";
 import { useEditorUiStore } from "@/lib/stores/useEditorUiStore";
@@ -77,6 +79,8 @@ export default function EditorToolbar({ editor }: Props) {
 
   return (
     <div className="bg-white border-b border-[#dfe1e6] px-3 py-1.5 flex flex-wrap items-center gap-1">
+      {/* Cycle 85 — 상태/정보 매크로 다이얼로그 마운트(슬래시/＋ 메뉴에서 store 신호로 열림). */}
+      <MacroDialogsMount editor={editor} />
       {/* G1: 문단 스타일 드롭다운 — 제목 1~4 / 인용 / 코드 블록 / 문단 */}
       <ParagraphStyleDropdown editor={editor} />
       <Divider />
@@ -289,6 +293,33 @@ export default function EditorToolbar({ editor }: Props) {
         </TB>
       </BtnGroup>
     </div>
+  );
+}
+
+// Cycle 85 — 상태/정보 매크로 다이얼로그 마운트. 슬래시/＋ 메뉴가 useEditorUiStore
+//   신호로 연다. 다이얼로그 자체는 트리거 위치와 무관하게 항상 마운트되어 있음.
+function MacroDialogsMount({ editor }: { editor: Editor }) {
+  const statusOpen = useEditorUiStore((s) => s.statusMacroOpen);
+  const closeStatus = useEditorUiStore((s) => s.closeStatusMacro);
+  const infoOpen = useEditorUiStore((s) => s.infoPanelDialogOpen);
+  const closeInfo = useEditorUiStore((s) => s.closeInfoPanelDialog);
+  return (
+    <>
+      <StatusMacroDialog
+        open={statusOpen}
+        onOpenChange={(v) => {
+          if (!v) closeStatus();
+        }}
+        editor={editor}
+      />
+      <InfoPanelDialog
+        open={infoOpen}
+        onOpenChange={(v) => {
+          if (!v) closeInfo();
+        }}
+        editor={editor}
+      />
+    </>
   );
 }
 

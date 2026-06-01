@@ -33,6 +33,8 @@ import { MathBlock } from "@/lib/tiptap/math-block";
 import { DateExtension } from "@/lib/tiptap/date";
 import { MentionNode } from "@/lib/tiptap/mention";
 import { DiagramNode } from "@/lib/tiptap/diagram";
+import { StatusBadgeNode } from "@/lib/tiptap/status-badge";
+import { InfoPanelNode } from "@/lib/tiptap/info-panel";
 import {
   SlashCommand,
   slashCommandSuggestion,
@@ -503,6 +505,9 @@ export default function CollaborativeEditor({
         MentionNode,
         // Cycle 64 — 본문 다이어그램 노드(Excalidraw). ＋/slash '다이어그램'.
         DiagramNode,
+        // Cycle 85 — Confluence 식 매크로: 상태 배지(인라인 atom) + 정보 패널(블록).
+        StatusBadgeNode,
+        InfoPanelNode,
         // FR-036 (Cycle 13) — StarterKit 미커버 input rules (체크리스트/링크/이미지).
         MarkdownInputRules,
         SlashCommand.configure({ suggestion: slashCommandSuggestion }),

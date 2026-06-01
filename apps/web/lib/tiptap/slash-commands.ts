@@ -215,6 +215,39 @@ export const SLASH_ITEMS: SlashCommandItem[] = [
         .run();
     },
   },
+  {
+    // Cycle 85 — 상태(status) 매크로. slash 토큰 제거 후 다이얼로그 열기.
+    title: "상태",
+    description: "색상 상태 배지 매크로",
+    searchTerms: ["status", "badge", "label", "상태", "라벨"],
+    command: ({ editor, range }) => {
+      editor.chain().focus().deleteRange(range).run();
+      useEditorUiStore.getState().openStatusMacro();
+    },
+  },
+  {
+    // Cycle 85 — 사용자 언급. '@' 삽입 → 기존 mention 서지스천이 popup 호출.
+    title: "사용자 언급",
+    description: "@사용자 멘션 시작",
+    searchTerms: ["mention", "user", "@", "언급", "멘션", "사용자"],
+    command: ({ editor, range }) =>
+      editor
+        .chain()
+        .focus()
+        .deleteRange(range)
+        .insertContent("@")
+        .run(),
+  },
+  {
+    // Cycle 85 — 정보 패널 매크로. slash 토큰 제거 후 다이얼로그 열기.
+    title: "정보",
+    description: "정보 패널(파란 배경) 매크로",
+    searchTerms: ["info", "panel", "note", "callout", "정보", "알림", "안내"],
+    command: ({ editor, range }) => {
+      editor.chain().focus().deleteRange(range).run();
+      useEditorUiStore.getState().openInfoPanelDialog();
+    },
+  },
 ];
 
 export function filterItems(query: string): SlashCommandItem[] {
