@@ -82,6 +82,9 @@ type Props = {
   // true면 내부 EditorToolbar 렌더 생략 — 부모는 onEditor로 받은 인스턴스로
   // 직접 <EditorToolbar editor={editor}/>를 띄운다.
   hideToolbar?: boolean;
+  // Cycle 84 followup 5 — 사용자가 첫 입력을 한 직후 호출(초기 sync 완료 이후).
+  //   '발행/업데이트' 버튼 즉시 활성화를 위해 autosave 5초 debounce 와 분리.
+  onContentChange?: () => void;
 };
 
 function resolveWsUrl(): string {
@@ -212,9 +215,13 @@ export default function CollaborativeEditor({
   onEditor,
   onConnectionStateChange,
   hideToolbar,
+  onContentChange,
 }: Props) {
   const identity = useIdentity();
   const queryClient = useQueryClient();
+  // Cycle 84 followup 5 — Yjs/persistence/provider 초기 sync 후의 update 만
+  //   '사용자 변경' 으로 본다. 초기 sync 단계의 update 는 onContentChange 무시.
+  const syncedRef = useRef(false);
   const [instance, setInstance] = useState<{
     ydoc: Y.Doc;
     provider: HocuspocusProvider;
@@ -632,9 +639,16 @@ export default function CollaborativeEditor({
 
     // persistence.whenSynced 가 거부/지연되는 환경(IndexedDB 불가)에서도
     // 본문이 영영 비지 않도록 fallback seed. 영속이 없으면 누적 위험도 없다.
+    // Cycle 84 followup 5 — seeding 후 syncedRef 를 true 로 — 이후 update 는 사용자 입력.
     void Promise.all([persistence.whenSynced, waitProvider]).then(
-      trySeed,
-      trySeed,
+      () => {
+        trySeed();
+        syncedRef.current = true;
+      },
+      () => {
+        trySeed();
+        syncedRef.current = true;
+      },
     );
 
     return () => {
@@ -679,6 +693,11 @@ export default function CollaborativeEditor({
       } catch {
         return;
       }
+      // Cycle 84 followup 5 — 초기 sync 이후의 update 는 사용자 입력으로 본다.
+      //   '발행/업데이트' 버튼이 5초 autosave 를 기다리지 않고 즉시 활성화되도록.
+      if (syncedRef.current) {
+        onContentChange?.();
+      }
       if (timer) clearTimeout(timer);
       // FR-038 / NFR-A-020 — 5초 간격 자동 저장
       timer = setTimeout(flush, 5000);
@@ -692,7 +711,7 @@ export default function CollaborativeEditor({
         flush();
       }
     };
-  }, [editor, editable, pageId, onSaveStatusChange]);
+  }, [editor, editable, pageId, onSaveStatusChange, onContentChange]);
 
   // Presence / awareness
   useEffect(() => {

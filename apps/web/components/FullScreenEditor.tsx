@@ -56,6 +56,8 @@ type Props = {
   onPresenceChange?: (users: PresenceUser[]) => void;
   // Cycle 82 — 브레드크럼의 조상 페이지 클릭 시 편집 모드 종료 + 그 페이지로 이동.
   onSelectAncestor?: (id: string) => void;
+  // Cycle 84 followup 5 — 사용자가 첫 입력을 한 직후(즉, 발행할 변경이 생긴 직후) 호출.
+  onContentChange?: () => void;
 };
 
 export default function FullScreenEditor({
@@ -72,6 +74,7 @@ export default function FullScreenEditor({
   onConnectionStateChange,
   onPresenceChange,
   onSelectAncestor,
+  onContentChange,
 }: Props) {
   // 편집기 인스턴스 — 툴바를 상단 sticky 영역에 분리 배치하기 위해
   // CollaborativeEditor가 onEditor로 위로 끌어올린 ref를 받는다.
@@ -292,6 +295,7 @@ export default function FullScreenEditor({
               onSaveStatusChange={onSaveStatusChange}
               onConnectionStateChange={onConnectionStateChange}
               onPresenceChange={onPresenceChange}
+              onContentChange={onContentChange}
             />
           </div>
         </div>

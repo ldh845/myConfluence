@@ -600,6 +600,7 @@ export default function HomePage() {
         onConnectionStateChange={setConnectionState}
         onPresenceChange={setPresence}
         onSelectAncestor={selectPage}
+        onContentChange={() => setHasDraft(true)}
       />
     );
   }
