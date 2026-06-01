@@ -2211,3 +2211,4 @@
 - **비고**: 기존 키보드 단축키(Mod-Enter / 트리플 Enter / 끝에서 ArrowDown)도 그대로 동작 — 버튼은 발견성 보완용. NodeView 의 `contentEditable={false}` 가 컨트롤 영역의 입력 가로채기 차단.
 - **84 followup (피드백 반영)**: 가시적 '↓ 본문' 버튼 대신 **코드 블록 끝에서 ArrowRight** 로 탈출하도록 변경. `CodeBlockExtension.addKeyboardShortcuts` 에서 `parentOffset === content.size` 일 때 코드 블록 뒤로 커서 이동(문서 끝이면 빈 paragraph 삽입 후 진입). 가시 버튼은 제거 — 키보드만으로 충분. (`afadb79`)
 - **84 followup 2 (피드백 반영)**: PageHeader 의 **'저장됨' 표시 제거**(SaveStatusBadge 의 saved 케이스를 빈 텍스트로) — 자동저장 성공은 조용히 처리. 대신 **`hasDraft` 일 때 제목 옆에 황색 '발행되지 않은 변경 내용' 태그** 노출(미발행 draft 의 가시적 안내). 'saving...'/'저장 실패' 는 그대로 유지. (`c3ec5c7`)
+- **84 followup 3 (피드백 반영)**: 발행 직후에도 태그가 잔존하던 버그 → `saveStatus="saved"` → `setHasDraft(true)` 동기화를 **편집 모드(`isBodyEditable`)에서만** 처리. 발행 onSuccess 가 `setIsBodyEditable(false)` + key 변경으로 에디터를 view 모드로 리마운트하는데, 초기 sync 가 "saved" 를 발화해 hasDraft 가 다시 켜지던 race 해소. (`510adbb`)
