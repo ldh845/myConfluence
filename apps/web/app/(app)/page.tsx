@@ -668,6 +668,11 @@ export default function HomePage() {
                   onPresenceChange={setPresence}
                   onEditor={setEditor}
                   onConnectionStateChange={setConnectionState}
+                  // Cycle 86 fix2 — 본문에서 Ctrl/Cmd+S → 페이지 발행(handlePublish).
+                  //   발행 버튼의 disabled 조건(!hasDraft || publishing) 과 동일하게 가드.
+                  onSaveShortcut={() => {
+                    if (hasDraft && !publish.isPending) handlePublish();
+                  }}
                 />
                 {/* Cycle 63 followup — 조회 화면에서 다이어그램/첨부파일 별도
                     섹션 제거(사용자 요청). 첨부·다이어그램은 본문에 삽입된
