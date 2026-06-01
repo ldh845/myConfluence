@@ -2159,3 +2159,31 @@
 - **남은 일**: 없음. **브라우저 시각 확인 미수행**
 - **비고**: 편집 도중 조상 클릭은 자동 저장(autosave) 흐름이 처리(URL 변경 = 컴포넌트 unmount → flush). 페이지 제한 enforcement·라벨의 공간 전역 검색은 별 사이클.
 - **82 followup (피드백 반영)**: `LabelBar` 의 별도 '＋ 레이블 추가' 버튼 제거 → **🏷️ 아이콘 자체가 추가 팝업 트리거**(editable 일 때 버튼, 아니면 단순 표시). (`285b1d4`)
+
+---
+
+## Cycle 83 — 2026-06-01 — ✅ Done (페이지 단위 제한 — 3 모드 + 사용자별 권한)
+- **제목**: '제한 없음'(공간 권한 그대로) / '편집 제한'(보기는 모두, 편집은 일부) / '보기 및 편집 제한'(일부만 보기·편집). 사용자별 VIEW/EDIT 역할.
+- **카테고리**: BE + FE / 권한 (페이지 단위 RBAC)
+- **커밋**: `0e18bf7`(코드), 본 CYCLES.md
+- **마이그레이션**: `20260601000000_page_restriction` (`enum PageRestrictionMode/Role`, `Page.restrictionMode` NOT NULL DEFAULT NONE, `PageRestriction(@@id[pageId,userId], role)`). 수기 + `migrate deploy` + `prisma generate`(API 프로세스 종료 후)
+- **변경 (BE)**:
+  - `schema.prisma` — 2 enum, `Page.restrictionMode`/`restrictions`, `User.pageRestrictions`, `PageRestriction` 모델
+  - `space-permission.service.ts` — `assertCanEditPage` 확장(EDIT/VIEW_EDIT 일 때 PageRestriction role=EDIT 필수, 작성자/공간 관리자/전역 ADMIN 통과). `assertCanViewPageRestriction(page, user, access)`(VIEW_EDIT 일 때만 멤버십 필요). `canManagePageRestriction`/`assertCanManagePageRestriction`(작성자/공간 관리자/전역 ADMIN)
+  - `pages.service.findOne` — VIEW_EDIT 모드 페이지 보기 시 `assertCanViewPageRestriction` 호출
+  - `pages.service` — `getRestriction`/`updateRestrictionMode`/`addRestrictionMember`/`updateRestrictionMember`/`removeRestrictionMember`
+  - `pages.controller` — `GET/PATCH /pages/:id/restriction`, `POST/PATCH/DELETE /pages/:id/restriction/members[/:userId]` (JwtAuthGuard, 가드는 서비스에서)
+  - `dto/update-page-restriction.dto.ts` 신규
+- **변경 (FE)**:
+  - `lib/types` — `PageRestrictionMode/Role/Member/State`
+  - `RestrictButton.tsx` 전면 재작성 — 트리거(unlock / `RedLockIcon`(lock.png mask-tint #de350b)) + "제한" 라벨(VIEW_EDIT 일 때 빨강). 팝오버: 3 모드 카드(설명·아이콘·✓), EDIT/VIEW_EDIT 일 때 멤버 섹션(UserSearchCombobox 재활용, 역할 선택, role select, 제거 ×). canManage 없으면 모드 변경/멤버 관리 비활성 + 안내
+  - `PageHeader` / `FullScreenEditor` — `<RestrictButton pageId={page.id} />`
+- **검증**: web/api `tsc --noEmit` EXIT 0, jest **154 passed (15 suites)**
+- **동작 확인 안내**:
+  1) ⚠️ **`cd apps/api && npx prisma migrate deploy`** + `npx prisma generate` (적용 완료, **API dev 서버 재기동 필요**)
+  2) 페이지 조회/편집의 '제한' 클릭 → 3 모드 + 설명. NONE/EDIT=unlock, VIEW_EDIT=빨간 lock
+  3) EDIT 선택 → '+ 사용자 추가' → 검색 → 추가(역할=편집 고정). 추가된 사용자만 PATCH 가능, 나머지는 403
+  4) VIEW_EDIT 선택 → 사용자별 보기/조회+편집 역할 선택. 멤버 아닌 사용자는 페이지 조회 시 403
+  5) 작성자/공간 관리자/전역 ADMIN 은 모드 무관 통과
+- **남은 일**: 본 사이클이 Task I 의 '페이지 단위 접근 제한 (Cycle 81)' 항목을 닫음. 추가 후속: 멤버 일괄 추가/검색 결과 페이지네이션, 제한 변경의 감사 로그 기록. **브라우저 시각 확인 미수행**
+- **비고**: 모드별 의미 — NONE=공간 권한 그대로, EDIT 모드는 보기는 공간 권한, 편집만 멤버(role=EDIT) 한정, VIEW_EDIT 모드는 보기·편집 모두 멤버 한정(role=VIEW 는 보기만, EDIT 은 편집까지). 빨간 lock 은 CSS mask-image 로 PNG 를 #de350b 로 재칠.
