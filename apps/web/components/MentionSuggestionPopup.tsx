@@ -46,16 +46,15 @@ const MentionSuggestionPopup = forwardRef<MentionPopupHandle, Props>(
       ref,
       () => ({
         onKeyDown: (event) => {
+          // Cycle 85 followup — 일치 사용자가 없으면 멘션 팝업이 ArrowUp/Down/Enter
+          //   를 가로채지 않고 에디터가 일반 동작(커서 이동 / 줄바꿈)을 하도록.
+          if (items.length === 0) return false;
           if (event.key === "ArrowDown") {
-            setSelected((s) =>
-              items.length === 0 ? 0 : (s + 1) % items.length,
-            );
+            setSelected((s) => (s + 1) % items.length);
             return true;
           }
           if (event.key === "ArrowUp") {
-            setSelected((s) =>
-              items.length === 0 ? 0 : (s - 1 + items.length) % items.length,
-            );
+            setSelected((s) => (s - 1 + items.length) % items.length);
             return true;
           }
           if (event.key === "Enter") {
