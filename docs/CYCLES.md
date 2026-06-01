@@ -2188,3 +2188,4 @@
 - **남은 일**: 본 사이클이 Task I 의 '페이지 단위 접근 제한 (Cycle 81)' 항목을 닫음. 추가 후속: 멤버 일괄 추가/검색 결과 페이지네이션, 제한 변경의 감사 로그 기록. **브라우저 시각 확인 미수행**
 - **비고**: 모드별 의미 — NONE=공간 권한 그대로, EDIT 모드는 보기는 공간 권한, 편집만 멤버(role=EDIT) 한정, VIEW_EDIT 모드는 보기·편집 모두 멤버 한정(role=VIEW 는 보기만, EDIT 은 편집까지). 빨간 lock 은 CSS mask-image 로 PNG 를 #de350b 로 재칠.
 - **83 followup (피드백 반영)**: 좁은 화면에서 잘리던 absolute 팝오버 → **shadcn `Dialog` 모달**로 전환(중앙 정렬·반응형). 트리거 버튼에서 '제한' 텍스트 제거 — 자물쇠 아이콘만 노출(title/aria-label 로 의미 보존). (`c9ea38c`)
+- **83 followup 2 (피드백 반영)**: ① 다이얼로그 폭 28rem·높이 34rem **고정**(`DialogContent` 명시) — 멤버 추가로 크기가 변하지 않음. ② **허용 사용자 페이지네이션**(4명/페이지, 이전/다음, 'N명 · X/Y' 표시). ③ `updateRestrictionMode` 가 모드 실제 변경 시 `PageRestriction` 전체 삭제(트랜잭션) — EDIT→VIEW_EDIT 시 이전 멤버가 그대로 남던 문제 해소(역할 의미가 달라지므로 깨끗하게 시작). (`4dcdd26`)
