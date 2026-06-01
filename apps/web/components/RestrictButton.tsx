@@ -11,6 +11,7 @@ import {
 import AppIcon from "@/components/AppIcon";
 import UserSearchCombobox from "@/components/UserSearchCombobox";
 import type {
+  PageRestrictionMember,
   PageRestrictionMode,
   PageRestrictionRole,
   PageRestrictionState,
@@ -92,6 +93,9 @@ function RealRestrictButton({ pageId }: { pageId: string }) {
   const [adding, setAdding] = useState(false);
   const [addRole, setAddRole] = useState<PageRestrictionRole>("VIEW");
   const [memberPage, setMemberPage] = useState(0);
+  // Cycle 83 followup 3 — 모든 변경은 로컬 draft. '적용' 시 한 번에 PATCH.
+  const [draftMode, setDraftMode] = useState<PageRestrictionMode>("NONE");
+  const [draftMembers, setDraftMembers] = useState<PageRestrictionMember[]>([]);
   const qc = useQueryClient();
 
   const queryKey = ["page-restriction", pageId];
@@ -106,90 +110,78 @@ function RealRestrictButton({ pageId }: { pageId: string }) {
     },
   });
 
-  // 다이얼로그 닫힐 때 사용자 추가 UI 초기화.
+  // 다이얼로그 열릴 때 서버 상태로 draft 초기화. 닫힐 때 보조 상태 정리.
   useEffect(() => {
+    if (open && data) {
+      setDraftMode(data.mode);
+      setDraftMembers(data.members);
+      setMemberPage(0);
+    }
     if (!open) setAdding(false);
-  }, [open]);
+  }, [open, data]);
 
-  const mode = data?.mode ?? "NONE";
   const canManage = data?.canManage ?? false;
-  const members = data?.members ?? [];
-  const isLocked = mode === "VIEW_EDIT";
+  const serverMode = data?.mode ?? "NONE";
+  // 트리거 아이콘은 서버 상태 기준(draft 는 다이얼로그 안에서만 의미).
+  const isLocked = serverMode === "VIEW_EDIT";
 
   // 사용자 추가 UI 열릴 때 모드에 맞게 기본 역할 설정.
   useEffect(() => {
-    if (adding) setAddRole(mode === "EDIT" ? "EDIT" : "VIEW");
-  }, [adding, mode]);
+    if (adding) setAddRole(draftMode === "EDIT" ? "EDIT" : "VIEW");
+  }, [adding, draftMode]);
 
-  // 모드 변경 시 페이지네이션 초기화.
-  useEffect(() => {
-    setMemberPage(0);
-  }, [mode]);
-
-  // 페이지네이션 계산.
-  const totalPages = Math.max(1, Math.ceil(members.length / MEMBERS_PER_PAGE));
+  // 페이지네이션 계산 (draft 기준).
+  const totalPages = Math.max(
+    1,
+    Math.ceil(draftMembers.length / MEMBERS_PER_PAGE),
+  );
   const safeMemberPage = Math.min(memberPage, totalPages - 1);
-  const pageMembers = members.slice(
+  const pageMembers = draftMembers.slice(
     safeMemberPage * MEMBERS_PER_PAGE,
     (safeMemberPage + 1) * MEMBERS_PER_PAGE,
   );
 
-  const setMode = useMutation({
-    mutationFn: async (next: PageRestrictionMode) => {
+  // 모드 카드 클릭 → draft 모드 변경 + 멤버 초기화(역할 의미 달라짐).
+  const selectMode = (next: PageRestrictionMode) => {
+    if (next === draftMode) return;
+    setDraftMode(next);
+    setDraftMembers([]);
+    setMemberPage(0);
+    setAdding(false);
+  };
+
+  const apply = useMutation({
+    mutationFn: async () => {
       const r = await fetch(`/api/pages/${pageId}/restriction`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ mode: next }),
+        body: JSON.stringify({
+          mode: draftMode,
+          members: draftMembers.map((m) => ({
+            userId: m.userId,
+            role: m.role,
+          })),
+        }),
       });
       if (!r.ok) throw new Error("failed");
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey }),
-    onError: () => window.alert("제한 모드 변경에 실패했습니다."),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey });
+      setOpen(false);
+    },
+    onError: () => window.alert("저장에 실패했습니다."),
   });
 
-  const addMember = useMutation({
-    mutationFn: async (v: { userId: string; role: PageRestrictionRole }) => {
-      const r = await fetch(`/api/pages/${pageId}/restriction/members`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify(v),
-      });
-      if (!r.ok) throw new Error("failed");
-    },
-    onSuccess: () => qc.invalidateQueries({ queryKey }),
-    onError: () => window.alert("사용자 추가에 실패했습니다."),
-  });
-
-  const changeMemberRole = useMutation({
-    mutationFn: async (v: { userId: string; role: PageRestrictionRole }) => {
-      const r = await fetch(
-        `/api/pages/${pageId}/restriction/members/${v.userId}`,
-        {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({ role: v.role }),
-        },
-      );
-      if (!r.ok) throw new Error("failed");
-    },
-    onSuccess: () => qc.invalidateQueries({ queryKey }),
-    onError: () => window.alert("역할 변경에 실패했습니다."),
-  });
-
-  const removeMember = useMutation({
-    mutationFn: async (userId: string) => {
-      const r = await fetch(
-        `/api/pages/${pageId}/restriction/members/${userId}`,
-        { method: "DELETE", credentials: "include" },
-      );
-      if (!r.ok) throw new Error("failed");
-    },
-    onSuccess: () => qc.invalidateQueries({ queryKey }),
-    onError: () => window.alert("사용자 제거에 실패했습니다."),
-  });
+  // draft 와 서버 상태가 동일한지(변경사항 없음 → '적용' 비활성용).
+  const isDirty =
+    !!data &&
+    (draftMode !== data.mode ||
+      draftMembers.length !== data.members.length ||
+      draftMembers.some((d) => {
+        const s = data.members.find((sm) => sm.userId === d.userId);
+        return !s || s.role !== d.role;
+      }));
 
   return (
     <>
@@ -218,16 +210,16 @@ function RealRestrictButton({ pageId }: { pageId: string }) {
             <div className="text-[12px] flex-1 min-h-0 flex flex-col">
               <div className="space-y-1.5">
                 {MODE_OPTIONS.map((opt) => {
-                  const active = mode === opt.value;
-                  const disabled = !canManage || setMode.isPending;
+                  const active = draftMode === opt.value;
+                  const disabled = !canManage || apply.isPending;
                   return (
                     <button
                       key={opt.value}
                       type="button"
                       disabled={disabled}
                       onClick={() => {
-                        if (!canManage || active) return;
-                        setMode.mutate(opt.value);
+                        if (!canManage) return;
+                        selectMode(opt.value);
                       }}
                       className={`w-full text-left px-3 py-2 rounded border transition-colors ${
                         active
@@ -262,7 +254,7 @@ function RealRestrictButton({ pageId }: { pageId: string }) {
                 })}
               </div>
 
-              {(mode === "EDIT" || mode === "VIEW_EDIT") && (
+              {(draftMode === "EDIT" || draftMode === "VIEW_EDIT") && (
                 <div className="mt-3 pt-3 border-t border-[#dfe1e6] flex-1 min-h-0 flex flex-col">
                   <div className="flex items-center justify-between mb-2">
                     <div className="text-[11px] font-semibold uppercase tracking-wide text-[#6b778c]">
@@ -280,7 +272,7 @@ function RealRestrictButton({ pageId }: { pageId: string }) {
                   </div>
                   {adding && canManage && (
                     <div className="mb-2 relative">
-                      {mode === "VIEW_EDIT" && (
+                      {draftMode === "VIEW_EDIT" && (
                         <div className="flex items-center gap-1 mb-1">
                           <span className="text-[11px] text-[#6b778c]">
                             역할:
@@ -310,9 +302,24 @@ function RealRestrictButton({ pageId }: { pageId: string }) {
                         </div>
                       )}
                       <UserSearchCombobox
-                        excludeIds={members.map((m) => m.userId)}
+                        excludeIds={draftMembers.map((m) => m.userId)}
                         onSelect={(u) => {
-                          addMember.mutate({ userId: u.id, role: addRole });
+                          setDraftMembers((prev) => [
+                            ...prev,
+                            {
+                              userId: u.id,
+                              name: u.name,
+                              department: u.department ?? null,
+                              role:
+                                draftMode === "EDIT" ? "EDIT" : addRole,
+                            },
+                          ]);
+                          // 새 멤버가 추가되면 마지막 페이지로 이동.
+                          setMemberPage(
+                            Math.floor(
+                              draftMembers.length / MEMBERS_PER_PAGE,
+                            ),
+                          );
                           setAdding(false);
                         }}
                         onClose={() => setAdding(false)}
@@ -321,7 +328,7 @@ function RealRestrictButton({ pageId }: { pageId: string }) {
                   )}
                   {/* 페이지네이션으로 고정 영역 — 멤버 추가로 다이얼로그가 커지지 않도록. */}
                   <div className="flex-1 min-h-0 flex flex-col">
-                    {members.length === 0 ? (
+                    {draftMembers.length === 0 ? (
                       <div className="text-[#6b778c] text-[11px]">
                         아직 추가된 사용자가 없습니다.
                       </div>
@@ -340,18 +347,19 @@ function RealRestrictButton({ pageId }: { pageId: string }) {
                                 </span>
                               )}
                             </span>
-                            {mode === "VIEW_EDIT" ? (
+                            {draftMode === "VIEW_EDIT" ? (
                               <select
                                 value={m.role}
-                                disabled={
-                                  !canManage || changeMemberRole.isPending
-                                }
-                                onChange={(e) =>
-                                  changeMemberRole.mutate({
-                                    userId: m.userId,
-                                    role: e.target.value as PageRestrictionRole,
-                                  })
-                                }
+                                disabled={!canManage}
+                                onChange={(e) => {
+                                  const role = e.target
+                                    .value as PageRestrictionRole;
+                                  setDraftMembers((prev) =>
+                                    prev.map((x) =>
+                                      x.userId === m.userId ? { ...x, role } : x,
+                                    ),
+                                  );
+                                }}
                                 className="text-[11px] border border-[#dfe1e6] rounded px-1 py-0.5"
                               >
                                 <option value="VIEW">보기</option>
@@ -365,7 +373,11 @@ function RealRestrictButton({ pageId }: { pageId: string }) {
                             {canManage && (
                               <button
                                 type="button"
-                                onClick={() => removeMember.mutate(m.userId)}
+                                onClick={() =>
+                                  setDraftMembers((prev) =>
+                                    prev.filter((x) => x.userId !== m.userId),
+                                  )
+                                }
                                 className="text-[#6b778c] hover:text-[#de350b] text-[14px] leading-none"
                                 title="제거"
                                 aria-label={`${m.name} 제거`}
@@ -377,10 +389,11 @@ function RealRestrictButton({ pageId }: { pageId: string }) {
                         ))}
                       </ul>
                     )}
-                    {members.length > MEMBERS_PER_PAGE && (
+                    {draftMembers.length > MEMBERS_PER_PAGE && (
                       <div className="mt-auto pt-2 flex items-center justify-between text-[11px] text-[#6b778c]">
                         <span>
-                          {members.length}명 · {safeMemberPage + 1}/{totalPages}
+                          {draftMembers.length}명 · {safeMemberPage + 1}/
+                          {totalPages}
                         </span>
                         <span className="flex items-center gap-1">
                           <button
@@ -419,6 +432,25 @@ function RealRestrictButton({ pageId }: { pageId: string }) {
               )}
             </div>
           )}
+          {/* Cycle 83 followup 3 — 명시적 적용/취소 버튼. 닫기만으론 저장 안 됨. */}
+          <div className="flex justify-end gap-2 pt-3 border-t border-[#dfe1e6]">
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              disabled={apply.isPending}
+              className="px-3 py-1.5 text-[12px] rounded border border-[#dfe1e6] text-[#42526e] hover:bg-[#ebecf0]"
+            >
+              취소
+            </button>
+            <button
+              type="button"
+              onClick={() => apply.mutate()}
+              disabled={!canManage || !isDirty || apply.isPending}
+              className="px-3 py-1.5 text-[12px] rounded bg-[#0052cc] text-white hover:bg-[#0747a6] disabled:bg-[#a5adba] disabled:cursor-not-allowed"
+            >
+              {apply.isPending ? "적용 중..." : "적용"}
+            </button>
+          </div>
         </DialogContent>
       </Dialog>
     </>

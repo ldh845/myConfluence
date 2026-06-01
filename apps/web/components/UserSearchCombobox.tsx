@@ -12,7 +12,11 @@ export default function UserSearchCombobox({
   onClose,
   excludeIds = [],
 }: {
-  onSelect: (u: { id: string; name: string }) => void;
+  onSelect: (u: {
+    id: string;
+    name: string;
+    department?: string | null;
+  }) => void;
   onClose: () => void;
   excludeIds?: string[];
 }) {
@@ -71,7 +75,13 @@ export default function UserSearchCombobox({
             <button
               key={u.id}
               type="button"
-              onClick={() => onSelect({ id: u.id, name: u.name })}
+              onClick={() =>
+                onSelect({
+                  id: u.id,
+                  name: u.name,
+                  department: u.department ?? null,
+                })
+              }
               className="w-full text-left px-3 py-1.5 text-[13px] text-[#172b4d] hover:bg-[#deebff] flex items-center justify-between gap-2"
             >
               <span className="truncate">{u.name}</span>

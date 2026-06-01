@@ -224,7 +224,12 @@ export class PagesController {
     @Body() dto: UpdatePageRestrictionModeDto,
     @Req() req: Request,
   ) {
-    return this.pages.updateRestrictionMode(id, dto.mode, userFromReq(req));
+    return this.pages.updateRestrictionMode(
+      id,
+      dto.mode,
+      userFromReq(req),
+      dto.members,
+    );
   }
 
   @Post(':id/restriction/members')

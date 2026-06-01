@@ -1290,6 +1290,7 @@ export class PagesService {
     pageId: string,
     mode: PageRestrictionMode,
     actor: Actor,
+    members?: Array<{ userId: string; role: PageRestrictionRole }>,
   ) {
     await this.perms.assertCanManagePageRestriction(pageId, actor);
     const current = await this.prisma.page.findUnique({
@@ -1297,15 +1298,62 @@ export class PagesService {
       select: { restrictionMode: true },
     });
     if (!current) throw new NotFoundException({ error: 'page not found' });
-    // Cycle 83 followup — 모드가 바뀌면 역할 의미가 달라지므로 멤버 초기화.
-    //   (예: EDIT→VIEW_EDIT 시 이전 멤버가 그대로 남지 않도록.)
+
+    if (members === undefined) {
+      // 모드만 변경. 모드가 바뀌면 멤버 자동 삭제 (followup 2).
+      await this.prisma.$transaction([
+        this.prisma.page.update({
+          where: { id: pageId },
+          data: { restrictionMode: mode },
+        }),
+        ...(current.restrictionMode !== mode
+          ? [this.prisma.pageRestriction.deleteMany({ where: { pageId } })]
+          : []),
+      ]);
+      return { ok: true };
+    }
+
+    // Cycle 83 followup 3 — '적용' 흐름: mode + members 원자적 교체.
+    // 정규화: NONE 모드는 멤버 비움, EDIT 모드는 role=EDIT 강제, 중복 userId 제거.
+    const seen = new Set<string>();
+    const normalized: Array<{ userId: string; role: PageRestrictionRole }> = [];
+    if (mode !== 'NONE') {
+      for (const m of members) {
+        if (!m?.userId || seen.has(m.userId)) continue;
+        seen.add(m.userId);
+        normalized.push({
+          userId: m.userId,
+          role: mode === 'EDIT' ? 'EDIT' : m.role,
+        });
+      }
+    }
+    if (normalized.length > 0) {
+      const existing = await this.prisma.user.findMany({
+        where: { id: { in: normalized.map((m) => m.userId) } },
+        select: { id: true },
+      });
+      if (existing.length !== normalized.length) {
+        throw new BadRequestException({
+          error: 'one or more users not found',
+        });
+      }
+    }
     await this.prisma.$transaction([
       this.prisma.page.update({
         where: { id: pageId },
         data: { restrictionMode: mode },
       }),
-      ...(current.restrictionMode !== mode
-        ? [this.prisma.pageRestriction.deleteMany({ where: { pageId } })]
+      this.prisma.pageRestriction.deleteMany({ where: { pageId } }),
+      ...(normalized.length > 0
+        ? [
+            this.prisma.pageRestriction.createMany({
+              data: normalized.map((m) => ({
+                pageId,
+                userId: m.userId,
+                role: m.role,
+              })),
+            }),
+          ]
         : []),
     ]);
     return { ok: true };
