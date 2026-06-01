@@ -299,9 +299,10 @@ export default function Sidebar({
   const [overId, setOverId] = useState<string | null>(null);
   const [dropHint, setDropHint] = useState<DropHint>(null);
   // Cycle 84 followup 10 — compact 모드에서 옆에 뜨는 floating 패널.
-  //   'shortcuts' = 공간 바로가기, 'tree' = 페이지 트리. null = 닫힘.
+  //   클릭한 아이콘 옆에 뜨도록 그 버튼의 offsetTop 함께 저장.
+  type CompactPopoverKind = "shortcuts" | "tree";
   const [compactPopover, setCompactPopover] = useState<
-    "shortcuts" | "tree" | null
+    { kind: CompactPopoverKind; top: number } | null
   >(null);
   const compactPopoverRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -524,7 +525,7 @@ export default function Sidebar({
       label: string;
       active?: boolean;
       disabled?: boolean;
-      onClick?: () => void;
+      onClick?: (e: React.MouseEvent<HTMLButtonElement>) => void;
     }) => (
       <button
         type="button"
@@ -543,6 +544,16 @@ export default function Sidebar({
         {icon}
       </button>
     );
+
+    // 클릭한 아이콘의 offsetTop 으로 패널을 그 옆에 정렬.
+    const togglePopover =
+      (kind: CompactPopoverKind) =>
+      (e: React.MouseEvent<HTMLButtonElement>) => {
+        const top = e.currentTarget.offsetTop;
+        setCompactPopover((prev) =>
+          prev?.kind === kind ? null : { kind, top },
+        );
+      };
     return (
       <div
         ref={compactPopoverRef}
@@ -589,20 +600,14 @@ export default function Sidebar({
           <IconBtn
             icon={<AppIcon name="externalLink" size={15} alt="" />}
             label="공간 바로가기"
-            active={compactPopover === "shortcuts"}
-            onClick={() =>
-              setCompactPopover((p) =>
-                p === "shortcuts" ? null : "shortcuts",
-              )
-            }
+            active={compactPopover?.kind === "shortcuts"}
+            onClick={togglePopover("shortcuts")}
           />
           <IconBtn
             icon={<AppIcon name="node" size={15} alt="" />}
             label="페이지 트리"
-            active={compactPopover === "tree"}
-            onClick={() =>
-              setCompactPopover((p) => (p === "tree" ? null : "tree"))
-            }
+            active={compactPopover?.kind === "tree"}
+            onClick={togglePopover("tree")}
           />
           <div className="w-8 border-t border-[#dfe1e6] my-1.5" />
           <IconBtn
@@ -620,9 +625,13 @@ export default function Sidebar({
           )}
         </aside>
 
-        {/* Cycle 84 followup 10 — 공간 바로가기 / 페이지 트리 floating 패널. */}
-        {compactPopover === "shortcuts" && (
-          <div className="absolute left-14 top-0 ml-1 w-72 max-h-full overflow-y-auto bg-white border border-[#dfe1e6] rounded-md shadow-lg z-30">
+        {/* Cycle 84 followup 10 — 공간 바로가기 / 페이지 트리 floating 패널.
+            followup 11 — 클릭한 아이콘 옆에 뜨도록 inline top 적용. */}
+        {compactPopover?.kind === "shortcuts" && (
+          <div
+            style={{ top: compactPopover.top }}
+            className="absolute left-14 ml-1 w-72 max-h-[60vh] overflow-y-auto bg-white border border-[#dfe1e6] rounded-md shadow-lg z-30"
+          >
             <div className="px-3 pt-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-[#6b778c]">
               공간 바로가기
             </div>
@@ -664,8 +673,11 @@ export default function Sidebar({
             )}
           </div>
         )}
-        {compactPopover === "tree" && (
-          <div className="absolute left-14 top-0 ml-1 w-72 max-h-full overflow-y-auto bg-white border border-[#dfe1e6] rounded-md shadow-lg z-30">
+        {compactPopover?.kind === "tree" && (
+          <div
+            style={{ top: compactPopover.top }}
+            className="absolute left-14 ml-1 w-72 max-h-[60vh] overflow-y-auto bg-white border border-[#dfe1e6] rounded-md shadow-lg z-30"
+          >
             <div className="px-3 pt-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-[#6b778c]">
               페이지 트리
             </div>
