@@ -542,13 +542,13 @@ function RestrictButton() {
         title="페이지 제한"
         className="inline-flex items-center gap-1 px-2 py-1 rounded text-[12px] text-[#42526e] hover:bg-[#ebecf0]"
       >
-        <AppIcon name="openPadlock" size={14} alt="제한" />
+        <AppIcon name="unlock" size={14} alt="제한" />
         <span>제한</span>
       </button>
       {open && (
         <div className="absolute left-0 top-full mt-1 z-20 w-64 bg-white border border-[#dfe1e6] rounded-md shadow-lg p-3 text-[12px]">
           <div className="flex items-center gap-2 text-[#172b4d] font-semibold">
-            <AppIcon name="openPadlock" size={16} alt="" />
+            <AppIcon name="unlock" size={16} alt="" />
             제한 없음
           </div>
           <p className="text-[#6b778c] mt-1">
