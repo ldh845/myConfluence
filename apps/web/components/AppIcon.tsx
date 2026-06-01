@@ -40,6 +40,10 @@ const ICON_SRC = {
   unlock: "/icons/unlock.png",
   // Cycle 84 followup 6 — 공간 도구 진입 아이콘.
   settings: "/icons/settings.png",
+  // Cycle 84 followup 8 — 네비/사이드바 아이콘.
+  search: "/icons/search.png",
+  notification: "/icons/notification.png",
+  chevron: "/icons/chevron.png",
 } as const;
 
 export type IconName = keyof typeof ICON_SRC;

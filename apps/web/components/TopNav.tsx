@@ -12,6 +12,7 @@ import SearchOverlay from "@/components/SearchOverlay";
 import SpaceAvatar from "@/components/SpaceAvatar";
 import CreatePageDialog from "@/components/CreatePageDialog";
 import NotificationBellButton from "@/components/NotificationBellButton";
+import AppIcon from "@/components/AppIcon";
 
 type Props = {
   spaces: SpaceWithPages[];
@@ -86,8 +87,8 @@ export default function TopNav({
       <div className="flex-1" />
 
       <div className="relative">
-        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#6b778c] text-sm">
-          🔍
+        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none">
+          <AppIcon name="search" size={14} alt="" />
         </span>
         {/* Cycle 31 — readOnly 트리거. 클릭/포커스 시 SearchOverlay 열림. */}
         <input
@@ -159,7 +160,7 @@ function AdminGearButton() {
           open ? "bg-[#ebecf0]" : "hover:bg-[#ebecf0]"
         }`}
       >
-        ⚙️
+        <AppIcon name="settings" size={16} alt="관리자" />
       </button>
       {open && (
         <div

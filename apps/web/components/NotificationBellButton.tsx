@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth/useAuth";
+import AppIcon from "@/components/AppIcon";
 
 // Cycle 59 — TopNav 종 아이콘 + dropdown 알림 패널.
 //   AdminGearButton 패턴 답습 (useRef + mousedown 외부 클릭 + Esc).
@@ -177,7 +178,7 @@ export default function NotificationBellButton() {
         aria-label="알림"
         title="알림"
       >
-        <span className="text-[18px]">🔔</span>
+        <AppIcon name="notification" size={18} alt="알림" />
         {unreadCount > 0 && (
           <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-[16px] px-1 rounded-full bg-[#de350b] text-white text-[10px] font-semibold flex items-center justify-center">
             {unreadCount > 99 ? "99+" : unreadCount}

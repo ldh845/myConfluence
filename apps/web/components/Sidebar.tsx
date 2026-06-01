@@ -234,7 +234,11 @@ function SortableTreeRow({
         aria-label={item.hasChildren ? "하위 페이지 펼치기/접기" : undefined}
       >
         {item.hasChildren ? (
-          collapsedHas ? "›" : "⌄"
+          collapsedHas ? (
+            <AppIcon name="chevron" size={10} alt="" />
+          ) : (
+            <AppIcon name="downArrow" size={10} alt="" />
+          )
         ) : (
           <span className="text-[#a5adba]">•</span>
         )}
