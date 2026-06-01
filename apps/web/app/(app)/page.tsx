@@ -428,17 +428,14 @@ export default function HomePage() {
         return;
       }
 
-      if (e.key === "Escape") {
-        if (inBody && isBodyEditable) {
-          e.preventDefault();
-          (t as HTMLElement | null)?.blur?.();
-          exitEditMode();
-        }
-      }
+      // Cycle 86 — ESC 는 페이지 편집 모드를 종료하지 않는다. 열린 다이얼로그/팝업은
+      //   각자 자체 ESC 핸들러로 닫히고, 그 외엔 ESC 가 본문 편집을 유지한 채 무시.
+      //   (이전엔 inBody && isBodyEditable 일 때 exitEditMode() 했는데, 그게 다이얼로그
+      //   닫는 의도의 ESC 입력에서 사용자 편집 컨텍스트까지 함께 잃게 만들었음.)
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [currentPage, isBodyEditable, toggleEditMode, exitEditMode]);
+  }, [currentPage, toggleEditMode]);
 
   // PageHeader breadcrumb / WelcomeBanner / CopyPageDialog가 참조하는 활성 스페이스.
   // 우선순위: URL의 spaceId > currentPage.spaceId > 첫 스페이스.

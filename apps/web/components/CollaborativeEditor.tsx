@@ -709,8 +709,32 @@ export default function CollaborativeEditor({
     };
 
     editor.on("update", onUpdate);
+
+    // Cycle 86 — Ctrl/Cmd+S 강제 저장. 디바운스 대기 없이 즉시 flush.
+    //   브라우저 기본 '페이지 저장' 다이얼로그는 preventDefault 로 차단.
+    const onSaveKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      if (e.key !== "s" && e.key !== "S") return;
+      e.preventDefault();
+      if (timer) {
+        clearTimeout(timer);
+        timer = null;
+      }
+      // 사용자가 아직 한 글자도 안 쳐서 latestMd 가 비어있을 수 있음 → 현재 doc 직렬화.
+      if (!latestMd) {
+        try {
+          latestMd = JSON.stringify(editor.getJSON());
+        } catch {
+          return;
+        }
+      }
+      void flush();
+    };
+    window.addEventListener("keydown", onSaveKey);
+
     return () => {
       editor.off("update", onUpdate);
+      window.removeEventListener("keydown", onSaveKey);
       if (timer) {
         clearTimeout(timer);
         flush();
