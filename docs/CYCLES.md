@@ -2191,3 +2191,21 @@
 - **83 followup 2 (피드백 반영)**: ① 다이얼로그 폭 28rem·높이 34rem **고정**(`DialogContent` 명시) — 멤버 추가로 크기가 변하지 않음. ② **허용 사용자 페이지네이션**(4명/페이지, 이전/다음, 'N명 · X/Y' 표시). ③ `updateRestrictionMode` 가 모드 실제 변경 시 `PageRestriction` 전체 삭제(트랜잭션) — EDIT→VIEW_EDIT 시 이전 멤버가 그대로 남던 문제 해소(역할 의미가 달라지므로 깨끗하게 시작). (`4dcdd26`)
 - **83 followup 3 (피드백 반영)**: 다이얼로그 안 변경이 즉시 저장되던 동작을 **명시적 '적용'/'취소'** 로 변경. 모드 카드 클릭·멤버 추가/역할/제거 모두 로컬 draft 만 갱신. '적용' 시 단일 `PATCH /pages/:id/restriction { mode, members }` 로 원자적 교체(서비스: mode 갱신 + 멤버 전체 deleteMany + createMany 트랜잭션, EDIT 모드 role=EDIT 강제, NONE 은 빈 멤버, 중복/미존재 검증). '취소'/닫기는 draft 폐기 → 다음 열 때 서버 상태로 재초기화. DTO `members` 옵셔널 필드 추가, `UserSearchCombobox.onSelect` 가 department 도 전달(draft 표시용). (`0c9b42d`)
 - **83 followup 4 (피드백 반영)**: '취소' 버튼이 적용 중 비활성화되던 것을 **항상 활성**으로 — 진행 중이어도 닫기 가능(in-flight mutation 은 그대로 완료, 이미 닫힌 상태라 무해). (`189fd19`)
+
+---
+
+## Cycle 84 — 2026-06-01 — ✅ Done (코드 블록 언어 선택 인라인 + '본문으로' 빠져나가기)
+- **제목**: 편집 화면 코드 블록의 언어 선택을 툴바에서 블록 자체로 이동하고, 코드 블록에서 일반 본문으로 빠져나가는 가시적 버튼 제공
+- **카테고리**: FE 전용 / UX (에디터)
+- **커밋**: `0e7f2c1`(코드), 본 CYCLES.md
+- **변경 파일 (FE)**:
+  - `CodeBlockNodeView.tsx` — 우상단의 언어 라벨 `<span>` 을 `<select>` 로 교체(항상 노출, 변경 시 `updateAttributes({ language })`). 호버 영역에 **'↓ 본문'** 버튼 추가 — `getPos() + nodeSize` 위치에 빈 `paragraph` 삽입 후 `setTextSelection` 으로 커서 이동(키보드 Mod-Enter / 트리플 Enter 보완하는 가시적 출구). `CODE_BLOCK_LANGUAGES` 에 없는 언어 attrs 도 옵션에 포함하여 표시 보장
+  - `EditorToolbar.tsx` — `editor.isActive("codeBlock")` 컨텍스트 분기의 `CodeBlockLanguageSelect` 사용/정의 제거(블록 NodeView 로 일원화). 미사용 `CODE_BLOCK_LANGUAGES` import 정리
+- **검증**: web `tsc --noEmit` EXIT 0. 마이그레이션 없음
+- **동작 확인 안내**:
+  1) **마이그레이션 불필요**
+  2) 코드 블록 우상단에 항상 언어 select 보임 — 다른 언어 선택 시 syntax 하이라이트 갱신
+  3) 코드 블록 호버 시 '복사' 옆 **'↓ 본문'** 버튼 → 클릭 시 블록 뒤 본문으로 커서 이동
+  4) 툴바에는 더 이상 코드 블록 언어 select 가 뜨지 않음
+- **남은 일**: 없음. **브라우저 시각 확인 미수행**
+- **비고**: 기존 키보드 단축키(Mod-Enter / 트리플 Enter / 끝에서 ArrowDown)도 그대로 동작 — 버튼은 발견성 보완용. NodeView 의 `contentEditable={false}` 가 컨트롤 영역의 입력 가로채기 차단.
