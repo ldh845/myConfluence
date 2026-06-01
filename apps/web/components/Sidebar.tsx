@@ -298,6 +298,32 @@ export default function Sidebar({
   const [activeId, setActiveId] = useState<string | null>(null);
   const [overId, setOverId] = useState<string | null>(null);
   const [dropHint, setDropHint] = useState<DropHint>(null);
+  // Cycle 84 followup 10 — compact 모드에서 옆에 뜨는 floating 패널.
+  //   'shortcuts' = 공간 바로가기, 'tree' = 페이지 트리. null = 닫힘.
+  const [compactPopover, setCompactPopover] = useState<
+    "shortcuts" | "tree" | null
+  >(null);
+  const compactPopoverRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!compactPopover) return;
+    const onDown = (e: MouseEvent) => {
+      if (
+        compactPopoverRef.current &&
+        !compactPopoverRef.current.contains(e.target as Node)
+      ) {
+        setCompactPopover(null);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setCompactPopover(null);
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [compactPopover]);
 
   const pages = space?.pages ?? [];
 
@@ -518,69 +544,184 @@ export default function Sidebar({
       </button>
     );
     return (
-      <aside className="w-14 shrink-0 bg-[#f4f5f7] border-r border-[#dfe1e6] h-full overflow-y-auto flex flex-col items-center py-3 gap-1 pb-12">
-        {space && (
-          <div className="mb-2">
-            <SpaceAvatar name={space.name} icon={space.icon} size={28} />
+      <div
+        ref={compactPopoverRef}
+        className="relative shrink-0 flex h-full"
+      >
+        <aside className="w-14 bg-[#f4f5f7] border-r border-[#dfe1e6] h-full overflow-y-auto flex flex-col items-center py-3 gap-1 pb-12">
+          {space && (
+            <div className="mb-2">
+              <SpaceAvatar name={space.name} icon={space.icon} size={28} />
+            </div>
+          )}
+          <IconBtn
+            icon={<AppIcon name="home" size={15} alt="" />}
+            label="홈"
+            active={
+              pathname === "/" &&
+              !!homePageId &&
+              selectedPageId === homePageId
+            }
+            onClick={goHome}
+          />
+          <IconBtn
+            icon={<AppIcon name="page" size={15} alt="" />}
+            label="페이지"
+            active={pathname === "/" && view === "pages"}
+            onClick={() => {
+              if (space) router.push(`/?spaceId=${space.id}&view=pages`);
+            }}
+          />
+          <IconBtn
+            icon={<AppIcon name="chart" size={15} alt="" />}
+            label="보드"
+            active={pathname === "/" && view === "board"}
+            onClick={() => {
+              if (space) router.push(`/?spaceId=${space.id}&view=board`);
+            }}
+          />
+          <IconBtn
+            icon={<AppIcon name="calendar" size={15} alt="" />}
+            label="캘린더"
+            disabled
+          />
+          <div className="w-8 border-t border-[#dfe1e6] my-1.5" />
+          <IconBtn
+            icon={<AppIcon name="externalLink" size={15} alt="" />}
+            label="공간 바로가기"
+            active={compactPopover === "shortcuts"}
+            onClick={() =>
+              setCompactPopover((p) =>
+                p === "shortcuts" ? null : "shortcuts",
+              )
+            }
+          />
+          <IconBtn
+            icon={<AppIcon name="node" size={15} alt="" />}
+            label="페이지 트리"
+            active={compactPopover === "tree"}
+            onClick={() =>
+              setCompactPopover((p) => (p === "tree" ? null : "tree"))
+            }
+          />
+          <div className="w-8 border-t border-[#dfe1e6] my-1.5" />
+          <IconBtn
+            icon={<AppIcon name="trash" size={15} alt="" />}
+            label="휴지통"
+            onClick={() => onOpenTrash?.()}
+          />
+          {canManage && space && (
+            <IconBtn
+              icon={<AppIcon name="settings" size={15} alt="" />}
+              label="공간 도구 (펴기)"
+              active={pathname === "/" && view === "settings"}
+              onClick={onExpand}
+            />
+          )}
+        </aside>
+
+        {/* Cycle 84 followup 10 — 공간 바로가기 / 페이지 트리 floating 패널. */}
+        {compactPopover === "shortcuts" && (
+          <div className="absolute left-14 top-0 ml-1 w-72 max-h-full overflow-y-auto bg-white border border-[#dfe1e6] rounded-md shadow-lg z-30">
+            <div className="px-3 pt-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-[#6b778c]">
+              공간 바로가기
+            </div>
+            {space && (space.shortcuts?.length ?? 0) > 0 ? (
+              <ul className="px-2 pb-2 space-y-0.5">
+                {space.shortcuts!.map((s) =>
+                  s.type === "INTERNAL_PAGE" ? (
+                    <li key={s.id}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onSelect(s.target);
+                          setCompactPopover(null);
+                        }}
+                        className="w-full text-left px-2 py-1 text-sm rounded truncate text-[#172b4d] hover:bg-[#ebecf0]"
+                      >
+                        🔗 {s.label}
+                      </button>
+                    </li>
+                  ) : (
+                    <li key={s.id}>
+                      <a
+                        href={s.target}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={() => setCompactPopover(null)}
+                        className="block px-2 py-1 text-sm rounded truncate text-[#172b4d] hover:bg-[#ebecf0]"
+                      >
+                        ↗ {s.label}
+                      </a>
+                    </li>
+                  ),
+                )}
+              </ul>
+            ) : (
+              <div className="px-3 pb-2 text-[12px] text-[#6b778c]">
+                빠른 링크가 없습니다
+              </div>
+            )}
           </div>
         )}
-        <IconBtn
-          icon={<AppIcon name="home" size={15} alt="" />}
-          label="홈"
-          active={
-            pathname === "/" &&
-            !!homePageId &&
-            selectedPageId === homePageId
-          }
-          onClick={goHome}
-        />
-        <IconBtn
-          icon={<AppIcon name="page" size={15} alt="" />}
-          label="페이지"
-          active={pathname === "/" && view === "pages"}
-          onClick={() => {
-            if (space) router.push(`/?spaceId=${space.id}&view=pages`);
-          }}
-        />
-        <IconBtn
-          icon={<AppIcon name="chart" size={15} alt="" />}
-          label="보드"
-          active={pathname === "/" && view === "board"}
-          onClick={() => {
-            if (space) router.push(`/?spaceId=${space.id}&view=board`);
-          }}
-        />
-        <IconBtn
-          icon={<AppIcon name="calendar" size={15} alt="" />}
-          label="캘린더"
-          disabled
-        />
-        <div className="w-8 border-t border-[#dfe1e6] my-1.5" />
-        <IconBtn
-          icon={<AppIcon name="externalLink" size={15} alt="" />}
-          label="공간 바로가기 (펴기)"
-          onClick={onExpand}
-        />
-        <IconBtn
-          icon={<AppIcon name="node" size={15} alt="" />}
-          label="페이지 트리 (펴기)"
-          onClick={onExpand}
-        />
-        <div className="w-8 border-t border-[#dfe1e6] my-1.5" />
-        <IconBtn
-          icon={<AppIcon name="trash" size={15} alt="" />}
-          label="휴지통"
-          onClick={() => onOpenTrash?.()}
-        />
-        {canManage && space && (
-          <IconBtn
-            icon={<AppIcon name="settings" size={15} alt="" />}
-            label="공간 도구 (펴기)"
-            active={pathname === "/" && view === "settings"}
-            onClick={onExpand}
-          />
+        {compactPopover === "tree" && (
+          <div className="absolute left-14 top-0 ml-1 w-72 max-h-full overflow-y-auto bg-white border border-[#dfe1e6] rounded-md shadow-lg z-30">
+            <div className="px-3 pt-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-[#6b778c]">
+              페이지 트리
+            </div>
+            {visible.length === 0 ? (
+              <div className="px-3 pb-2 text-[12px] text-[#6b778c]">
+                페이지가 없습니다
+              </div>
+            ) : (
+              <ul className="px-2 pb-2 space-y-0.5">
+                {visible.map((v) => (
+                  <li
+                    key={v.id}
+                    className="flex items-center gap-1"
+                    style={{ paddingLeft: v.depth * 16 }}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (v.hasChildren) toggleCollapsed(v.id);
+                      }}
+                      className="w-4 shrink-0 flex items-center justify-center text-[#6b778c]"
+                      aria-label={
+                        v.hasChildren ? "하위 페이지 펼치기/접기" : undefined
+                      }
+                    >
+                      {v.hasChildren ? (
+                        collapsed.has(v.id) ? (
+                          <AppIcon name="chevron" size={10} alt="" />
+                        ) : (
+                          <AppIcon name="downArrow" size={10} alt="" />
+                        )
+                      ) : (
+                        <span className="text-[#a5adba]">•</span>
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onSelect(v.id);
+                        setCompactPopover(null);
+                      }}
+                      className={`flex-1 min-w-0 text-left py-1 pr-2 text-sm truncate rounded ${
+                        selectedPageId === v.id
+                          ? "bg-[#deebff] text-[#0052cc] font-semibold"
+                          : "text-[#172b4d] hover:bg-[#ebecf0]"
+                      }`}
+                    >
+                      {v.title || "(제목 없음)"}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         )}
-      </aside>
+      </div>
     );
   }
 
