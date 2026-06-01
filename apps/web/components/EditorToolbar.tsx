@@ -1103,7 +1103,8 @@ function InsertMoreButton({ editor }: { editor: Editor }) {
               className="w-full px-2 py-1 text-[13px] border border-[#dfe1e6] rounded focus:outline-none focus:border-[#0052cc]"
             />
           </div>
-          <div ref={listRef} className="max-h-[260px] overflow-y-auto py-1">
+          {/* Cycle 85 followup 2 — 드롭다운 길이 확장(설명 제거로 한 줄에 더 많은 항목). */}
+          <div ref={listRef} className="max-h-[420px] overflow-y-auto py-1">
             {items.length === 0 ? (
               <div className="px-3 py-2 text-[12px] text-[#6b778c]">
                 결과 없음
@@ -1118,16 +1119,13 @@ function InsertMoreButton({ editor }: { editor: Editor }) {
                     type="button"
                     onMouseEnter={() => setSelected(i)}
                     onClick={() => runItem(item)}
-                    className={`w-full text-left px-3 py-1.5 text-[13px] flex flex-col ${
+                    className={`w-full text-left px-3 py-1.5 text-[13px] ${
                       active
                         ? "bg-[#deebff] text-[#0052cc]"
                         : "text-[#172b4d] hover:bg-[#ebecf0]"
                     }`}
                   >
-                    <span className="font-medium">{item.title}</span>
-                    <span className="text-[11px] text-[#6b778c]">
-                      {item.description}
-                    </span>
+                    {item.title}
                   </button>
                 );
               })
