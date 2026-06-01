@@ -399,6 +399,15 @@ export default function PageHeader({
               status={page.status}
               canEdit={canEditStatus}
             />
+            {/* Cycle 84 followup 2 — 발행되지 않은 draft 가 있으면 태그로 안내. */}
+            {hasDraft && (
+              <span
+                className="inline-flex items-center rounded-[3px] px-2 py-0.5 text-[11px] font-semibold leading-none bg-[#fff7d6] text-[#7f5f01] border border-[#f5cd47]"
+                title="이 페이지에 아직 발행되지 않은 임시 저장 본문이 있습니다."
+              >
+                발행되지 않은 변경 내용
+              </span>
+            )}
           </div>
         )}
       </div>
@@ -500,7 +509,9 @@ function SaveStatusBadge({ status }: { status: SaveStatus }) {
       case "saving":
         return { text: "저장 중...", cls: "text-[#6b778c]" };
       case "saved":
-        return { text: "저장됨", cls: "text-[#006644]" };
+        // Cycle 84 followup 2 — '저장됨' 표시 제거(사용자 요청). 자동저장 성공은
+        //   조용히 처리; 미발행 변경은 별도 '발행되지 않은 변경 내용' 태그로 노출.
+        return { text: "", cls: "" };
       case "error":
         return { text: "저장 실패", cls: "text-[#de350b]" };
       default:
