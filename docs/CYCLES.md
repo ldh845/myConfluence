@@ -2223,3 +2223,30 @@
 - **84 followup 12 (피드백 반영)**: 접힌 사이드바의 **휴지통/공간 도구**를 `mt-auto` 컨테이너로 묶어 **하단 고정** — 펴진 상태와 같은 위치. 위쪽 항목(홈/페이지/보드/캘린더/공간 바로가기/페이지 트리)은 상단 유지. (`56ae494`)
 - **84 followup 13 (피드백 반영)**: 접힌 사이드바에서 **공간 도구 클릭 시 사이드바 펴기 대신 옆 메뉴**. `compactPopover.kind` 에 `'tools'` 추가, 펴진 사이드바의 '공간 도구' 위로-열림 드롭다운과 같은 `toolItems`(개요/권한/감사 로그/페이지 순서/사이드바 구성)를 옆에 렌더. 항목 클릭 시 `?view=settings&tab=` 로 이동하며 팝오버 닫힘. (`a0c2bf3`)
 - **84 followup 14 (피드백 반영)**: 사이드바 하단 아이콘(휴지통/공간 도구) 클릭 시 팝오버가 viewport 아래로 잘리던 문제 → `togglePopover` 가 추정 패널 높이로 컨테이너 잔여 공간을 검사한 뒤 자동으로 **top 또는 bottom 앵커**를 선택. state 를 `{ kind, style: CSSProperties }` 로 일반화. tools 220px / shortcuts·tree min(360, 60vh) 추정. (`6160ce0`)
+
+---
+
+## Cycle 85 — 2026-06-01 — ✅ Done (편집기 매크로 3종 — 상태 / 사용자 언급 / 정보)
+- **제목**: 편집기 슬래시/＋ 메뉴에 Confluence 식 매크로 도입: 상태 배지·사용자 언급·정보 패널
+- **카테고리**: FE 전용 / 기능 (편집기 매크로)
+- **커밋**: `e6bdcd9`(코드), 본 CYCLES.md
+- **변경 파일 (FE)**:
+  - `lib/tiptap/status-badge.ts` 신규 — 인라인 atom 노드 `statusBadge`(attrs `text`, `color`). 6 색 프리셋(회/파/초/노/빨/보)
+  - `components/StatusBadgeNodeView.tsx` 신규 — 색칠된 pill 렌더
+  - `lib/tiptap/info-panel.ts` 신규 — 블록 컨테이너 `infoPanel`(attrs `title`, `showIcon`, content `block+`)
+  - `components/InfoPanelNodeView.tsx` 신규 — 파란 배경 + 좌측 강조선 + (선택) 아이콘/제목 + `NodeViewContent` 본문(편집 가능)
+  - `components/StatusMacroDialog.tsx` 신규 — 좌측 제목/색상 입력 + 우측 미리보기(↻ 새로고침) + 삽입/취소
+  - `components/InfoPanelDialog.tsx` 신규 — 제목(선택) + '정보 아이콘 표시' 체크박스 + 미리보기 + 삽입
+  - `lib/stores/useEditorUiStore.ts` — `statusMacroOpen`/`infoPanelDialogOpen` + open/close 액션
+  - `components/CollaborativeEditor.tsx` — `StatusBadgeNode`/`InfoPanelNode` 등록(스키마 합류)
+  - `components/EditorToolbar.tsx` — `MacroDialogsMount` 로 두 다이얼로그를 항상 마운트(store 신호로 열림)
+  - `lib/tiptap/slash-commands.ts` — `SLASH_ITEMS` 에 '상태/사용자 언급/정보' 3 항목 추가. 사용자 언급은 `@` 삽입으로 기존 mention suggestion(Cycle 55) 팝업 자연 발화
+- **검증**: web `tsc --noEmit` EXIT 0. 마이그레이션 없음(클라이언트 노드만 추가, 본문은 ProseMirror JSON 으로 자연 저장)
+- **동작 확인 안내**:
+  1) **마이그레이션 불필요**
+  2) 편집 모드 → 슬래시 `/` 또는 툴바 '＋ 더 많은 내용 삽입' → '상태/사용자 언급/정보' 항목 노출
+  3) 상태: 다이얼로그에서 제목 입력 + 색상 선택 → 미리보기 → 삽입 → 본문에 인라인 배지
+  4) 사용자 언급: 클릭 시 `@` 삽입 → 기존 mention 검색 팝업
+  5) 정보: 다이얼로그에서 제목(선택)/아이콘 체크 → 삽입 → 본문에 파란 패널 + 빈 단락(편집 가능)
+- **남은 일**: 상태 배지의 in-place 편집(클릭 → 같은 다이얼로그)·정보 패널의 인라인 제목 편집은 후속. **브라우저 시각 확인 미수행**
+- **비고**: 슬래시는 모든 항목 노출이 표준이고 '＋ 더 많은 내용 삽입' 은 툴바 중복 항목만 제외하는 정책이라 매크로 3 종은 양쪽 모두에 자연 노출(별도 처리 없음). 본문은 ProseMirror JSON(Cycle 57)으로 저장돼 새 노드 라운드트립 보장. 옛 페이지에 해당 노드 없음 — 영향 0.
