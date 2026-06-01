@@ -49,6 +49,11 @@ type Props = {
   onDeletePage: (pageId: string, cascade: boolean) => void;
   onOpenTrash?: () => void;
   onReorder?: () => void;
+  // Cycle 84 followup 9 — 접힌 모드(아이콘 전용 미니 사이드바, ~56px).
+  //   기존 트리-행 펼침/접힘 state(collapsed: Set) 와 이름 충돌 회피로 'compact'.
+  compact?: boolean;
+  // 섹션 아이콘(공간 바로가기/페이지 트리) 클릭 시 펴기 요청.
+  onExpand?: () => void;
 };
 
 // FR-021 (Cycle 19b) — 사이드바 트리 DnD.
@@ -254,6 +259,8 @@ export default function Sidebar({
   onSelect,
   onOpenTrash,
   onReorder,
+  compact,
+  onExpand,
 }: Props) {
   const router = useRouter();
   const pathname = usePathname();
@@ -477,6 +484,105 @@ export default function Sidebar({
   const activeItem = activeId
     ? visible.find((v) => v.id === activeId) ?? null
     : null;
+
+  // ── Cycle 84 followup 9 — 접힌 모드: 아이콘 전용 미니 사이드바(56px). ──
+  if (compact) {
+    const IconBtn = ({
+      icon,
+      label,
+      active,
+      disabled,
+      onClick,
+    }: {
+      icon: ReactNode;
+      label: string;
+      active?: boolean;
+      disabled?: boolean;
+      onClick?: () => void;
+    }) => (
+      <button
+        type="button"
+        onClick={onClick}
+        disabled={disabled}
+        title={label}
+        aria-label={label}
+        className={`w-9 h-9 flex items-center justify-center rounded ${
+          active
+            ? "bg-[#deebff] text-[#0052cc]"
+            : disabled
+              ? "text-[#a5adba] cursor-not-allowed"
+              : "text-[#42526e] hover:bg-[#ebecf0]"
+        }`}
+      >
+        {icon}
+      </button>
+    );
+    return (
+      <aside className="w-14 shrink-0 bg-[#f4f5f7] border-r border-[#dfe1e6] h-full overflow-y-auto flex flex-col items-center py-3 gap-1 pb-12">
+        {space && (
+          <div className="mb-2">
+            <SpaceAvatar name={space.name} icon={space.icon} size={28} />
+          </div>
+        )}
+        <IconBtn
+          icon={<AppIcon name="home" size={15} alt="" />}
+          label="홈"
+          active={
+            pathname === "/" &&
+            !!homePageId &&
+            selectedPageId === homePageId
+          }
+          onClick={goHome}
+        />
+        <IconBtn
+          icon={<AppIcon name="page" size={15} alt="" />}
+          label="페이지"
+          active={pathname === "/" && view === "pages"}
+          onClick={() => {
+            if (space) router.push(`/?spaceId=${space.id}&view=pages`);
+          }}
+        />
+        <IconBtn
+          icon={<AppIcon name="chart" size={15} alt="" />}
+          label="보드"
+          active={pathname === "/" && view === "board"}
+          onClick={() => {
+            if (space) router.push(`/?spaceId=${space.id}&view=board`);
+          }}
+        />
+        <IconBtn
+          icon={<AppIcon name="calendar" size={15} alt="" />}
+          label="캘린더"
+          disabled
+        />
+        <div className="w-8 border-t border-[#dfe1e6] my-1.5" />
+        <IconBtn
+          icon={<AppIcon name="externalLink" size={15} alt="" />}
+          label="공간 바로가기 (펴기)"
+          onClick={onExpand}
+        />
+        <IconBtn
+          icon={<AppIcon name="node" size={15} alt="" />}
+          label="페이지 트리 (펴기)"
+          onClick={onExpand}
+        />
+        <div className="w-8 border-t border-[#dfe1e6] my-1.5" />
+        <IconBtn
+          icon={<AppIcon name="trash" size={15} alt="" />}
+          label="휴지통"
+          onClick={() => onOpenTrash?.()}
+        />
+        {canManage && space && (
+          <IconBtn
+            icon={<AppIcon name="settings" size={15} alt="" />}
+            label="공간 도구 (펴기)"
+            active={pathname === "/" && view === "settings"}
+            onClick={onExpand}
+          />
+        )}
+      </aside>
+    );
+  }
 
   return (
     <aside className="w-[260px] shrink-0 bg-[#f4f5f7] border-r border-[#dfe1e6] h-full overflow-y-auto flex flex-col">

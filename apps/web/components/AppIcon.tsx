@@ -44,6 +44,9 @@ const ICON_SRC = {
   search: "/icons/search.png",
   notification: "/icons/notification.png",
   chevron: "/icons/chevron.png",
+  // Cycle 84 followup 9 — 접힌 스페이스 사이드바 섹션 아이콘.
+  externalLink: "/icons/external-link.png",
+  node: "/icons/node.png",
 } as const;
 
 export type IconName = keyof typeof ICON_SRC;

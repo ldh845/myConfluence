@@ -182,7 +182,8 @@ function AppShell({ children }: { children: React.ReactNode }) {
                 {sidebarOpen ? "«" : "»"}
               </button>
             </div>
-          ) : sidebarOpen ? (
+          ) : (
+            // Cycle 84 followup 9 — Sidebar 자체에 collapsed 모드(아이콘 전용 56px).
             <div className="relative shrink-0">
               <Sidebar
                 space={activeSpace}
@@ -192,25 +193,18 @@ function AppShell({ children }: { children: React.ReactNode }) {
                 onDeletePage={handleDeletePage}
                 onOpenTrash={() => setTrashOpen(true)}
                 onReorder={invalidateSpaces}
+                compact={!sidebarOpen}
+                onExpand={() => setSidebarOpen(true)}
               />
               <button
-                onClick={() => setSidebarOpen(false)}
-                title="사이드바 접기"
-                aria-label="사이드바 접기"
+                onClick={() => setSidebarOpen((v) => !v)}
+                title={sidebarOpen ? "사이드바 접기" : "사이드바 펴기"}
+                aria-label={sidebarOpen ? "사이드바 접기" : "사이드바 펴기"}
                 className="absolute bottom-2 right-2 z-10 w-6 h-6 flex items-center justify-center rounded text-[16px] font-bold leading-none text-[#172b4d] hover:bg-[#ebecf0] hover:text-[#0052cc]"
               >
-                «
+                {sidebarOpen ? "«" : "»"}
               </button>
             </div>
-          ) : (
-            <button
-              onClick={() => setSidebarOpen(true)}
-              title="사이드바 펴기"
-              aria-label="사이드바 펴기"
-              className="w-6 shrink-0 bg-[#f4f5f7] border-r border-[#dfe1e6] flex items-end justify-center pb-3 text-[16px] font-bold text-[#172b4d] hover:bg-[#ebecf0] hover:text-[#0052cc]"
-            >
-              »
-            </button>
           )}
 
           <main className="flex-1 min-w-0 overflow-auto bg-white">
