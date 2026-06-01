@@ -84,10 +84,14 @@ function PlaceholderRestrictButton() {
   );
 }
 
+// Cycle 83 followup — 멤버 목록은 페이지네이션(다이얼로그 크기 고정 유지).
+const MEMBERS_PER_PAGE = 4;
+
 function RealRestrictButton({ pageId }: { pageId: string }) {
   const [open, setOpen] = useState(false);
   const [adding, setAdding] = useState(false);
   const [addRole, setAddRole] = useState<PageRestrictionRole>("VIEW");
+  const [memberPage, setMemberPage] = useState(0);
   const qc = useQueryClient();
 
   const queryKey = ["page-restriction", pageId];
@@ -116,6 +120,19 @@ function RealRestrictButton({ pageId }: { pageId: string }) {
   useEffect(() => {
     if (adding) setAddRole(mode === "EDIT" ? "EDIT" : "VIEW");
   }, [adding, mode]);
+
+  // 모드 변경 시 페이지네이션 초기화.
+  useEffect(() => {
+    setMemberPage(0);
+  }, [mode]);
+
+  // 페이지네이션 계산.
+  const totalPages = Math.max(1, Math.ceil(members.length / MEMBERS_PER_PAGE));
+  const safeMemberPage = Math.min(memberPage, totalPages - 1);
+  const pageMembers = members.slice(
+    safeMemberPage * MEMBERS_PER_PAGE,
+    (safeMemberPage + 1) * MEMBERS_PER_PAGE,
+  );
 
   const setMode = useMutation({
     mutationFn: async (next: PageRestrictionMode) => {
@@ -190,14 +207,15 @@ function RealRestrictButton({ pageId }: { pageId: string }) {
         )}
       </button>
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-md">
+        {/* Cycle 83 followup — 폭/높이 고정으로 멤버 추가 시 크기 변동 방지. */}
+        <DialogContent className="max-w-md w-[28rem] h-[34rem] flex flex-col">
           <DialogHeader>
             <DialogTitle>페이지 제한</DialogTitle>
           </DialogHeader>
           {isLoading ? (
             <div className="text-[12px] text-[#6b778c]">불러오는 중...</div>
           ) : (
-            <div className="text-[12px]">
+            <div className="text-[12px] flex-1 min-h-0 flex flex-col">
               <div className="space-y-1.5">
                 {MODE_OPTIONS.map((opt) => {
                   const active = mode === opt.value;
@@ -245,7 +263,7 @@ function RealRestrictButton({ pageId }: { pageId: string }) {
               </div>
 
               {(mode === "EDIT" || mode === "VIEW_EDIT") && (
-                <div className="mt-3 pt-3 border-t border-[#dfe1e6]">
+                <div className="mt-3 pt-3 border-t border-[#dfe1e6] flex-1 min-h-0 flex flex-col">
                   <div className="flex items-center justify-between mb-2">
                     <div className="text-[11px] font-semibold uppercase tracking-wide text-[#6b778c]">
                       허용 사용자
@@ -301,62 +319,96 @@ function RealRestrictButton({ pageId }: { pageId: string }) {
                       />
                     </div>
                   )}
-                  {members.length === 0 ? (
-                    <div className="text-[#6b778c] text-[11px]">
-                      아직 추가된 사용자가 없습니다.
-                    </div>
-                  ) : (
-                    <ul className="space-y-1">
-                      {members.map((m) => (
-                        <li
-                          key={m.userId}
-                          className="flex items-center gap-2 py-1 text-[12px]"
-                        >
-                          <span className="flex-1 truncate text-[#172b4d]">
-                            {m.name}
-                            {m.department && (
-                              <span className="text-[#a5adba] text-[11px] ml-1">
-                                ({m.department})
+                  {/* 페이지네이션으로 고정 영역 — 멤버 추가로 다이얼로그가 커지지 않도록. */}
+                  <div className="flex-1 min-h-0 flex flex-col">
+                    {members.length === 0 ? (
+                      <div className="text-[#6b778c] text-[11px]">
+                        아직 추가된 사용자가 없습니다.
+                      </div>
+                    ) : (
+                      <ul className="space-y-1">
+                        {pageMembers.map((m) => (
+                          <li
+                            key={m.userId}
+                            className="flex items-center gap-2 py-1 text-[12px]"
+                          >
+                            <span className="flex-1 truncate text-[#172b4d]">
+                              {m.name}
+                              {m.department && (
+                                <span className="text-[#a5adba] text-[11px] ml-1">
+                                  ({m.department})
+                                </span>
+                              )}
+                            </span>
+                            {mode === "VIEW_EDIT" ? (
+                              <select
+                                value={m.role}
+                                disabled={
+                                  !canManage || changeMemberRole.isPending
+                                }
+                                onChange={(e) =>
+                                  changeMemberRole.mutate({
+                                    userId: m.userId,
+                                    role: e.target.value as PageRestrictionRole,
+                                  })
+                                }
+                                className="text-[11px] border border-[#dfe1e6] rounded px-1 py-0.5"
+                              >
+                                <option value="VIEW">보기</option>
+                                <option value="EDIT">조회+편집</option>
+                              </select>
+                            ) : (
+                              <span className="text-[11px] text-[#0052cc] font-medium">
+                                {m.role === "EDIT" ? "편집" : "보기"}
                               </span>
                             )}
-                          </span>
-                          {mode === "VIEW_EDIT" ? (
-                            <select
-                              value={m.role}
-                              disabled={
-                                !canManage || changeMemberRole.isPending
-                              }
-                              onChange={(e) =>
-                                changeMemberRole.mutate({
-                                  userId: m.userId,
-                                  role: e.target.value as PageRestrictionRole,
-                                })
-                              }
-                              className="text-[11px] border border-[#dfe1e6] rounded px-1 py-0.5"
-                            >
-                              <option value="VIEW">보기</option>
-                              <option value="EDIT">조회+편집</option>
-                            </select>
-                          ) : (
-                            <span className="text-[11px] text-[#0052cc] font-medium">
-                              {m.role === "EDIT" ? "편집" : "보기"}
-                            </span>
-                          )}
-                          {canManage && (
-                            <button
-                              type="button"
-                              onClick={() => removeMember.mutate(m.userId)}
-                              className="text-[#6b778c] hover:text-[#de350b] text-[14px] leading-none"
-                              title="제거"
-                              aria-label={`${m.name} 제거`}
-                            >
-                              ×
-                            </button>
-                          )}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
+                            {canManage && (
+                              <button
+                                type="button"
+                                onClick={() => removeMember.mutate(m.userId)}
+                                className="text-[#6b778c] hover:text-[#de350b] text-[14px] leading-none"
+                                title="제거"
+                                aria-label={`${m.name} 제거`}
+                              >
+                                ×
+                              </button>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {members.length > MEMBERS_PER_PAGE && (
+                      <div className="mt-auto pt-2 flex items-center justify-between text-[11px] text-[#6b778c]">
+                        <span>
+                          {members.length}명 · {safeMemberPage + 1}/{totalPages}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setMemberPage((p) => Math.max(0, p - 1))
+                            }
+                            disabled={safeMemberPage === 0}
+                            className="px-2 py-0.5 rounded border border-[#dfe1e6] disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#f4f5f7]"
+                          >
+                            이전
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setMemberPage((p) =>
+                                Math.min(totalPages - 1, p + 1),
+                              )
+                            }
+                            disabled={safeMemberPage >= totalPages - 1}
+                            className="px-2 py-0.5 rounded border border-[#dfe1e6] disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#f4f5f7]"
+                          >
+                            다음
+                          </button>
+                        </span>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 

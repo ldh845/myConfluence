@@ -1292,10 +1292,22 @@ export class PagesService {
     actor: Actor,
   ) {
     await this.perms.assertCanManagePageRestriction(pageId, actor);
-    await this.prisma.page.update({
+    const current = await this.prisma.page.findUnique({
       where: { id: pageId },
-      data: { restrictionMode: mode },
+      select: { restrictionMode: true },
     });
+    if (!current) throw new NotFoundException({ error: 'page not found' });
+    // Cycle 83 followup — 모드가 바뀌면 역할 의미가 달라지므로 멤버 초기화.
+    //   (예: EDIT→VIEW_EDIT 시 이전 멤버가 그대로 남지 않도록.)
+    await this.prisma.$transaction([
+      this.prisma.page.update({
+        where: { id: pageId },
+        data: { restrictionMode: mode },
+      }),
+      ...(current.restrictionMode !== mode
+        ? [this.prisma.pageRestriction.deleteMany({ where: { pageId } })]
+        : []),
+    ]);
     return { ok: true };
   }
 
