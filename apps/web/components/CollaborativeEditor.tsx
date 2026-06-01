@@ -711,11 +711,18 @@ export default function CollaborativeEditor({
     editor.on("update", onUpdate);
 
     // Cycle 86 — Ctrl/Cmd+S 강제 저장. 디바운스 대기 없이 즉시 flush.
-    //   브라우저 기본 '페이지 저장' 다이얼로그는 preventDefault 로 차단.
+    //   ① 키 검사는 `e.code === "KeyS"` (물리 위치) — 한글 IME 켜진 상태에서
+    //      `e.key === "ㄴ"` 로 들어오는 케이스를 잡기 위해. `e.key` 도 fallback.
+    //   ② 등록을 ProseMirror DOM(capture) + window 양쪽에 — ProseMirror 가
+    //      keydown 을 자체 처리하더라도 capture 단계에서 먼저 잡고 stopPropagation.
+    //   ③ 브라우저 기본 '페이지 저장' 다이얼로그는 preventDefault 로 차단.
     const onSaveKey = (e: KeyboardEvent) => {
       if (!(e.ctrlKey || e.metaKey)) return;
-      if (e.key !== "s" && e.key !== "S") return;
+      const isS =
+        e.code === "KeyS" || e.key === "s" || e.key === "S";
+      if (!isS) return;
       e.preventDefault();
+      e.stopPropagation();
       if (timer) {
         clearTimeout(timer);
         timer = null;
@@ -730,10 +737,13 @@ export default function CollaborativeEditor({
       }
       void flush();
     };
+    const editorDom = editor.view.dom as HTMLElement;
+    editorDom.addEventListener("keydown", onSaveKey, true);
     window.addEventListener("keydown", onSaveKey);
 
     return () => {
       editor.off("update", onUpdate);
+      editorDom.removeEventListener("keydown", onSaveKey, true);
       window.removeEventListener("keydown", onSaveKey);
       if (timer) {
         clearTimeout(timer);
