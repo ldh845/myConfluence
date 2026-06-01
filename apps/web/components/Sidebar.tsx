@@ -609,20 +609,23 @@ export default function Sidebar({
             active={compactPopover?.kind === "tree"}
             onClick={togglePopover("tree")}
           />
-          <div className="w-8 border-t border-[#dfe1e6] my-1.5" />
-          <IconBtn
-            icon={<AppIcon name="trash" size={15} alt="" />}
-            label="휴지통"
-            onClick={() => onOpenTrash?.()}
-          />
-          {canManage && space && (
+          {/* Cycle 84 followup 12 — 휴지통/공간 도구는 펴진 상태와 동일하게 하단 정렬. */}
+          <div className="mt-auto flex flex-col items-center gap-1">
+            <div className="w-8 border-t border-[#dfe1e6] my-1.5" />
             <IconBtn
-              icon={<AppIcon name="settings" size={15} alt="" />}
-              label="공간 도구 (펴기)"
-              active={pathname === "/" && view === "settings"}
-              onClick={onExpand}
+              icon={<AppIcon name="trash" size={15} alt="" />}
+              label="휴지통"
+              onClick={() => onOpenTrash?.()}
             />
-          )}
+            {canManage && space && (
+              <IconBtn
+                icon={<AppIcon name="settings" size={15} alt="" />}
+                label="공간 도구 (펴기)"
+                active={pathname === "/" && view === "settings"}
+                onClick={onExpand}
+              />
+            )}
+          </div>
         </aside>
 
         {/* Cycle 84 followup 10 — 공간 바로가기 / 페이지 트리 floating 패널.
