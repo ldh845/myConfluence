@@ -12,6 +12,35 @@ export const CodeBlockExtension = CodeBlockLowlight.extend({
   addNodeView() {
     return ReactNodeViewRenderer(CodeBlockNodeView);
   },
+  // Cycle 84 followup — 코드 블록 끝에서 ArrowRight → 다음 노드로 탈출.
+  //   기본 exitOnArrowDown 외에 ArrowRight 도 동일하게 처리(사용자 요청).
+  //   다음 노드가 없으면 빈 paragraph 삽입 후 그쪽으로 이동.
+  addKeyboardShortcuts() {
+    return {
+      ...this.parent?.(),
+      ArrowRight: ({ editor }) => {
+        const { state } = editor;
+        const { selection } = state;
+        if (!selection.empty) return false;
+        const $from = selection.$from;
+        if ($from.parent.type.name !== this.name) return false;
+        if ($from.parentOffset !== $from.parent.content.size) return false;
+        const codeBlockStart = $from.before();
+        const after = codeBlockStart + $from.parent.nodeSize;
+        if (after >= state.doc.content.size) {
+          // 문서 끝 — 빈 paragraph 삽입 후 진입.
+          editor
+            .chain()
+            .insertContentAt(after, [{ type: "paragraph" }])
+            .setTextSelection(after + 1)
+            .run();
+        } else {
+          editor.commands.setTextSelection(after + 1);
+        }
+        return true;
+      },
+    };
+  },
 }).configure({
   lowlight,
   defaultLanguage: "plaintext",
