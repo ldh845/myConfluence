@@ -2209,3 +2209,4 @@
   4) 툴바에는 더 이상 코드 블록 언어 select 가 뜨지 않음
 - **남은 일**: 없음. **브라우저 시각 확인 미수행**
 - **비고**: 기존 키보드 단축키(Mod-Enter / 트리플 Enter / 끝에서 ArrowDown)도 그대로 동작 — 버튼은 발견성 보완용. NodeView 의 `contentEditable={false}` 가 컨트롤 영역의 입력 가로채기 차단.
+- **84 followup (피드백 반영)**: 가시적 '↓ 본문' 버튼 대신 **코드 블록 끝에서 ArrowRight** 로 탈출하도록 변경. `CodeBlockExtension.addKeyboardShortcuts` 에서 `parentOffset === content.size` 일 때 코드 블록 뒤로 커서 이동(문서 끝이면 빈 paragraph 삽입 후 진입). 가시 버튼은 제거 — 키보드만으로 충분. (`afadb79`)
