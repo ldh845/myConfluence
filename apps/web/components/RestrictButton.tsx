@@ -437,7 +437,6 @@ function RealRestrictButton({ pageId }: { pageId: string }) {
             <button
               type="button"
               onClick={() => setOpen(false)}
-              disabled={apply.isPending}
               className="px-3 py-1.5 text-[12px] rounded border border-[#dfe1e6] text-[#42526e] hover:bg-[#ebecf0]"
             >
               취소
