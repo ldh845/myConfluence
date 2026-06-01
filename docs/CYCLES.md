@@ -2251,3 +2251,4 @@
 - **남은 일**: 상태 배지의 in-place 편집(클릭 → 같은 다이얼로그)·정보 패널의 인라인 제목 편집은 후속. **브라우저 시각 확인 미수행**
 - **비고**: 슬래시는 모든 항목 노출이 표준이고 '＋ 더 많은 내용 삽입' 은 툴바 중복 항목만 제외하는 정책이라 매크로 3 종은 양쪽 모두에 자연 노출(별도 처리 없음). 본문은 ProseMirror JSON(Cycle 57)으로 저장돼 새 노드 라운드트립 보장. 옛 페이지에 해당 노드 없음 — 영향 0.
 - **85 followup (피드백 반영)**: `@` 뒤 텍스트가 일치 사용자 없는('일치하는 사용자가 없습니다') 상태일 때 `MentionSuggestionPopup.onKeyDown` 이 Enter/ArrowUp/Down 을 `true` 로 가로채 줄바꿈/커서 이동이 막히던 문제 → `items.length===0` 이면 `false` 반환해 에디터 기본 동작 진행. 즉, 일반 텍스트로 자연히 입력 가능. (`2a2dcec`)
+- **85 followup 2 (피드백 반영)**: ① `EditorToolbar.tsx` 의 InsertMoreButton 드롭다운 max-h `260→420px` 로 확장, 항목별 설명 줄 제거(제목만 표시) — 더 많은 항목이 한 눈에. ② `lib/tiptap/info-panel.ts` 에 `addKeyboardShortcuts.ArrowRight` 추가 — 정보 패널의 마지막 leaf 끝에서 ArrowRight 누르면 패널 밖으로 커서 탈출(다음 노드 없으면 빈 paragraph 삽입). 코드 블록(Cycle 84) 의 탈출 패턴과 동일. `tsc --noEmit` EXIT 0. (`8e591bb`)
