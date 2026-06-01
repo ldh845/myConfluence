@@ -38,6 +38,8 @@ const ICON_SRC = {
   // Cycle 81 — 페이지 제한 버튼(잠금/열림).
   lock: "/icons/lock.png",
   unlock: "/icons/unlock.png",
+  // Cycle 84 followup 6 — 공간 도구 진입 아이콘.
+  settings: "/icons/settings.png",
 } as const;
 
 export type IconName = keyof typeof ICON_SRC;

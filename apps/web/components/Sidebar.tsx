@@ -668,7 +668,7 @@ export default function Sidebar({
                   : "text-[#172b4d]"
               }`}
             >
-              <span>⚙️</span> 공간 도구
+              <AppIcon name="settings" size={15} alt="" /> 공간 도구
             </button>
             {toolsOpen && (
               <div className="absolute left-0 bottom-full mb-1 w-[180px] bg-white border border-[#dfe1e6] rounded-md shadow-lg py-1 z-30">

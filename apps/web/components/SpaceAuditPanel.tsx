@@ -10,7 +10,8 @@ import {
 import UserSearchCombobox from "./UserSearchCombobox";
 
 // Cycle 74-D — 공간 도구 '감사 로그' 탭. ActivityLog 를 스페이스 단위로 필터.
-//   필터: 이벤트 타입 / 기간(from~to) / 사용자(actorId). 페이지네이션 '더 보기'.
+//   필터: 이벤트 타입 / 기간(from~to) / 사용자(actorId).
+//   Cycle 84 followup 6 — '더 보기' append → 페이지네이션(이전/다음).
 //   표시: 날짜 · 작성자 · 분류 · 요약 (4열).
 const LIMIT = 20;
 
@@ -29,6 +30,7 @@ export default function SpaceAuditPanel({ spaceId }: { spaceId: string }) {
   const [items, setItems] = useState<ActivityItem[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [page, setPage] = useState(0); // 0-indexed
 
   const [type, setType] = useState("");
   const [dateFrom, setDateFrom] = useState("");
@@ -39,7 +41,7 @@ export default function SpaceAuditPanel({ spaceId }: { spaceId: string }) {
   const [pickerOpen, setPickerOpen] = useState(false);
 
   const load = useCallback(
-    async (offset: number, append: boolean) => {
+    async (offset: number) => {
       setLoading(true);
       try {
         const p = new URLSearchParams();
@@ -56,7 +58,7 @@ export default function SpaceAuditPanel({ spaceId }: { spaceId: string }) {
         const data = r.ok
           ? ((await r.json()) as { items: ActivityItem[]; total: number })
           : { items: [], total: 0 };
-        setItems((prev) => (append ? [...prev, ...data.items] : data.items));
+        setItems(data.items);
         setTotal(data.total);
       } finally {
         setLoading(false);
@@ -65,10 +67,20 @@ export default function SpaceAuditPanel({ spaceId }: { spaceId: string }) {
     [spaceId, type, actor, dateFrom, dateTo],
   );
 
-  // 필터 변경 시 처음부터 다시 로드.
+  // 필터 변경 시 첫 페이지로 리셋(다음 effect 가 새 페이지 로드).
   useEffect(() => {
-    load(0, false);
-  }, [load]);
+    setPage(0);
+  }, [type, dateFrom, dateTo, actor, spaceId]);
+
+  // 페이지(또는 필터로 인한 page 리셋) 변경 시 로드.
+  useEffect(() => {
+    load(page * LIMIT);
+  }, [load, page]);
+
+  const totalPages = Math.max(1, Math.ceil(total / LIMIT));
+  const safePage = Math.min(page, totalPages - 1);
+  const startIdx = safePage * LIMIT;
+  const endIdx = Math.min(startIdx + items.length, total);
 
   return (
     <div className="space-y-4">
@@ -199,22 +211,33 @@ export default function SpaceAuditPanel({ spaceId }: { spaceId: string }) {
         </table>
       )}
 
-      {items.length < total && (
-        <div className="flex justify-center">
-          <button
-            type="button"
-            onClick={() => load(items.length, true)}
-            disabled={loading}
-            className="px-4 py-2 text-[13px] border border-[#dfe1e6] rounded hover:bg-[#f4f5f7] disabled:opacity-50"
-          >
-            {loading ? "불러오는 중..." : "더 보기"}
-          </button>
-        </div>
-      )}
       {total > 0 && (
-        <p className="text-[11px] text-[#6b778c] text-center">
-          총 {total}건 중 {items.length}건 표시
-        </p>
+        <div className="flex items-center justify-between text-[12px] text-[#6b778c]">
+          <span>
+            총 {total}건 · {startIdx + 1}–{endIdx}건 ({safePage + 1}/
+            {totalPages} 페이지)
+          </span>
+          <span className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => setPage((p) => Math.max(0, p - 1))}
+              disabled={loading || safePage === 0}
+              className="px-3 py-1 rounded border border-[#dfe1e6] disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#f4f5f7]"
+            >
+              이전
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                setPage((p) => Math.min(totalPages - 1, p + 1))
+              }
+              disabled={loading || safePage >= totalPages - 1}
+              className="px-3 py-1 rounded border border-[#dfe1e6] disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#f4f5f7]"
+            >
+              다음
+            </button>
+          </span>
+        </div>
       )}
     </div>
   );
