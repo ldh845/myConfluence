@@ -2139,3 +2139,22 @@
   3) '제한' 클릭 → 팝오버(제한 없음 안내 + 닫힌 자물쇠로 준비 중 표기)
 - **남은 일**: 실제 페이지 제한(특정 사용자/그룹 접근 제어)은 백엔드 미구현 — 버튼은 현재 상태 표시 + 안내만. **브라우저 시각 확인 미수행**
 - **비고**: PageHeader 는 조회 모드 전용(편집은 FullScreenEditor) — `isBodyEditable` 분기는 유지하되 실사용 경로는 조회. 제한 enforcement 는 향후 권한 사이클에서.
+
+---
+
+## Cycle 82 — 2026-06-01 — ✅ Done (편집 화면 브레드크럼 클릭 가능 + 라벨/제한 노출)
+- **제목**: FullScreenEditor 의 브레드크럼 조상을 조회와 동일하게 클릭 가능하게 하고, 비활성 placeholder 였던 라벨/제한을 실제 컴포넌트로 교체해 같은 줄에 배치
+- **카테고리**: FE 전용 / UX (편집 화면 헤더 통합)
+- **커밋**: `8a5913a`(코드), 본 CYCLES.md
+- **변경 파일 (FE)**:
+  - `RestrictButton.tsx` 신규 — Cycle 81 에서 `PageHeader` 내부 함수였던 RestrictButton 을 별도 컴포넌트로 추출(조회/편집 양쪽 공유). 동작 동일(unlock/lock 아이콘 팝오버 안내)
+  - `PageHeader.tsx` — 인라인 `RestrictButton` 함수 삭제 → 공유 컴포넌트 import
+  - `FullScreenEditor.tsx` — 브레드크럼 줄을 한 묶음으로 정리: 조상 항목을 `onSelectAncestor` 있을 때 `<button>` 으로 렌더(hover 밑줄), 비활성 '🏷️ 라벨'/'🔒 제한' placeholder 두 개 제거 → 실제 `LabelBar`(editable=true) + `RestrictButton` 을 브레드크럼과 같은 줄(`flex-wrap items-center gap-3`)에. `onSelectAncestor?: (id) => void` prop 추가
+  - `page.tsx` — `<FullScreenEditor onSelectAncestor={selectPage} />` 전달. selectPage 는 `router.push('?pageId=…')` 라 URL 변경으로 `isBodyEditable` 이 자연 종료(편집 종료 + 이동 한 흐름)
+- **검증**: web `tsc --noEmit` EXIT 0. 마이그레이션 없음
+- **동작 확인 안내**:
+  1) **마이그레이션 불필요**
+  2) 편집 화면 상단 브레드크럼: 조상 페이지명 클릭 → 편집 종료 + 그 페이지로 이동
+  3) 브레드크럼 옆에 라벨 칩 + '＋ 레이블 추가' 팝업(editable) + '제한' 버튼(팝오버 안내) 노출
+- **남은 일**: 없음. **브라우저 시각 확인 미수행**
+- **비고**: 편집 도중 조상 클릭은 자동 저장(autosave) 흐름이 처리(URL 변경 = 컴포넌트 unmount → flush). 페이지 제한 enforcement·라벨의 공간 전역 검색은 별 사이클.
