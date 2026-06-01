@@ -598,6 +598,11 @@ export default function HomePage() {
         onPresenceChange={setPresence}
         onSelectAncestor={selectPage}
         onContentChange={() => setHasDraft(true)}
+        // Cycle 86 fix3 — Ctrl/Cmd+S → 페이지 발행. 발행 노트 없이 즉시(서버가 draft 승격).
+        //   발행 버튼의 disabled 조건과 동일하게 가드.
+        onSaveShortcut={() => {
+          if (hasDraft && !publish.isPending) handlePublish();
+        }}
       />
     );
   }
