@@ -230,8 +230,16 @@ export default function HomePage() {
   // currentPage가 다시 로드될 때(페이지 전환 / 발행 직후) 서버의 draftContent
   // 기준으로 hasDraft 재설정. loadCurrentPage가 매번 새 객체를 만들므로
   // currentPage 참조 변경으로 감지된다.
+  // Cycle 84 followup 4 — draftContent 가 published content 와 동일하면 '실질적
+  //   변경 없음' 으로 간주(false). 발행 직후 에디터 unmount cleanup 이 동일 내용을
+  //   draft 로 다시 PATCH 하는 phantom-draft 경우를 흡수.
   useEffect(() => {
-    setHasDraft(currentPage?.draftContent != null);
+    if (!currentPage) {
+      setHasDraft(false);
+      return;
+    }
+    const dc = currentPage.draftContent;
+    setHasDraft(dc != null && dc !== currentPage.content);
   }, [currentPage]);
 
   // 자동저장 성공 → draft 존재. (currentPage는 자동저장으로 갱신되지 않으므로
