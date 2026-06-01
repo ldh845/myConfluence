@@ -589,6 +589,7 @@ export default function HomePage() {
         onSaveStatusChange={setSaveStatus}
         onConnectionStateChange={setConnectionState}
         onPresenceChange={setPresence}
+        onSelectAncestor={selectPage}
       />
     );
   }

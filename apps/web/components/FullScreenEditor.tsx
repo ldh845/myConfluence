@@ -22,6 +22,8 @@ import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
 import type { Editor } from "@tiptap/react";
 import EditorToolbar from "@/components/EditorToolbar";
+import LabelBar from "@/components/LabelBar";
+import RestrictButton from "@/components/RestrictButton";
 import type {
   ConnectionState,
   PresenceUser,
@@ -52,6 +54,8 @@ type Props = {
   onSaveStatusChange: (s: SaveStatus) => void;
   onConnectionStateChange?: (s: ConnectionState) => void;
   onPresenceChange?: (users: PresenceUser[]) => void;
+  // Cycle 82 — 브레드크럼의 조상 페이지 클릭 시 편집 모드 종료 + 그 페이지로 이동.
+  onSelectAncestor?: (id: string) => void;
 };
 
 export default function FullScreenEditor({
@@ -67,6 +71,7 @@ export default function FullScreenEditor({
   onSaveStatusChange,
   onConnectionStateChange,
   onPresenceChange,
+  onSelectAncestor,
 }: Props) {
   // 편집기 인스턴스 — 툴바를 상단 sticky 영역에 분리 배치하기 위해
   // CollaborativeEditor가 onEditor로 위로 끌어올린 ref를 받는다.
@@ -186,36 +191,35 @@ export default function FullScreenEditor({
         )}
       </div>
 
-      {/* 2) breadcrumb + 페이지 도구 — Cycle 35: 좌측 정렬 + 넉넉한 가로 패딩. */}
+      {/* 2) breadcrumb + 페이지 도구 — Cycle 35: 좌측 정렬 + 넉넉한 가로 패딩.
+          Cycle 82: 조상 경로 클릭 가능(편집 종료 + 이동) + 라벨/제한을 같은 줄로. */}
       <div className="border-b border-[#dfe1e6] bg-white">
-        <div className="px-8 lg:px-12 xl:px-16 py-2 flex items-center justify-between text-[12px] text-[#6b778c]">
-          <nav className="flex flex-wrap items-center gap-1">
+        <div className="px-8 lg:px-12 xl:px-16 py-2 flex flex-wrap items-center gap-3 text-[12px] text-[#6b778c]">
+          <nav className="flex items-center gap-1">
             {space && <span>{space.name}</span>}
             {ancestors.map((c) => (
               <span key={c.id} className="flex items-center gap-1">
                 <span>/</span>
-                <span>{c.title}</span>
+                {onSelectAncestor ? (
+                  <button
+                    type="button"
+                    onClick={() => onSelectAncestor(c.id)}
+                    className="hover:text-[#0052cc] hover:underline"
+                  >
+                    {c.title}
+                  </button>
+                ) : (
+                  <span>{c.title}</span>
+                )}
               </span>
             ))}
           </nav>
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              disabled
-              title="라벨은 추후 지원 예정입니다"
-              className="inline-flex items-center gap-1 px-2 py-1 rounded text-[#a5adba] cursor-not-allowed"
-            >
-              🏷️ 라벨
-            </button>
-            <button
-              type="button"
-              disabled
-              title="페이지 제한은 추후 지원 예정입니다"
-              className="inline-flex items-center gap-1 px-2 py-1 rounded text-[#a5adba] cursor-not-allowed"
-            >
-              🔒 제한
-            </button>
-          </div>
+          <LabelBar
+            pageId={page.id}
+            labels={page.labels ?? []}
+            editable={true}
+          />
+          <RestrictButton />
         </div>
       </div>
 
