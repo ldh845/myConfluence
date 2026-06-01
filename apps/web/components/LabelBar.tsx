@@ -88,7 +88,19 @@ export default function LabelBar({
 
   return (
     <div ref={ref} className="relative flex flex-wrap items-center gap-1.5">
-      <span className="text-[13px] text-[#6b778c]">🏷️</span>
+      {/* Cycle 82 followup — 🏷️ 자체가 추가 트리거. 별도 '+ 레이블 추가' 버튼 제거. */}
+      {editable ? (
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          title="레이블 추가"
+          className="text-[13px] text-[#6b778c] hover:text-[#0052cc] leading-none"
+        >
+          🏷️
+        </button>
+      ) : (
+        <span className="text-[13px] text-[#6b778c]">🏷️</span>
+      )}
       {labels.length === 0 && !editable && (
         <span className="text-[13px] text-[#6b778c]">레이블 없음</span>
       )}
@@ -111,15 +123,6 @@ export default function LabelBar({
           )}
         </span>
       ))}
-      {editable && (
-        <button
-          type="button"
-          onClick={() => setOpen((v) => !v)}
-          className="inline-flex items-center px-2 py-0.5 rounded-full text-[12px] border border-dashed border-[#a5adba] text-[#6b778c] hover:bg-[#f4f5f7]"
-        >
-          ＋ 레이블 추가
-        </button>
-      )}
       {open && (
         <div className="absolute left-0 top-full mt-1 z-20 w-64 bg-white border border-[#dfe1e6] rounded-md shadow-lg p-2">
           <div className="flex items-center gap-1">
