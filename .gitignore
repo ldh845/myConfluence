@@ -1,0 +1,44 @@
+node_modules/
+.next/
+.env
+.env.local
+
+# Cycle 45 — 컨테이너 배포 override 는 환경 특정이라 비커밋.
+# 저장소엔 deploy/docker-compose.override.example.yml 템플릿만 둔다.
+/docker-compose.override.yml
+*.db
+*.db-journal
+dev.db
+prisma/dev.db
+prisma/migrations/dev.db*
+.DS_Store
+*.docx
+
+# apps/api (NestJS)
+apps/api/node_modules
+apps/api/.env
+apps/api/dist
+
+# apps/web (Next.js workspace)
+apps/web/node_modules
+apps/web/.next
+apps/web/.env
+
+# Cycle 42 followup — 사내 root CA 는 공개 repo 에 안 올린다.
+# ca-certs/.gitkeep 만 트래킹(디렉토리 존재용), 실제 *.crt 는 빌드 환경에만 둔다.
+ca-certs/*
+!ca-certs/.gitkeep
+
+# Local-only: Claude Code metadata and internal SRS document.
+# .claude/ 안의 모든 항목은 기본 ignore — 다만 .claude/skills/ 는 팀 공유
+# 대상이라 negation으로 트래킹. (디렉터리 자체를 .claude/로 통째 ignore
+# 하면 하위 negation이 안 먹어서 .claude/* 패턴을 써야 함.)
+.claude/*
+!.claude/skills/
+!.claude/skills/**
+SRS.md
+
+# Cycle 48 followup — 로컬 산출물·일회성 파일.
+# DB 마이그레이션 직전 백업 덤프(예: backup_before_cycle48.sql) + 발표자료(*.pptx).
+backup_*.sql
+*.pptx

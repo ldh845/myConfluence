@@ -1,0 +1,466 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// FR-001 / FR-002 (Cycle 27a) — 사용자 + 역할.
+// 첫 가입자만 자동 ADMIN, 이후는 DEVELOPER. Role은 추후 ADMIN이 조정.
+enum Role {
+  ADMIN
+  PART_LEADER
+  DEVELOPER
+  DESIGNER
+  PM
+}
+
+// Cycle 70 — 페이지 작업 상태. null(컬럼 nullable)이면 "상태 없음" → 배지 미표시.
+enum PageStatus {
+  TODO
+  IN_PROGRESS
+  DONE
+  DROP
+}
+
+// Cycle 83 — 페이지 단위 제한 모드.
+//   NONE      : 공간 권한 그대로 따름(누구나 보기·편집)
+//   EDIT      : 모두 보기 가능, 일부 사용자만 편집
+//   VIEW_EDIT : 일부 사용자만 보기/편집(사용자별 VIEW or EDIT 역할)
+enum PageRestrictionMode {
+  NONE
+  EDIT
+  VIEW_EDIT
+}
+
+// Cycle 83 — 제한 멤버의 페이지별 역할.
+enum PageRestrictionRole {
+  EDIT
+  VIEW
+}
+
+// Cycle 32 — 스페이스 유형. SITE=공용 스페이스, PERSONAL=사용자 개인 공간.
+enum SpaceType {
+  SITE
+  PERSONAL
+}
+
+// Cycle 74-A — 스페이스 단위 권한 역할.
+//   ADMIN=관리(설정/멤버/삭제), EDITOR=페이지 CRUD, VIEWER=읽기.
+enum SpaceRole {
+  ADMIN
+  EDITOR
+  VIEWER
+}
+
+// Cycle 74-A — 스페이스 공개 범위.
+//   PUBLIC=로그인 사용자 누구나 읽기+편집(암묵적 Editor), PRIVATE=멤버 전용(역할 기반),
+//   PERSONAL=소유자 전용(기존 개인 공간). 관리는 항상 Space Admin 또는 전역 ADMIN.
+enum SpaceVisibility {
+  PUBLIC
+  PRIVATE
+  PERSONAL
+}
+
+// Cycle 74-F — 스페이스 바로가기 종류. 내부 페이지 또는 외부 URL.
+enum SpaceShortcutType {
+  INTERNAL_PAGE
+  EXTERNAL_URL
+}
+
+model User {
+  id                         String        @id @default(cuid())
+  username                   String        @unique
+  // Cycle 43 — OIDC(SSO) 전용 사용자는 비밀번호가 없으므로 nullable.
+  // 자체 가입(/auth/signup) 사용자만 bcrypt 해시를 채운다.
+  passwordHash               String?
+  // Cycle 43 — Keycloak subject(sub). OIDC 로그인 계정 매핑 키(unique).
+  // 자체 가입만 한 사용자는 null. 첫 OIDC 로그인 시 username 매칭으로 링크되거나 신규 생성.
+  keycloakId                 String?       @unique
+  name                       String
+  department                 String
+  role                       Role          @default(DEVELOPER)
+  // Cycle 48 — Keycloak claim 캐시 (Admin 페이지 사용자 목록용).
+  // OIDC callback 의 findOrCreateOidcUser 가 매 로그인마다 동기화.
+  email                      String?
+  emailVerified              Boolean       @default(false)
+  lastLoginAt                DateTime?
+  // Cycle 49 — 사용자별 환경설정(현재 1건). SystemSidebar '내 공간' 섹션에
+  // 본인 personal space 를 항상 표시할지 토글. PATCH /auth/me/prefs 로 갱신.
+  // 향후 prefs 가 더 늘면 UserPreferences 테이블로 분리 검토.
+  showPersonalSpaceInSidebar Boolean       @default(false)
+  createdAt                  DateTime      @default(now())
+  updatedAt                  DateTime      @updatedAt
+  authoredPages              Page[]        @relation("PageAuthor")
+  editedPages                Page[]        @relation("PageEditor")
+  // Cycle 70 — 페이지 상태 변경자 back-relation. user 삭제 시 SetNull.
+  statusChangedPages         Page[]        @relation("PageStatusBy")
+  // FR-001 / FR-002 (Cycle 27d) — Comment / PageShare 작성자 양방향 관계.
+  // user 삭제 시 SetNull → authorName / 시스템 표기로 fallback.
+  authoredComments           Comment[]     @relation("CommentAuthor")
+  createdShares              PageShare[]   @relation("ShareCreator")
+  // FR-001 (Cycle 27e) — ActivityLog actor / Reaction user 양방향 관계.
+  // activities는 SetNull(로그 보존), reactions는 Cascade(개인 반응이라 같이 정리).
+  activities                 ActivityLog[] @relation("ActivityActor")
+  reactions                  Reaction[]    @relation("UserReaction")
+  // Cycle 32 — 사용자가 소유한 개인 공간.
+  ownedSpaces                Space[]       @relation("SpaceOwner")
+  // Cycle 74-A — 스페이스 멤버십(권한). user 삭제 시 Cascade.
+  spaceMemberships           SpaceMember[] @relation("UserSpaceMember")
+  // Cycle 83 — 페이지 단위 제한 멤버.
+  pageRestrictions           PageRestriction[] @relation("UserPageRestrictions")
+  // Cycle 53 — 사용자별 '나중을 위해 저장' / '지켜보기' 페이지 목록.
+  // 본인 데이터라 user 삭제 시 Cascade.
+  savedPages                 SavedPage[]   @relation("UserSaved")
+  watchedPages               WatchList[]   @relation("UserWatching")
+  // Cycle 59 — 알림 (Notification). 본인이 받는 알림 + 본인이 발생시킨 알림.
+  // recipient: Cascade(본인 데이터). actor: SetNull(원 사용자 삭제돼도 알림 보존,
+  // payload.actorName 으로 fallback).
+  notificationsReceived      Notification[] @relation("NotificationRecipient")
+  notificationsCreated       Notification[] @relation("NotificationActor")
+}
+
+model Space {
+  id           String        @id @default(cuid())
+  name         String
+  description  String?
+  // Cycle 80 — 스페이스 키(Confluence 식 짧은 식별자). 선택 입력, 대문자/숫자.
+  //   기존 공간은 null. 유니크(null 다중 허용).
+  key          String?       @unique
+  // Cycle 74-G — 스페이스 아이콘. 이모지 문자 또는 data: 이미지 URL(클라 리사이즈).
+  icon         String?
+  // Cycle 32 — 개인 공간 지원. PERSONAL은 ownerId 소유자에게만 노출.
+  type         SpaceType     @default(SITE)
+  // Cycle 74-A — 공개 범위. 기존 데이터는 마이그레이션에서 PUBLIC(PERSONAL 은 PERSONAL) 백필.
+  visibility   SpaceVisibility @default(PUBLIC)
+  ownerId      String?
+  owner        User?         @relation("SpaceOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  // Cycle 74-A — 스페이스 멤버(권한). PRIVATE 접근/역할의 출처. 공간 삭제 시 Cascade.
+  members      SpaceMember[] @relation("SpaceMembers")
+  // Cycle 74-F — 사이드바 바로가기. 공간 삭제 시 Cascade.
+  shortcuts    SpaceShortcut[] @relation("SpaceShortcuts")
+  // Cycle 33 — 공간의 명시적 홈(메인) 페이지. 공간 생성 시 자동 생성.
+  // 홈 페이지 삭제 시 SetNull → 사이드바는 첫 루트 페이지로 fallback.
+  homePageId   String?       @unique
+  homePage     Page?         @relation("SpaceHomePage", fields: [homePageId], references: [id], onDelete: SetNull)
+  createdAt    DateTime      @default(now())
+  pages        Page[]
+  activityLogs ActivityLog[]
+
+  @@index([ownerId])
+}
+
+// Cycle 74-A — 스페이스 멤버십(권한). (space, user) 당 최대 1행.
+//   스페이스/사용자 삭제 시 Cascade. 전역 ADMIN 은 멤버 행 없이도 override.
+model SpaceMember {
+  spaceId   String
+  space     Space     @relation("SpaceMembers", fields: [spaceId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User      @relation("UserSpaceMember", fields: [userId], references: [id], onDelete: Cascade)
+  role      SpaceRole @default(VIEWER)
+  createdAt DateTime  @default(now())
+
+  @@id([spaceId, userId])
+  @@index([userId])
+}
+
+// Cycle 74-F — 스페이스 사이드바 바로가기. target=pageId(INTERNAL_PAGE) 또는 URL(EXTERNAL_URL).
+model SpaceShortcut {
+  id        String            @id @default(cuid())
+  spaceId   String
+  space     Space             @relation("SpaceShortcuts", fields: [spaceId], references: [id], onDelete: Cascade)
+  type      SpaceShortcutType
+  label     String
+  target    String
+  position  Int               @default(0)
+  createdAt DateTime          @default(now())
+
+  @@index([spaceId])
+}
+
+model Page {
+  id           String        @id @default(cuid())
+  title        String
+  content      String        @default("")
+  // 이슈 2 (Cycle 10-1) — 편집 중 임시 저장.
+  // null이면 draft 없음(published만). PATCH /pages/:id/draft로 갱신,
+  // POST /pages/:id/publish로 비움(content로 승격).
+  draftContent String?
+  spaceId      String
+  space        Space         @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  parentId     String?
+  parent       Page?         @relation("PageTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children     Page[]        @relation("PageTree")
+  diagrams     Diagram[]
+  versions     PageVersion[]
+  attachments  Attachment[]
+  comments     Comment[]
+  shares       PageShare[]
+  activityLogs ActivityLog[]
+  reactions    Reaction[]
+  // FR-024 (Cycle 18-1a) — 휴지통(soft delete). null이면 활성 페이지.
+  // 모든 일반 조회는 deletedAt IS NULL 필터 적용. 영구 삭제는 별도 endpoint.
+  deletedAt    DateTime?
+  // FR-021 (Cycle 19a) — 사이드바 트리 정렬용. 같은 (spaceId, parentId) 그룹
+  // 안에서 0,1,2,... 순서. reorder 시 한 그룹의 position을 일괄 재부여.
+  position     Int           @default(0)
+  // FR-001 (Cycle 27c) — 작성자 / 마지막 편집자. user 삭제 시 SetNull.
+  authorId     String?
+  author       User?         @relation("PageAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+  lastEditorId String?
+  lastEditor   User?         @relation("PageEditor", fields: [lastEditorId], references: [id], onDelete: SetNull)
+  // Cycle 70 — 작업 상태(To Do / In Progress / Done). null = 상태 없음(배지 미표시).
+  //   statusAt/statusById = 마지막 상태 변경 시각/변경자. 변경자 삭제 시 SetNull.
+  status       PageStatus?
+  statusAt     DateTime?
+  statusById   String?
+  statusBy     User?         @relation("PageStatusBy", fields: [statusById], references: [id], onDelete: SetNull)
+  // Cycle 33 — 이 페이지가 어느 공간의 홈 페이지인지 (back-relation).
+  homeOfSpace  Space?        @relation("SpaceHomePage")
+  // Cycle 35 — 발행 시각. null이면 아직 한 번도 발행되지 않은 draft 페이지로,
+  // 사이드바 페이지 트리에서 숨긴다. 첫 publish 시 now()로 채우고 이후엔 그대로.
+  // 기존 페이지는 마이그레이션에서 createdAt으로 백필.
+  publishedAt  DateTime?
+  // Cycle 78 — 페이지 레이블(태그). 페이지 조회 화면에서 추가/제거. 단순 문자열 배열.
+  labels       String[]      @default([])
+  // Cycle 83 — 페이지 단위 제한. NONE 이면 공간 권한 그대로, EDIT/VIEW_EDIT 면 restrictions 가 게이트.
+  restrictionMode PageRestrictionMode @default(NONE)
+  restrictions    PageRestriction[]   @relation("PageRestrictions")
+  // Cycle 53 — '나중을 위해 저장' / '지켜보기' back-relation. 페이지 삭제 시 Cascade.
+  savedBy      SavedPage[]   @relation("PageSaved")
+  watchers     WatchList[]   @relation("PageWatching")
+  // Cycle 59 — 알림 back-relation. page 삭제 시 SetNull (알림은 보존).
+  notifications Notification[] @relation("NotificationPage")
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@index([spaceId])
+  @@index([parentId])
+  @@index([deletedAt])
+  @@index([parentId, position], map: "Page_parent_position_idx")
+  @@index([authorId])
+  @@index([lastEditorId])
+  @@index([statusById])
+  // FR-090 (Cycle 15-1a / 17) — 한글 부분 일치 ILIKE 가속용 GIN trigram 인덱스.
+  // schema에 명시함으로써 향후 prisma migrate가 자동 DROP하지 않도록 차단.
+  @@index([title(ops: raw("gin_trgm_ops"))], type: Gin, map: "Page_title_trgm_idx")
+  @@index([content(ops: raw("gin_trgm_ops"))], type: Gin, map: "Page_content_trgm_idx")
+}
+
+// FR-070 (Cycle 16-1a) — 페이지 댓글.
+// parentId/parent self-relation은 16-2 스레드 사이클 대비. 현재는 모두 null.
+// page cascade로 페이지 삭제 시 함께 정리. 권한 체크는 인증 사이클까지 보류.
+// FR-131 (Cycle 24) — 활동 피드.
+// page/space onDelete: SetNull — 영구 삭제 후에도 로그 보존(payload에 title 스냅샷).
+// actorName은 인증 도입 전 단순 문자열(댓글의 authorName 등).
+model ActivityLog {
+  id        String   @id @default(cuid())
+  type      String
+  spaceId   String?
+  space     Space?   @relation(fields: [spaceId], references: [id], onDelete: SetNull)
+  pageId    String?
+  page      Page?    @relation(fields: [pageId], references: [id], onDelete: SetNull)
+  // FR-001 (Cycle 27e) — actor FK. user 삭제 시 SetNull → actorName fallback.
+  actorId   String?
+  actor     User?    @relation("ActivityActor", fields: [actorId], references: [id], onDelete: SetNull)
+  actorName String?
+  payload   Json?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt(sort: Desc)])
+  @@index([spaceId, createdAt(sort: Desc)])
+  @@index([actorId])
+}
+
+// FR-120 (Cycle 23) — 페이지 공유 링크.
+// 토큰 보유자에게 읽기 전용 접근. revokedAt이 null이면 활성.
+model PageShare {
+  id          String    @id @default(cuid())
+  pageId      String
+  page        Page      @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  token       String    @unique
+  // FR-001 / FR-120 (Cycle 27d) — 발급자. user 삭제 시 SetNull.
+  createdById String?
+  createdBy   User?     @relation("ShareCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt   DateTime  @default(now())
+  revokedAt   DateTime?
+
+  @@index([pageId])
+  @@index([createdById])
+}
+
+model Comment {
+  id         String     @id @default(cuid())
+  pageId     String
+  page       Page       @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  parentId   String?
+  parent     Comment?   @relation("CommentThread", fields: [parentId], references: [id], onDelete: Cascade)
+  replies    Comment[]  @relation("CommentThread")
+  // FR-001 / FR-070 (Cycle 27d) — 작성자 FK. user 삭제 시 SetNull → authorName fallback.
+  authorId   String?
+  author     User?      @relation("CommentAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+  authorName String?
+  body       String
+  // FR-071 (Cycle 16-3a) — 인라인 댓글.
+  // isInline=true면 anchorJson에 ProseMirror 위치(from/to)와 선택 텍스트를 JSON
+  // 문자열로 저장. resolvedAt/resolvedBy는 해결 시각·해결자.
+  isInline   Boolean    @default(false)
+  anchorJson String?
+  resolvedAt DateTime?
+  resolvedBy String?
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+  reactions  Reaction[]
+
+  @@index([pageId, createdAt])
+  @@index([parentId])
+  @@index([pageId, isInline, resolvedAt])
+  @@index([authorId])
+}
+
+// FR-073 (Cycle 25) — 이모지 반응. page 또는 comment 둘 중 하나에 연결.
+// FR-001 (Cycle 27e) — userId = User FK (Cascade). 익명 reactorId/Name 컬럼 폐지.
+// 동일 (target, emoji, user) 조합은 unique — service 가드 대신 DB 제약으로 강제.
+model Reaction {
+  id        String   @id @default(cuid())
+  emoji     String
+  userId    String
+  user      User     @relation("UserReaction", fields: [userId], references: [id], onDelete: Cascade)
+  pageId    String?
+  page      Page?    @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  commentId String?
+  comment   Comment? @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([pageId, commentId, emoji, userId], map: "Reaction_target_emoji_user_key")
+  @@index([pageId])
+  @@index([commentId])
+  @@index([userId])
+}
+
+model Attachment {
+  id         String   @id @default(cuid())
+  pageId     String
+  page       Page     @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  filename   String
+  mimetype   String
+  size       Int
+  storageKey String   @unique
+  authorName String?
+  createdAt  DateTime @default(now())
+
+  @@index([pageId])
+}
+
+model PageVersion {
+  id         String   @id @default(cuid())
+  pageId     String
+  page       Page     @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  title      String
+  content    String
+  authorName String?
+  // Cycle 34 — 발행 시 사용자가 남기는 "무엇을 변경했나요?" 메모.
+  // update / restore에는 수집 UI가 없어 항상 null. publish 경로에서만 채워진다.
+  note       String?
+  version    Int
+  createdAt  DateTime @default(now())
+
+  @@unique([pageId, version])
+  @@index([pageId, createdAt])
+}
+
+model Diagram {
+  id        String   @id @default(cuid())
+  pageId    String
+  page      Page     @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  title     String   @default("Untitled diagram")
+  data      String   @default("")
+  preview   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([pageId])
+}
+
+// Cycle 48 — 시스템 설정 (single-row pattern, id="singleton").
+// Admin 페이지의 "일반 설정"이 읽고/쓰는 단일 레코드.
+// 신규 환경 마이그레이션은 singleton 행을 seed 한다(migration.sql 의 INSERT).
+model AppConfig {
+  id               String   @id @default("singleton")
+  siteName         String   @default("DocSpace")
+  // 단일 파일 최대 크기 (MB). NFR-P-007 100MB 기준. 운영 중 ADMIN 조정 가능.
+  uploadLimitMb    Int      @default(100)
+  // 세션(docspace_session) 만료 시간 (분). 기본 7d = 10080분.
+  sessionExpireMin Int      @default(10080)
+  updatedAt        DateTime @updatedAt
+}
+
+// Cycle 53 — '나중을 위해 저장' (Confluence Save for later).
+// 사용자 한 명이 같은 페이지를 한 번만 저장(@@id composite). 토글은 idempotent
+// upsert/deleteMany. 페이지 / 사용자 삭제 시 함께 정리(Cascade — 본인 데이터).
+model SavedPage {
+  userId    String
+  user      User     @relation("UserSaved", fields: [userId], references: [id], onDelete: Cascade)
+  pageId    String
+  page      Page     @relation("PageSaved", fields: [pageId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@id([userId, pageId])
+  @@index([userId])
+  @@index([pageId])
+}
+
+// Cycle 59 — 알림. recipient 가 받는 모든 알림(멘션, 향후 댓글/지켜보기 등).
+// 같은 (recipient, actor, page, type) 조합은 한 번만 (@@unique) — 한 발행에
+// 같은 사용자 여러 번 멘션해도 알림 1개.
+// type 은 string (유연 확장). 현재 값: 'mention'.
+// payload 는 자유 — actorName 스냅샷, pageTitle 스냅샷 등 alleviation 데이터.
+model Notification {
+  id          String   @id @default(cuid())
+  recipientId String
+  recipient   User     @relation("NotificationRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+  actorId     String?
+  actor       User?    @relation("NotificationActor", fields: [actorId], references: [id], onDelete: SetNull)
+  type        String
+  pageId      String?
+  page        Page?    @relation("NotificationPage", fields: [pageId], references: [id], onDelete: SetNull)
+  payload     Json?
+  readAt      DateTime?
+  createdAt   DateTime @default(now())
+
+  @@unique([recipientId, actorId, pageId, type], name: "Notification_dedupe_key")
+  @@index([recipientId, readAt])
+  @@index([recipientId, createdAt])
+}
+
+// Cycle 53 — '지켜보기' (Watch). 향후 알림 발송의 기반. 이번 사이클은 토글만,
+// 알림은 별도 사이클(미구현). 구조는 SavedPage 와 동일 — 둘을 합치지 않은 것은
+// 의미 분리(저장 = 개인 책갈피, 지켜보기 = 변경 알림 수신자) + 향후 알림 정책
+// 진화 시 watch 만 확장될 수 있어서.
+model WatchList {
+  userId    String
+  user      User     @relation("UserWatching", fields: [userId], references: [id], onDelete: Cascade)
+  pageId    String
+  page      Page     @relation("PageWatching", fields: [pageId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@id([userId, pageId])
+  @@index([userId])
+  @@index([pageId])
+}
+
+// Cycle 83 — 페이지 단위 제한 멤버(사용자 ↔ 페이지, 역할 VIEW/EDIT).
+model PageRestriction {
+  pageId    String
+  page      Page                @relation("PageRestrictions", fields: [pageId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User                @relation("UserPageRestrictions", fields: [userId], references: [id], onDelete: Cascade)
+  role      PageRestrictionRole
+  createdAt DateTime            @default(now())
+
+  @@id([pageId, userId])
+  @@index([pageId])
+  @@index([userId])
+}

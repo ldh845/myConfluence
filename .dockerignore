@@ -1,0 +1,16 @@
+# Cycle 42 — 두 이미지(api/web) 모두 build context 가 저장소 루트이므로
+# 실제로 적용되는 .dockerignore 는 이 루트 파일이다. (per-app
+# apps/*/.dockerignore 는 의도 문서용 — context=root 빌드엔 적용 안 됨)
+.git
+node_modules
+apps/*/node_modules
+apps/web/.next
+apps/api/dist
+**/.env
+**/.env.*
+**/*.log
+coverage
+apps/api/storage
+.claude
+docs
+*.pptx

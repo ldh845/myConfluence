@@ -1,0 +1,890 @@
+"use client";
+
+import {
+  useEditor,
+  EditorContent,
+  ReactNodeViewRenderer,
+  type Editor,
+} from "@tiptap/react";
+import StarterKit from "@tiptap/starter-kit";
+import Collaboration from "@tiptap/extension-collaboration";
+import CollaborationCursor from "@tiptap/extension-collaboration-cursor";
+import Link from "@tiptap/extension-link";
+import TableRow from "@tiptap/extension-table-row";
+import {
+  TableExtended,
+  TableCellExtended,
+  TableHeaderExtended,
+} from "@/lib/tiptap/table-extensions";
+import { Markdown } from "tiptap-markdown";
+import TaskList from "@tiptap/extension-task-list";
+import TaskItem from "@tiptap/extension-task-item";
+import TextStyle from "@tiptap/extension-text-style";
+import Color from "@tiptap/extension-color";
+import Highlight from "@tiptap/extension-highlight";
+import Underline from "@tiptap/extension-underline";
+import Subscript from "@tiptap/extension-subscript";
+import Superscript from "@tiptap/extension-superscript";
+import TextAlign from "@tiptap/extension-text-align";
+import Image from "@tiptap/extension-image";
+import { Extension } from "@tiptap/core";
+import { CodeBlockExtension } from "@/lib/tiptap/code-block-lowlight";
+import { MarkdownInputRules } from "@/lib/tiptap/markdown-input-rules";
+import { MathInline } from "@/lib/tiptap/math-inline";
+import { MathBlock } from "@/lib/tiptap/math-block";
+import { DateExtension } from "@/lib/tiptap/date";
+import { MentionNode } from "@/lib/tiptap/mention";
+import { DiagramNode } from "@/lib/tiptap/diagram";
+import { StatusBadgeNode } from "@/lib/tiptap/status-badge";
+import { InfoPanelNode } from "@/lib/tiptap/info-panel";
+import {
+  SlashCommand,
+  slashCommandSuggestion,
+} from "@/lib/tiptap/slash-command";
+import EditorToolbar from "./EditorToolbar";
+import TaskItemNodeView from "./TaskItemNodeView";
+import ImageNodeView from "./ImageNodeView";
+import * as Y from "yjs";
+import { HocuspocusProvider } from "@hocuspocus/provider";
+import { IndexeddbPersistence } from "y-indexeddb";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import type { EditorView } from "@tiptap/pm/view";
+import { useIdentity } from "@/lib/useIdentity";
+
+export type PresenceUser = {
+  clientId: number;
+  name: string;
+  color: string;
+  self: boolean;
+};
+
+export type SaveStatus = "idle" | "saving" | "saved" | "error";
+
+// FR-054 (Cycle 26) — 오프라인 편집 상태.
+//  online-synced: 정상 (WS 연결 + 동기화 완료) — 표시 안 함
+//  online-syncing: WS 연결됐지만 아직 초기 sync 중
+//  offline: 브라우저 또는 WS 끊김 — IndexedDB에 영속, 재연결 대기
+//  reconnecting: 네트워크 복귀 시도 중
+export type ConnectionState =
+  | "online-synced"
+  | "online-syncing"
+  | "offline"
+  | "reconnecting";
+
+type Props = {
+  pageId: string;
+  initialMarkdown: string;
+  editable: boolean;
+  onSaveStatusChange?: (status: SaveStatus) => void;
+  onPresenceChange?: (users: PresenceUser[]) => void;
+  // FR-039 — 부모(page.tsx)가 TOC 등 외부 위젯에서 editor를 참조할 수 있게 노출.
+  onEditor?: (editor: Editor | null) => void;
+  // FR-054 (Cycle 26) — 연결 상태 변경을 부모에 통지(헤더 뱃지/배너용).
+  onConnectionStateChange?: (state: ConnectionState) => void;
+  // Cycle 34 — 전체 화면 편집기에서는 툴바를 상단 sticky 영역에 따로 배치한다.
+  // true면 내부 EditorToolbar 렌더 생략 — 부모는 onEditor로 받은 인스턴스로
+  // 직접 <EditorToolbar editor={editor}/>를 띄운다.
+  hideToolbar?: boolean;
+  // Cycle 84 followup 5 — 사용자가 첫 입력을 한 직후 호출(초기 sync 완료 이후).
+  //   '발행/업데이트' 버튼 즉시 활성화를 위해 autosave 5초 debounce 와 분리.
+  onContentChange?: () => void;
+  // Cycle 86 fix2 — Ctrl/Cmd+S 단축키 콜백. draft 저장이 아닌 '발행' 등 외부
+  //   페이지 액션과 결합되도록 위임. 미지정이면 단축키 비활성.
+  onSaveShortcut?: () => void;
+};
+
+function resolveWsUrl(): string {
+  // 1) Runtime override (set on window before app bootstraps)
+  if (
+    typeof window !== "undefined" &&
+    (window as unknown as { __MYCF_WS_URL__?: string }).__MYCF_WS_URL__
+  ) {
+    return (window as unknown as { __MYCF_WS_URL__?: string }).__MYCF_WS_URL__!;
+  }
+  // 2) Build-time env var (highest priority for fixed domains/ports)
+  if (process.env.NEXT_PUBLIC_WS_URL) {
+    return process.env.NEXT_PUBLIC_WS_URL;
+  }
+  // 3) Derive from the hostname the browser used to reach the app,
+  //    so LAN peers hitting http://server-ip:3000 get ws://server-ip:1234.
+  const wsHost =
+    typeof window !== "undefined" ? window.location.hostname : "localhost";
+  return `ws://${wsHost}:1234`;
+}
+
+const WS_URL = resolveWsUrl();
+
+// Cycle 38 — Confluence식 목록 단축키. StarterKit 기본은 Mod-Shift-7/8 인데,
+// Confluence는 Mod-Shift-N(번호) / Mod-Shift-B(단추) 라서 이쪽으로 추가 매핑.
+// 둘 다 Tiptap 명령이 true를 반환해 브라우저 기본(즐겨찾기 바, 새 시크릿 창)을
+// preventDefault 한다.
+const ListShortcuts = Extension.create({
+  name: "listShortcuts",
+  addKeyboardShortcuts() {
+    return {
+      "Mod-Shift-b": () => this.editor.commands.toggleBulletList(),
+      "Mod-Shift-n": () => this.editor.commands.toggleOrderedList(),
+    };
+  },
+});
+
+// Cycle 38 followup — 일반 문단/제목에도 들여쓰기/내어쓰기 적용 가능하도록
+// indent 속성을 추가. 한 단계당 24px margin-left, 최대 8단계.
+// 리스트 항목은 별도 sink/liftListItem 으로 처리되므로 여기 대상에서 제외.
+// 마크다운 직렬화는 indent 속성을 복원하지 않으므로 새로고침 시엔 0으로 리셋
+// 되지만, 편집 중 시각적 들여쓰기는 즉시 적용된다.
+const INDENT_STEP_PX = 24;
+const INDENT_MAX = 8;
+const INDENT_TYPES = ["paragraph", "heading"] as const;
+
+const BlockIndent = Extension.create({
+  name: "blockIndent",
+  addGlobalAttributes() {
+    return [
+      {
+        types: [...INDENT_TYPES],
+        attributes: {
+          indent: {
+            default: 0,
+            parseHTML: (el) => {
+              const ml = parseInt(
+                (el as HTMLElement).style.marginLeft || "0",
+                10,
+              );
+              if (!Number.isFinite(ml) || ml <= 0) return 0;
+              return Math.min(INDENT_MAX, Math.floor(ml / INDENT_STEP_PX));
+            },
+            renderHTML: (attrs) => {
+              const lvl = (attrs as { indent?: number }).indent ?? 0;
+              if (!lvl) return {};
+              return { style: `margin-left: ${lvl * INDENT_STEP_PX}px` };
+            },
+            keepOnSplit: false,
+          },
+        },
+      },
+    ];
+  },
+});
+
+// Cycle 57 — content 저장 markdown → JSON 전환.
+//   string content 가 '{' 로 시작하면 ProseMirror JSON, 그 외에는 기존 markdown.
+//   호환 자동 감지 — 새 자동저장은 JSON, 옛 markdown 도 그대로 로드 가능.
+//   MarkdownParser.parse 가 object 면 그대로 반환(tiptap-markdown 의 setContent
+//   가로채기에서 자연 우회).
+//   반환 타입은 TipTap 의 Content (string | object | array | null) 와 호환.
+type EditorSeed = string | Record<string, unknown> | unknown[];
+
+// 레거시 인라인 댓글 마크 제거. 인라인 댓글 기능 삭제(이 사이클)로 schema 에서
+// inlineComment 마크가 빠졌는데, 기존 페이지 JSON 에 이 마크가 남아 있으면
+// 로드 시 schema 불일치로 본문이 깨진다(빈 문서 fallback). 로드 직전 트리를
+// 훑어 inlineComment 마크만 걸러낸다 — 텍스트 자체는 그대로 보존.
+function stripInlineCommentMarks(value: unknown): void {
+  if (Array.isArray(value)) {
+    value.forEach(stripInlineCommentMarks);
+    return;
+  }
+  if (value && typeof value === "object") {
+    const obj = value as Record<string, unknown>;
+    if (Array.isArray(obj.marks)) {
+      obj.marks = (obj.marks as Array<{ type?: string }>).filter(
+        (m) => m?.type !== "inlineComment",
+      );
+    }
+    if (Array.isArray(obj.content)) {
+      obj.content.forEach(stripInlineCommentMarks);
+    }
+  }
+}
+
+function parseContent(raw: string | null | undefined): EditorSeed {
+  if (!raw) return "";
+  const trimmed = raw.trimStart();
+  if (trimmed.startsWith("{")) {
+    try {
+      const json = JSON.parse(raw) as Record<string, unknown>;
+      stripInlineCommentMarks(json);
+      return json;
+    } catch {
+      // fallthrough — markdown 으로
+    }
+  }
+  return raw;
+}
+
+export default function CollaborativeEditor({
+  pageId,
+  initialMarkdown,
+  editable,
+  onSaveStatusChange,
+  onPresenceChange,
+  onEditor,
+  onConnectionStateChange,
+  hideToolbar,
+  onContentChange,
+  onSaveShortcut,
+}: Props) {
+  const identity = useIdentity();
+  const queryClient = useQueryClient();
+  // Cycle 84 followup 5 — Yjs/persistence/provider 초기 sync 후의 update 만
+  //   '사용자 변경' 으로 본다. 초기 sync 단계의 update 는 onContentChange 무시.
+  const syncedRef = useRef(false);
+  const [instance, setInstance] = useState<{
+    ydoc: Y.Doc;
+    provider: HocuspocusProvider;
+    persistence: IndexeddbPersistence;
+  } | null>(null);
+
+  // FR-054 — onConnectionStateChange를 ref로 보관. WS effect가 콜백 정체성에
+  // 의존하면 부모 리렌더마다 provider가 재생성돼 "WebSocket closed before
+  // established"가 반복된다. ref로 빼면 effect deps는 [editable, pageId]만.
+  const connStateRef = useRef(onConnectionStateChange);
+  connStateRef.current = onConnectionStateChange;
+
+  // FR-033 (Cycle 12-1) — 본문 안에 드롭/붙여넣기된 이미지 파일을 첨부 API로
+  // 업로드하고 ProseMirror image 노드로 인라인 삽입한다. 첨부 영역(useQuery)
+  // 도 invalidate해 카드 목록을 즉시 갱신.
+  const uploadImageFiles = useCallback(
+    (view: EditorView, files: File[], pos: number) => {
+      void (async () => {
+        for (const file of files) {
+          const form = new FormData();
+          form.append("file", file);
+          form.append("authorName", identity.name);
+          try {
+            const r = await fetch(`/api/pages/${pageId}/attachments`, {
+              method: "POST",
+              body: form,
+            });
+            if (!r.ok) {
+              if (r.status === 413) {
+                window.alert("파일이 너무 큽니다 (최대 100MB).");
+              } else {
+                window.alert("이미지 업로드에 실패했습니다.");
+              }
+              continue;
+            }
+            const att = (await r.json()) as { id: string };
+            const imageType = view.state.schema.nodes.image;
+            if (!imageType) continue;
+            const node = imageType.create({
+              src: `/api/attachments/${att.id}`,
+              alt: file.name,
+            });
+            view.dispatch(view.state.tr.insert(pos, node));
+            queryClient.invalidateQueries({
+              queryKey: ["attachments", pageId],
+            });
+          } catch (err) {
+            console.error("[image] upload failed", err);
+            window.alert("이미지 업로드에 실패했습니다.");
+          }
+        }
+      })();
+    },
+    [pageId, identity.name, queryClient],
+  );
+
+  // Cycle 10-2b-1 — 편집 모드일 때만 Yjs 세션. 조회 모드 사용자는 다른
+  // 사용자의 임시 변경(draft)이 보이지 않게 하기 위해 협업 채널에 참여하지
+  // 않는다. page.tsx가 모드 전환 시 key prop으로 컴포넌트를 재마운트한다.
+  // FR-054 (Cycle 26) — IndexedDB persistence + 연결 상태 추적.
+  useEffect(() => {
+    if (!editable) return;
+    const ydoc = new Y.Doc();
+    const provider = new HocuspocusProvider({
+      url: WS_URL,
+      name: `page-${pageId}`,
+      document: ydoc,
+    });
+    // FR-054 — Y.Doc을 IndexedDB에 영속 → 오프라인에서도 마지막 상태 복원 +
+    // 편집 즉시 영속. 재연결 시 Yjs CRDT가 자동 merge.
+    const persistence = new IndexeddbPersistence(
+      `docspace-page-${pageId}`,
+      ydoc,
+    );
+
+    // 연결 상태 추적 — provider.status 속성을 직접 읽지 않고 이벤트 페이로드로
+    // 추적한다(속성이 버전에 따라 비어있을 수 있음). status 이벤트는
+    // { status: 'connecting' | 'connected' | 'disconnected' } 를 준다.
+    let wsStatus: "connecting" | "connected" | "disconnected" = "connecting";
+    let synced = false;
+
+    const pushState = () => {
+      const cb = connStateRef.current;
+      if (!cb) return;
+      const navOnline =
+        typeof navigator === "undefined" ? true : navigator.onLine;
+      if (!navOnline) {
+        cb("offline");
+        return;
+      }
+      if (wsStatus === "connected") {
+        cb(synced ? "online-synced" : "online-syncing");
+      } else if (wsStatus === "connecting") {
+        cb("reconnecting");
+      } else {
+        cb("offline");
+      }
+    };
+
+    const onStatus = (event: { status?: string }) => {
+      const s = event?.status;
+      if (s === "connecting" || s === "connected" || s === "disconnected") {
+        wsStatus = s;
+      }
+      pushState();
+    };
+    const onSynced = () => {
+      synced = true;
+      wsStatus = "connected";
+      pushState();
+    };
+    const onDisconnect = () => {
+      wsStatus = "disconnected";
+      synced = false;
+      pushState();
+    };
+    const onOnline = () => pushState();
+    const onOffline = () => connStateRef.current?.("offline");
+
+    provider.on("status", onStatus);
+    provider.on("synced", onSynced);
+    provider.on("disconnect", onDisconnect);
+    window.addEventListener("online", onOnline);
+    window.addEventListener("offline", onOffline);
+    pushState();
+
+    setInstance({ ydoc, provider, persistence });
+    return () => {
+      provider.off("status", onStatus);
+      provider.off("synced", onSynced);
+      provider.off("disconnect", onDisconnect);
+      window.removeEventListener("online", onOnline);
+      window.removeEventListener("offline", onOffline);
+      void persistence.destroy();
+      provider.destroy();
+      ydoc.destroy();
+      setInstance(null);
+    };
+  }, [editable, pageId]);
+
+  const editor = useEditor(
+    {
+      editable,
+      extensions: [
+        // FR-031 — codeBlock은 CodeBlockLowlight로 교체하므로 StarterKit
+        // 기본 codeBlock은 비활성. 두 노드가 충돌하면 schema가 깨진다.
+        // Cycle 10-2b-1 — 편집 모드는 Yjs UndoManager 사용(history false),
+        // 조회 모드는 어차피 편집 불가라 history 켜둬도 무관하지만 일관성을
+        // 위해 둘 다 false.
+        StarterKit.configure({
+          history: false,
+          codeBlock: false,
+          // Cycle 37 followup — 문단 스타일 드롭다운에 H1~H6 모두 노출하도록
+          // 확장 (이전 H4까지 정책에서 변경). 마크다운 #~###### 자동변환도 자연히 동작.
+          heading: { levels: [1, 2, 3, 4, 5, 6] },
+        }),
+        CodeBlockExtension,
+        // FR-030 (Cycle 9-2) — 밑줄 mark.
+        Underline,
+        // Cycle 37 followup — 아래첨자 / 윗첨자 mark (취소선 드롭다운에서 선택).
+        Subscript,
+        Superscript,
+        // Cycle 38 — 텍스트 정렬 (좌/중/우). 적용 대상은 paragraph + heading.
+        // (인용/리스트 항목 정렬은 정책상 제외 — Confluence와 동일한 범위.)
+        TextAlign.configure({
+          types: ["heading", "paragraph"],
+          alignments: ["left", "center", "right"],
+          defaultAlignment: "left",
+        }),
+        // Cycle 38 — Ctrl/Cmd+Shift+B (단추형) / Ctrl/Cmd+Shift+N (번호형) 단축키.
+        ListShortcuts,
+        // Cycle 38 followup — 일반 문단/제목 들여쓰기 속성.
+        BlockIndent,
+        // FR-030 부분 — 체크리스트 + 텍스트/배경 색상.
+        // TextStyle은 Color mark를 얹기 위한 base; Highlight multicolor로
+        // 형광펜 색을 노드별로 다르게 잡는다. TaskItem은 nested 허용.
+        TaskList,
+        // FR-030 보강 (Cycle 9-1b) — React NodeView로 체크박스를 직접
+        // 컨트롤. editor.editable과 무관하게 항상 클릭 가능하고, attr
+        // 변경 transaction이 Y.Doc → 다른 클라이언트로 전파된다.
+        TaskItem.configure({ nested: true }).extend({
+          addNodeView() {
+            return ReactNodeViewRenderer(TaskItemNodeView);
+          },
+        }),
+        TextStyle,
+        Color.configure({ types: ["textStyle"] }),
+        Highlight.configure({ multicolor: true }),
+        // FR-033 (Cycle 12-1) — 본문 이미지. allowBase64=false로 서버 업로드
+        // 강제 (DB 비대화 방지).
+        // Cycle 54-C — caption attr + NodeView(figure+figcaption) 확장.
+        //   기존 image 노드는 caption=""로 자연 호환. parseHTML 에 figure 매칭
+        //   추가(기존 img 도 부모 parseHTML 로 흡수). renderHTML 도 caption 유무로
+        //   figure/img 분기 — markdown 직렬화 / copy 시에도 시각화 보존.
+        Image.configure({
+          inline: false,
+          allowBase64: false,
+          HTMLAttributes: { class: "cf-image" },
+        }).extend({
+          addAttributes() {
+            return {
+              ...this.parent?.(),
+              caption: {
+                default: "",
+                // figure 안에서 직접 figcaption 텍스트를 가져온다. img 단독이면 빈 값.
+                parseHTML: (el: HTMLElement) => {
+                  // el 은 figure 또는 img 둘 중 하나. figure 면 자식 figcaption 의 텍스트.
+                  if (el.tagName.toLowerCase() === "figure") {
+                    return el.querySelector("figcaption")?.textContent ?? "";
+                  }
+                  return "";
+                },
+                // caption 속성은 figure 의 figcaption 으로만 출력. img 속성으로는 X.
+                renderHTML: () => ({}),
+              },
+              // Cycle 63 — 이미지 크기/테두리/정렬/연결. 화면은 ImageNodeView 가
+              //   inline style 로 적용. renderHTML 은 () => ({}) — img/figure 에
+              //   잘못된 속성 출력 방지. JSON 저장(Cycle 57)이 attr 라운드트립 담당.
+              width: { default: null, renderHTML: () => ({}) },
+              border: { default: false, renderHTML: () => ({}) },
+              align: { default: null, renderHTML: () => ({}) },
+              link: { default: null, renderHTML: () => ({}) },
+            };
+          },
+          parseHTML() {
+            return [
+              // figure>img(+figcaption) 형태. img 의 src/alt 를 attrs 로 흡수.
+              {
+                tag: "figure.cf-image-figure",
+                getAttrs: (el) => {
+                  if (!(el instanceof HTMLElement)) return false;
+                  const img = el.querySelector("img");
+                  if (!img) return false;
+                  const src = img.getAttribute("src");
+                  if (!src) return false;
+                  return {
+                    src,
+                    alt: img.getAttribute("alt") ?? "",
+                    title: img.getAttribute("title") ?? null,
+                    caption: el.querySelector("figcaption")?.textContent ?? "",
+                  };
+                },
+              },
+              // 기존 img — 부모 Image extension 의 parseHTML 흡수.
+              ...(this.parent?.() ?? []),
+            ];
+          },
+          renderHTML({ node, HTMLAttributes }) {
+            const caption = (node.attrs.caption as string | undefined) ?? "";
+            // caption 없으면 기존 단순 img 그대로 — 역호환.
+            if (!caption.trim()) {
+              return ["img", HTMLAttributes];
+            }
+            // caption 있으면 figure 구조. img 의 caption attr 은 출력하지 않는다.
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            const { caption: _drop, ...imgAttrs } = HTMLAttributes as Record<
+              string,
+              unknown
+            >;
+            return [
+              "figure",
+              { class: "cf-image-figure" },
+              ["img", imgAttrs],
+              ["figcaption", { class: "cf-image-caption" }, caption],
+            ];
+          },
+          addNodeView() {
+            return ReactNodeViewRenderer(ImageNodeView);
+          },
+        }),
+        // FR-040 (Cycle 20) — LaTeX 수식 (인라인 + 블록).
+        MathInline,
+        MathBlock,
+        // Cycle 54-F — 날짜 inline atom. + / slash 카탈로그에서 진입.
+        DateExtension,
+        // Cycle 55 — @user 멘션. @ trigger + GET /api/users?q= 자동완성.
+        //   향후 알림(Notification) 도입 시 멘션 transaction 을 hook 으로 잡아
+        //   POST /notifications 호출.
+        MentionNode,
+        // Cycle 64 — 본문 다이어그램 노드(Excalidraw). ＋/slash '다이어그램'.
+        DiagramNode,
+        // Cycle 85 — Confluence 식 매크로: 상태 배지(인라인 atom) + 정보 패널(블록).
+        StatusBadgeNode,
+        InfoPanelNode,
+        // FR-036 (Cycle 13) — StarterKit 미커버 input rules (체크리스트/링크/이미지).
+        MarkdownInputRules,
+        SlashCommand.configure({ suggestion: slashCommandSuggestion }),
+        Link.configure({
+          openOnClick: false,
+          autolink: true,
+          HTMLAttributes: { rel: "noopener noreferrer" },
+        }),
+        TableExtended.configure({ resizable: true }),
+        TableRow,
+        TableHeaderExtended,
+        TableCellExtended,
+        Markdown.configure({
+          // Cycle 55 followup 5 — html: true → false 롤백.
+          //   followup 3 의 html:true 변경이 자동저장 markdown 직렬화에 부작용
+          //   (편집 시 본문 누적 — 데이터 손상 위험)을 일으켜 즉시 롤백.
+          //   멘션 라운드트립은 일시 포기 (별도 메가 사이클에서 content 저장
+          //   방식 자체를 markdown → HTML 으로 전환할 때 해결).
+          html: false,
+          tightLists: true,
+          transformCopiedText: true,
+        }),
+        // Cycle 10-2b-1 — 편집 모드 + Yjs 세션 준비된 후에만 Collaboration.
+        ...(editable && instance
+          ? [
+              Collaboration.configure({ document: instance.ydoc }),
+              CollaborationCursor.configure({
+                provider: instance.provider,
+                user: { name: identity.name, color: identity.color },
+              }),
+            ]
+          : []),
+      ],
+      // Cycle 10-2b-1 — 조회 모드는 Yjs 없이 published content를 직접 시드.
+      // 편집 모드는 Collaboration extension이 ydoc에서 채워주므로 content
+      // prop을 주면 안 된다(중복 시드 → 본문 두 번 표시).
+      // Cycle 57 — parseContent: JSON 이면 object, markdown 이면 string.
+      //   tiptap-markdown 의 Markdown.setContent 가 가로채면 parser.parse(content)
+      //   호출 — object 면 그대로 반환되어 ProseMirror 가 JSON 으로 시드.
+      content: !editable ? parseContent(initialMarkdown) : undefined,
+      editorProps: {
+        attributes: {
+          class: "cf-article outline-none min-h-[320px]",
+        },
+        // FR-033 (Cycle 12-1) — 드래그앤드롭 이미지 파일 → 첨부 업로드 + 인라인 삽입.
+        handleDrop: (view, event) => {
+          if (!editable) return false;
+          const files = event.dataTransfer
+            ? Array.from(event.dataTransfer.files)
+            : [];
+          const images = files.filter((f) => f.type.startsWith("image/"));
+          if (images.length === 0) return false;
+          event.preventDefault();
+          const pos =
+            view.posAtCoords({ left: event.clientX, top: event.clientY })
+              ?.pos ?? view.state.selection.from;
+          uploadImageFiles(view, images, pos);
+          return true;
+        },
+        // FR-033 (Cycle 12-1) — 클립보드(스크린샷 등) 이미지 붙여넣기.
+        handlePaste: (view, event) => {
+          if (!editable) return false;
+          const items = event.clipboardData?.items;
+          if (!items) return false;
+          const imageItems = Array.from(items).filter(
+            (it) => it.kind === "file" && it.type.startsWith("image/"),
+          );
+          if (imageItems.length === 0) return false;
+          const files = imageItems
+            .map((it) => it.getAsFile())
+            .filter((f): f is File => !!f);
+          if (files.length === 0) return false;
+          event.preventDefault();
+          uploadImageFiles(view, files, view.state.selection.from);
+          return true;
+        },
+      },
+    },
+    [
+      editable,
+      instance,
+      identity.name,
+      identity.color,
+      initialMarkdown,
+      uploadImageFiles,
+    ]
+  );
+
+  // FR-039 — editor 인스턴스를 부모에 노출. cleanup에서 null 통지.
+  useEffect(() => {
+    onEditor?.(editor ?? null);
+    return () => onEditor?.(null);
+  }, [editor, onEditor]);
+
+  // Seed initial content from DB once, only if the shared doc is empty.
+  // Cycle 10-2b-1 — 조회 모드는 useEditor의 content prop이 시드를 처리하므로
+  // 이 효과는 편집 모드 전용.
+  const seededRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!editable) return;
+    if (!editor || !instance) return;
+    if (seededRef.current === pageId) return;
+
+    const { provider, ydoc, persistence } = instance;
+    let cancelled = false;
+
+    const trySeed = () => {
+      if (cancelled || seededRef.current === pageId) return;
+      seededRef.current = pageId;
+      const frag = ydoc.getXmlFragment("default");
+      if (frag.length === 0 && initialMarkdown) {
+        // Cycle 57 — JSON / markdown 자동 분기.
+        editor.commands.setContent(parseContent(initialMarkdown), false);
+      }
+    };
+
+    // Cycle 66 — 본문 누적 버그 수정.
+    //   seed 판정을 로컬(IndexedDB)·원격(서버) 동기화가 *둘 다* 끝난 뒤로
+    //   미룬다. 이전엔 provider.synced(서버) 만 기다렸는데, 서버는 Y.Doc 을
+    //   영속하지 않아 localhost in-process WS sync 가 IndexedDB 로드보다 먼저
+    //   끝나는 경우가 잦았다. 그 순간 frag 가 비어 보여 draft 를 재삽입하고,
+    //   직후 IndexedDB 가 이전 세션 내용을 로드하면 Yjs 가 merge(concat) 하여
+    //   편집 진입마다 본문이 한 벌씩 누적됐다. 둘 다 기다리면 frag 가 이미
+    //   채워진 상태로 판정돼 재삽입이 일어나지 않는다.
+    const waitProvider = provider.synced
+      ? Promise.resolve()
+      : new Promise<void>((resolve) => {
+          const onSynced = () => {
+            provider.off("synced", onSynced);
+            resolve();
+          };
+          provider.on("synced", onSynced);
+        });
+
+    // persistence.whenSynced 가 거부/지연되는 환경(IndexedDB 불가)에서도
+    // 본문이 영영 비지 않도록 fallback seed. 영속이 없으면 누적 위험도 없다.
+    // Cycle 84 followup 5 — seeding 후 syncedRef 를 true 로 — 이후 update 는 사용자 입력.
+    void Promise.all([persistence.whenSynced, waitProvider]).then(
+      () => {
+        trySeed();
+        syncedRef.current = true;
+      },
+      () => {
+        trySeed();
+        syncedRef.current = true;
+      },
+    );
+
+    return () => {
+      cancelled = true;
+    };
+  }, [editor, instance, pageId, initialMarkdown, editable]);
+
+  // Debounced save: client-side, last-writer-wins.
+  // Cycle 10-2b-1 — editable 가드 복귀. 조회 모드는 Yjs 미참여이고 자동저장도
+  // 하지 않는다. 조회 모드 체크박스 토글은 10-2b-2에서 즉시 발행 흐름으로
+  // 별도 처리(현재는 일시적으로 영속화되지 않음).
+  useEffect(() => {
+    if (!editor || !editable) return;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let latestMd = "";
+
+    const flush = async () => {
+      onSaveStatusChange?.("saving");
+      try {
+        // Cycle 10-2a — 자동저장은 draft로. content는 발행 시점에만 갱신.
+        const res = await fetch(`/api/pages/${pageId}/draft`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            content: latestMd,
+            authorName: identity.name,
+          }),
+        });
+        onSaveStatusChange?.(res.ok ? "saved" : "error");
+      } catch {
+        onSaveStatusChange?.("error");
+      }
+    };
+
+    const onUpdate = () => {
+      // Cycle 57 — markdown 대신 ProseMirror JSON 직렬화. 모든 노드/마크의
+      //   라운드트립을 100% 보장 (mention/figcaption/inline 댓글/색상/하이라이트).
+      //   기존 markdown 직렬화의 사용자 정의 노드 한계 (CLAUDE.md '마크다운
+      //   직렬화 한계') 해소.
+      try {
+        latestMd = JSON.stringify(editor.getJSON());
+      } catch {
+        return;
+      }
+      // Cycle 84 followup 5 — 초기 sync 이후의 update 는 사용자 입력으로 본다.
+      //   '발행/업데이트' 버튼이 5초 autosave 를 기다리지 않고 즉시 활성화되도록.
+      if (syncedRef.current) {
+        onContentChange?.();
+      }
+      if (timer) clearTimeout(timer);
+      // FR-038 / NFR-A-020 — 5초 간격 자동 저장
+      timer = setTimeout(flush, 5000);
+    };
+
+    editor.on("update", onUpdate);
+
+    return () => {
+      editor.off("update", onUpdate);
+      if (timer) {
+        clearTimeout(timer);
+        flush();
+      }
+    };
+  }, [editor, editable, pageId, onSaveStatusChange, onContentChange]);
+
+  // Cycle 86 fix2 — Ctrl/Cmd+S 단축키. 외부 onSaveShortcut 콜백 호출(발행 등).
+  //   ① 키 검사는 `e.code === "KeyS"` (물리 위치) — 한글 IME 켜진 상태에서
+  //      `e.key === "ㄴ"` 로 들어오는 케이스를 잡기 위해. `e.key` 도 fallback.
+  //   ② 등록을 ProseMirror DOM(capture) + window 양쪽에 — ProseMirror 가
+  //      keydown 을 자체 처리하더라도 capture 단계에서 먼저 잡고 stopPropagation.
+  //   ③ 브라우저 기본 '페이지 저장' 다이얼로그는 preventDefault 로 차단.
+  useEffect(() => {
+    if (!editor || !editable || !onSaveShortcut) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      const isS = e.code === "KeyS" || e.key === "s" || e.key === "S";
+      if (!isS) return;
+      e.preventDefault();
+      e.stopPropagation();
+      onSaveShortcut();
+    };
+    const editorDom = editor.view.dom as HTMLElement;
+    editorDom.addEventListener("keydown", onKey, true);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      editorDom.removeEventListener("keydown", onKey, true);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [editor, editable, onSaveShortcut]);
+
+  // Presence / awareness
+  useEffect(() => {
+    if (!instance) return;
+    const { provider } = instance;
+    const awareness = provider.awareness;
+    if (!awareness) return;
+    const emit = () => {
+      const entries = Array.from(
+        awareness.getStates().entries()
+      ) as [number, { user?: { name: string; color: string } }][];
+      const users: PresenceUser[] = entries.map(([clientId, state]) => ({
+        clientId,
+        name: state?.user?.name ?? "익명",
+        color: state?.user?.color ?? "#6b778c",
+        self: clientId === awareness.clientID,
+      }));
+      onPresenceChange?.(users);
+    };
+    awareness.on("change", emit);
+    emit();
+    return () => {
+      awareness.off("change", emit);
+    };
+  }, [instance, onPresenceChange]);
+
+  // Cycle 10-2b-1 — 조회 모드는 Yjs instance 없이도 렌더. 편집 모드는
+  // instance가 준비되기 전 잠시 로딩 표시(Yjs sync 시작 전 빈 본문 방지).
+  return (
+    <div className="relative">
+      {!editor || (editable && !instance) ? (
+        <div className="text-sm text-[#6b778c]">에디터 불러오는 중...</div>
+      ) : (
+        <>
+          {editable && !hideToolbar && <EditorToolbar editor={editor} />}
+          {/* Cycle 37 — Confluence 편집기는 본문에 별도 박스/색을 두지 않는다.
+              조회/편집 모드 모두 같은 좌측 라인의 일반 문서 영역. */}
+          <div className="py-2">
+            <EditorContentWithCursorStyles editor={editor} />
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function EditorContentWithCursorStyles({ editor }: { editor: Editor }) {
+  return (
+    <>
+      <style jsx global>{`
+        .ProseMirror {
+          min-height: 320px;
+          outline: none;
+        }
+        .ProseMirror[contenteditable="false"] {
+          caret-color: transparent;
+        }
+        .ProseMirror[contenteditable="false"] p.is-editor-empty:first-child::before {
+          content: "(내용 없음) — '편집 (E)'을 눌러 작성을 시작하세요.";
+          color: #6b778c;
+          font-style: italic;
+        }
+        .ProseMirror[contenteditable="true"] p.is-editor-empty:first-child::before {
+          content: "내용을 입력하세요...";
+          color: #a5adba;
+          float: left;
+          height: 0;
+          pointer-events: none;
+        }
+        .collaboration-cursor__caret {
+          border-left: 1px solid #0052cc;
+          border-right: 1px solid #0052cc;
+          margin-left: -1px;
+          margin-right: -1px;
+          pointer-events: none;
+          position: relative;
+          word-break: normal;
+        }
+        .ProseMirror table {
+          border-collapse: collapse;
+          margin: 0.8em 0;
+          overflow: hidden;
+          table-layout: fixed;
+          width: 100%;
+        }
+        .ProseMirror table td,
+        .ProseMirror table th {
+          border: 1px solid #dfe1e6;
+          padding: 6px 10px;
+          vertical-align: top;
+          position: relative;
+        }
+        .ProseMirror table th {
+          background: #f4f5f7;
+          font-weight: 600;
+        }
+        .ProseMirror table .selectedCell:after {
+          background: rgba(0, 82, 204, 0.12);
+          content: "";
+          inset: 0;
+          pointer-events: none;
+          position: absolute;
+          z-index: 2;
+        }
+        .ProseMirror table .column-resize-handle {
+          background: #0052cc;
+          bottom: -2px;
+          position: absolute;
+          right: -2px;
+          pointer-events: none;
+          top: 0;
+          width: 3px;
+        }
+        .ProseMirror.resize-cursor {
+          cursor: col-resize;
+        }
+        .ProseMirror a {
+          color: #0052cc;
+          text-decoration: underline;
+        }
+        .collaboration-cursor__label {
+          border-radius: 3px 3px 3px 0;
+          color: white;
+          font-size: 11px;
+          font-style: normal;
+          font-weight: 600;
+          left: -1px;
+          line-height: normal;
+          padding: 1px 4px;
+          position: absolute;
+          top: -14px;
+          user-select: none;
+          white-space: nowrap;
+        }
+      `}</style>
+      <EditorContent editor={editor} />
+    </>
+  );
+}

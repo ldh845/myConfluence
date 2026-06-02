@@ -1,0 +1,330 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* FR-031 — highlight.js GitHub 테마 (lowlight가 hljs-* 클래스를 출력) */
+@import "highlight.js/styles/github.css";
+
+/* FR-040 (Cycle 20) — KaTeX 기본 폰트/레이아웃 */
+@import "katex/dist/katex.min.css";
+
+/* 브라우저 내장 패스워드 미리보기/지우기 버튼 제거 (Edge ::-ms-reveal, ::-ms-clear).
+   signup/login 페이지의 커스텀 SVG 토글 버튼과 중복 표시 방지. */
+input[type="password"]::-ms-reveal,
+input[type="password"]::-ms-clear {
+  display: none;
+}
+
+/* FR-121 (Cycle 21) — 인쇄(PDF) 최적화.
+   본문만 풀폭, 사이드바·툴바·헤더 버튼은 숨김. 표/코드/이미지 페이지 경계 보존. */
+@media print {
+  aside,
+  .no-print,
+  header,
+  .editor-toolbar,
+  nav,
+  button {
+    display: none !important;
+  }
+  main {
+    width: 100% !important;
+    max-width: none !important;
+    padding: 16px !important;
+    overflow: visible !important;
+  }
+  body,
+  html {
+    background: #fff !important;
+    overflow: visible !important;
+  }
+  h1,
+  h2,
+  h3 {
+    page-break-after: avoid;
+  }
+  pre,
+  table,
+  img,
+  .math-block,
+  .math-block-wrap {
+    page-break-inside: avoid;
+  }
+  /* 링크 옆에 URL 출력 (단 내부 페이지 링크는 제외) */
+  a[href^="http"]::after,
+  a[href^="https"]::after {
+    content: " (" attr(href) ")";
+    font-size: 10px;
+    color: #555;
+  }
+}
+
+/* shadcn/ui base tokens (Cycle 4 scaffold).
+   기존 --c-* 변수들은 그대로 보존. 신규 컴포넌트만 hsl(var(--*)) 사용. */
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+    --primary: 222.2 47.4% 11.2%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 222.2 84% 4.9%;
+    --radius: 0.5rem;
+  }
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 210 40% 98%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 212.7 26.8% 83.9%;
+  }
+}
+
+:root {
+  --c-primary: #0052cc;
+  --c-primary-hover: #0747a6;
+  --c-navy: #172b4d;
+  --c-text: #172b4d;
+  --c-text-muted: #6b778c;
+  --c-border: #dfe1e6;
+  --c-sidebar-bg: #f4f5f7;
+  --c-hover-bg: #ebecf0;
+  --c-active-bg: #deebff;
+  --c-active-text: #0052cc;
+  --c-success-bg: #e3fcef;
+  --c-success-text: #006644;
+}
+
+html,
+body,
+#__next {
+  height: 100%;
+}
+
+body {
+  color: var(--c-text);
+  background: #ffffff;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue",
+    "Apple SD Gothic Neo", "Noto Sans KR", Arial, sans-serif;
+  font-size: 14px;
+}
+
+.w-md-editor {
+  box-shadow: none !important;
+}
+
+/* Confluence-style article rendering */
+.cf-article {
+  color: var(--c-text);
+  font-size: 16px;
+  line-height: 1.65;
+}
+.cf-article h1 {
+  font-size: 28px;
+  font-weight: 700;
+  margin: 1.4em 0 0.6em;
+  color: var(--c-navy);
+}
+.cf-article h2 {
+  font-size: 22px;
+  font-weight: 700;
+  margin: 1.3em 0 0.5em;
+  color: var(--c-navy);
+}
+.cf-article h3 {
+  font-size: 18px;
+  font-weight: 600;
+  margin: 1.2em 0 0.4em;
+  color: var(--c-navy);
+}
+.cf-article p {
+  margin: 0.6em 0;
+}
+.cf-article a {
+  color: var(--c-primary);
+  text-decoration: none;
+}
+.cf-article a:hover {
+  text-decoration: underline;
+}
+.cf-article ul,
+.cf-article ol {
+  padding-left: 1.5em;
+  margin: 0.6em 0;
+}
+.cf-article ul {
+  list-style: disc;
+}
+.cf-article ol {
+  list-style: decimal;
+}
+.cf-article li {
+  margin: 0.2em 0;
+}
+.cf-article code {
+  background: #f4f5f7;
+  border: 1px solid #dfe1e6;
+  border-radius: 3px;
+  padding: 0.1em 0.35em;
+  font-size: 0.92em;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+}
+.cf-article pre {
+  background: #f4f5f7;
+  border: 1px solid #dfe1e6;
+  border-radius: 4px;
+  padding: 12px 14px;
+  overflow-x: auto;
+  margin: 0.8em 0;
+}
+.cf-article pre code {
+  background: transparent;
+  border: 0;
+  padding: 0;
+}
+
+/* FR-031 — CodeBlockLowlight가 출력하는 pre.cf-code-block.
+   highlight.js github 테마(@import)가 색을 칠하므로 여기선 컨테이너만 다듬음. */
+.cf-code-block {
+  background: #f7f8fa;
+  border: 1px solid #dfe1e6;
+  border-radius: 6px;
+  padding: 12px 14px;
+  margin: 0.8em 0;
+  overflow-x: auto;
+  font-size: 13px;
+  line-height: 1.55;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+}
+.cf-code-block code {
+  background: transparent;
+  border: 0;
+  padding: 0;
+}
+
+/* FR-030 — 체크리스트 (Cycle 9-1 + 9-1c + 9-1d)
+   실제 DOM: li[data-type="taskItem"] > label + div[data-node-view-content] >
+   div[data-node-view-content-react] > p. wrapper div 두 단계의 기본 margin과
+   prose preset이 줄바꿈/들여쓰기를 만들어 ul 셀렉터로는 안 잡힌다. */
+.ProseMirror ul[data-type="taskList"],
+.ProseMirror ul.task-list {
+  list-style: none;
+  padding: 0;
+}
+.ProseMirror li[data-type="taskItem"] {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin: 0.25rem 0;
+  list-style: none;
+}
+.ProseMirror li[data-type="taskItem"] > label {
+  flex: 0 0 auto;
+  user-select: none;
+}
+.ProseMirror li[data-type="taskItem"] > label > input[type="checkbox"] {
+  cursor: pointer;
+  width: 1rem;
+  height: 1rem;
+}
+.ProseMirror li[data-type="taskItem"] > div {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+.ProseMirror li[data-type="taskItem"] > div > div {
+  margin: 0 !important;
+  padding: 0 !important;
+}
+.ProseMirror li[data-type="taskItem"] p {
+  margin: 0 !important;
+  display: inline;
+}
+.ProseMirror li[data-type="taskItem"][data-checked="true"] > div {
+  color: #6b778c;
+  text-decoration: line-through;
+}
+
+/* FR-030 부분 — Highlight mark (배경 색상). 색은 inline style로 박힘. */
+.ProseMirror mark {
+  padding: 0 0.125em;
+  border-radius: 2px;
+}
+
+/* FR-033 (Cycle 12-1) — 본문 이미지. 폭 넘침 방지 + 선택 시 강조. */
+.ProseMirror .cf-image,
+.ProseMirror img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 0.5rem 0;
+  border-radius: 4px;
+}
+.ProseMirror .cf-image.ProseMirror-selectednode,
+.ProseMirror img.ProseMirror-selectednode {
+  outline: 2px solid #0052cc;
+  outline-offset: 2px;
+}
+.cf-article blockquote {
+  border-left: 3px solid #dfe1e6;
+  padding-left: 12px;
+  color: var(--c-text-muted);
+  margin: 0.8em 0;
+}
+.cf-article hr {
+  border: 0;
+  border-top: 1px solid var(--c-border);
+  margin: 1.4em 0;
+}
+.cf-article table {
+  border-collapse: collapse;
+  margin: 0.8em 0;
+}
+.cf-article th,
+.cf-article td {
+  border: 1px solid var(--c-border);
+  padding: 6px 10px;
+}
+.cf-article th {
+  background: #f4f5f7;
+}
+
+/* Cycle 87 — 반응형 표 모드. data-width-mode='responsive' (기본) 면 셀 내용
+   기준 폭 (table-layout:auto, width:auto). resizable=true 가 박은 colwidth 도
+   col 의 width:auto 강제로 무력화. 고정폭 모드(=fixed)에서만 기존 동작 유지. */
+.ProseMirror table[data-width-mode="responsive"] {
+  table-layout: auto !important;
+  width: auto !important;
+}
+.ProseMirror table[data-width-mode="responsive"] col {
+  width: auto !important;
+}
+/* Cycle 87 — TableCell/Header 의 verticalAlign attr 시각화는 inline style 로
+   처리되므로 별도 CSS 불필요. (style="vertical-align: top|middle|bottom") */
