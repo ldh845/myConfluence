@@ -1,12 +1,15 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth/useAuth";
+import { apiFetch } from "@/lib/api";
 
-// Cycle 43(2/2) — 로그인은 Keycloak OIDC(SSO) 단일.
-// 아이디/비번 폼·회원가입 링크 제거. "SSO 로그인" 버튼은 GET /api/auth/oidc/login
-// 으로 top-level 네비게이션(OIDC 리다이렉트 흐름이라 fetch 가 아니라 window.location).
+// Cycle 43(2/2) — 로그인은 Keycloak OIDC(SSO) 단일이었음.
+// Cycle L1 (feature/ldh) — 하이브리드 인증: SSO 버튼은 그대로 두고, 서버 플래그
+// LOCAL_LOGIN_ENABLED 가 켜진 경우에 한해 그 아래 ID/PW 로컬 로그인 폼을 노출한다.
+//  - 플래그 조회: GET /api/auth/local-login-enabled (public)
+//  - 제출: POST /api/auth/login → 성공 시 docspace_session 쿠키 발급 → /home
 // 이미 로그인된 상태(docspace_session)면 /home 으로 보낸다.
 
 const HOME_PATH = "/home";
@@ -15,13 +18,69 @@ export default function LoginPage() {
   const router = useRouter();
   const { user, isLoading } = useAuth();
 
+  const [localEnabled, setLocalEnabled] = useState(false);
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
   useEffect(() => {
     if (!isLoading && user) router.replace(HOME_PATH);
   }, [user, isLoading, router]);
 
+  // 로컬 로그인 플래그 조회 — 꺼져 있으면(기본) 폼을 아예 그리지 않는다.
+  useEffect(() => {
+    let active = true;
+    apiFetch("/api/auth/local-login-enabled")
+      .then((r) => (r.ok ? r.json() : { enabled: false }))
+      .then((body: { enabled?: boolean }) => {
+        if (active) setLocalEnabled(Boolean(body.enabled));
+      })
+      .catch(() => {
+        if (active) setLocalEnabled(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const startSso = () => {
     // OIDC authorization code 흐름 — 서버가 Keycloak 으로 302 리다이렉트한다.
     window.location.href = "/api/auth/oidc/login";
+  };
+
+  const submitLocal = async (e: FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setSubmitting(true);
+    try {
+      const r = await apiFetch("/api/auth/login", {
+        method: "POST",
+        body: JSON.stringify({ username, password }),
+      });
+      if (r.ok) {
+        // 쿠키가 막 발급됐으므로 전체 리로드로 세션을 새로 읽어 /home 으로.
+        window.location.href = HOME_PATH;
+        return;
+      }
+      if (r.status === 400) {
+        const body = (await r.json().catch(() => ({}))) as { message?: string };
+        setError(
+          body.message ??
+            "이 계정은 SSO 전용입니다. 관리자에게 문의하세요.",
+        );
+      } else if (r.status === 401) {
+        setError("아이디 또는 비밀번호가 올바르지 않습니다.");
+      } else if (r.status === 403) {
+        setError("로컬 로그인이 비활성화되어 있습니다.");
+      } else {
+        setError("로그인에 실패했습니다. 잠시 후 다시 시도하세요.");
+      }
+    } catch {
+      setError("로그인 요청 중 오류가 발생했습니다.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -49,6 +108,65 @@ export default function LoginPage() {
         >
           SSO 로그인
         </button>
+
+        {localEnabled && (
+          <>
+            <div className="flex items-center gap-2">
+              <div className="flex-1 h-px bg-[#dfe1e6]" />
+              <span className="text-[12px] text-[#6b778c]">또는</span>
+              <div className="flex-1 h-px bg-[#dfe1e6]" />
+            </div>
+
+            <form onSubmit={submitLocal} className="space-y-3">
+              <div className="space-y-1">
+                <label
+                  htmlFor="username"
+                  className="text-[12px] text-[#6b778c]"
+                >
+                  아이디
+                </label>
+                <input
+                  id="username"
+                  type="text"
+                  autoComplete="username"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  required
+                  className="w-full px-3 py-2 text-[13px] border border-[#dfe1e6] rounded focus:outline-none focus:border-[#0052cc]"
+                />
+              </div>
+              <div className="space-y-1">
+                <label
+                  htmlFor="password"
+                  className="text-[12px] text-[#6b778c]"
+                >
+                  비밀번호
+                </label>
+                <input
+                  id="password"
+                  type="password"
+                  autoComplete="current-password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  className="w-full px-3 py-2 text-[13px] border border-[#dfe1e6] rounded focus:outline-none focus:border-[#0052cc]"
+                />
+              </div>
+
+              {error && (
+                <p className="text-[12px] text-[#de350b]">{error}</p>
+              )}
+
+              <button
+                type="submit"
+                disabled={submitting}
+                className="w-full py-2 text-[13px] rounded border border-[#0052cc] text-[#0052cc] hover:bg-[#f4f8ff] disabled:opacity-50"
+              >
+                {submitting ? "로그인 중…" : "로컬 계정으로 로그인"}
+              </button>
+            </form>
+          </>
+        )}
       </div>
     </div>
   );

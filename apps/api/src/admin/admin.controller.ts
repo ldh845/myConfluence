@@ -1,9 +1,18 @@
-import { Body, Controller, Get, Put, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Put,
+  UseGuards,
+} from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 import { AdminService } from './admin.service';
 import { UpdateConfigDto } from './dto/update-config.dto';
+import { SetLocalPasswordDto } from './dto/set-local-password.dto';
 
 // Cycle 48 — 관리자 전용 라우트. ADMIN role 만 접근 가능.
 //   GET  /admin/config   — 시스템 설정 조회 (AppConfig singleton)
@@ -12,6 +21,9 @@ import { UpdateConfigDto } from './dto/update-config.dto';
 //
 // Keycloak 이 source 인 영역(계정 CRUD·역할 변경)은 여기 없음 — Keycloak Admin
 // 콘솔에서 수행.
+//
+// Cycle L1 (feature/ldh) — 하이브리드 인증.
+//   PATCH /admin/users/:id/local-password — 대상 사용자 로컬 비밀번호 설정/초기화
 
 @Controller('admin')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -32,5 +44,13 @@ export class AdminController {
   @Get('users')
   listUsers() {
     return this.admin.listUsers();
+  }
+
+  @Patch('users/:id/local-password')
+  setLocalPassword(
+    @Param('id') id: string,
+    @Body() dto: SetLocalPasswordDto,
+  ) {
+    return this.admin.setLocalPassword(id, dto.password);
   }
 }

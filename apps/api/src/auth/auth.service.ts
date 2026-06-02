@@ -1,5 +1,10 @@
-import { Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma/prisma.service';
 
 // FR-001 / FR-002 — 사용자 조회 + 자체 JWT(docspace_session) 발급.
@@ -67,6 +72,34 @@ export class AuthService {
   async findById(id: string): Promise<AuthUser | null> {
     const user = await this.prisma.user.findUnique({ where: { id } });
     return user ? this.sanitize(user) : null;
+  }
+
+  // Cycle L1 (feature/ldh) — 로컬 로그인(SSO 병행).
+  // Cycle 43 이 경로/UI 만 제거하고 User.passwordHash 컬럼은 남겨뒀으므로, 그 위에
+  // 자체 로그인을 재개한다. 성공 시 OIDC 콜백과 동일한 issueToken 으로 docspace_session
+  // JWT 를 발급(컨트롤러가 쿠키로 심음) → 이후 요청은 기존 jwt.strategy 가 그대로 검증.
+  // 에러 의미:
+  //   - 사용자 없음 / 비번 불일치 → 401 (계정 존재 여부를 노출하지 않음)
+  //   - passwordHash 가 null(= SSO 전용 계정) → 400 'SSO 전용' (로컬 비번 미설정 안내)
+  async localLogin(
+    username: string,
+    password: string,
+  ): Promise<{ user: AuthUser; token: string }> {
+    const user = await this.prisma.user.findUnique({ where: { username } });
+    if (!user) {
+      throw new UnauthorizedException({ error: 'invalid credentials' });
+    }
+    if (!user.passwordHash) {
+      throw new BadRequestException({
+        error: 'sso only',
+        message: '이 계정은 SSO 전용입니다. 관리자에게 로컬 비밀번호 설정을 요청하세요.',
+      });
+    }
+    const ok = await bcrypt.compare(password, user.passwordHash);
+    if (!ok) {
+      throw new UnauthorizedException({ error: 'invalid credentials' });
+    }
+    return { user: this.sanitize(user), token: this.signToken(user) };
   }
 
   // Cycle 43 — OIDC(Keycloak) 로그인용. callback 에서 ID 토큰 클레임으로 DocSpace
