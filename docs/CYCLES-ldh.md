@@ -130,3 +130,44 @@
 - **VM 검증 시나리오**: 추방 후 **뒤로가기 연타** — 몇 번을 눌러도 내용이 안 보이고 항상
   `/login` 이면 합격. (시크릿/캐시 비운 새 세션 권장 — 이전 배포의 캐시된 HTML 이 남아
   있으면 첫 테스트가 오염될 수 있음.)
+
+---
+
+## Cycle L3 — 2026-06-04 — ✅ Done (비밀번호 정책·로그인 실패 잠금·셀프 비번 변경)
+- **제목**: Task L-AUTH 최종 단계 — 약한 비번·brute-force·셀프 변경 불가 3구멍 폐쇄
+- **카테고리**: BE + FE + DB / 인증·계정보안
+- **커밋**: `27ca26f`(코드), 본 CYCLES-ldh.md
+- **변경 파일**:
+  - DB: `schema.prisma`(User.failedLoginCount Int @default(0), lockedUntil DateTime?),
+    마이그레이션 `20260604010000_login_lockout`(ADD COLUMN ×2)
+  - BE(정책): `auth/password-policy.ts`(신규, 단일 출처 — 8자+영문+숫자, validate/assert),
+    `auth/password-policy.spec.ts`(신규). DTO `create-local-user`·`set-local-password`
+    MinLength 제거(정책이 단일 검증), `auth/dto/change-password.dto.ts`(신규)
+  - BE(잠금): `auth/login-lockout.ts`(신규, 5회/15분 상수 + isLocked/minutesUntil),
+    `auth.service.ts`(localLogin 잠금 흐름 + changeMyPassword + AuthUser.hasLocalPassword),
+    `admin.service.ts`(createLocalUser/setLocalPassword 정책 적용, unlockUser, listUsers
+    잠금 매핑), `admin.controller.ts`(PATCH /admin/users/:id/unlock),
+    `auth.controller.ts`(PATCH /auth/me/password)
+  - 테스트: `auth.service.spec.ts`(잠금 5분기 + 셀프변경 4분기), `admin.service.spec.ts`
+    (정책·unlock·잠금 매핑), `auth.controller.spec.ts`(changePassword 위임),
+    `jwt.strategy.spec.ts`(fixture hasLocalPassword)
+  - FE: `lib/auth/useAuth.ts`(hasLocalPassword/isActive), `components/TopNav.tsx`
+    (UserMenu '비밀번호 변경' + 다이얼로그), `app/login/page.tsx`(423 잠금 안내),
+    `app/(app)/admin/AdminUsers.tsx`(잠금 배지·잠금 해제·정책 힌트)
+- **정책(단일 출처)**: 최소 8자 + 영문 1자 + 숫자 1자. 계정 생성·관리자 비번 설정·셀프
+  변경 3경로가 모두 `assertPasswordPolicy` 통과. 위반 시 400 + 사유 메시지.
+- **잠금**: 연속 5회 오답 → 15분 잠금(상수 분리, 추후 환경변수화 여지). 잠긴 동안 정답도
+  423 거부. 성공/잠금 시 카운트 리셋. 관리자 `unlock` 으로 즉시 해제. OIDC 로그인엔 무영향.
+- **셀프 변경**: `PATCH /auth/me/password` — SSO 전용 400 / 현재 비번 불일치 401 / 새 비번
+  정책 위반 400. SSO 전용 계정은 `hasLocalPassword=false` → 프론트가 메뉴 자체를 숨김.
+- **검증**: api `tsc --noEmit` EXIT 0, web `tsc --noEmit` EXIT 0, `nest build` EXIT 0,
+  jest **191 passed (18 suites)**(L2 171 + password-policy 7 + localLogin 잠금 5 +
+  changeMyPassword 4 + admin unlock 2 + createLocalUser 정책 1 + controller changePassword 1).
+  마이그레이션은 `prisma validate` 통과 + SQL 정적 검증(로컬 Postgres 미가동 → migrate
+  deploy 미수행, VM 배포 시 자동 적용).
+- **남은 일**: VM 브라우저 검증만 — ① 약한 비번 생성/변경 거부, ② 5회 오답→잠김(정답도
+  거부), ③ admin 잠금 해제→로그인, ④ 사용자 메뉴 '비밀번호 변경'→새 비번 로그인,
+  ⑤ SSO 계정엔 변경 메뉴 없음.
+- **비고**: 마이그레이션은 ADD COLUMN ×2(NOT NULL DEFAULT 0 / nullable) — 무중단·재작성
+  없음. 423 은 NestJS `HttpStatus.LOCKED`. 정책/잠금 기준 변경은 password-policy.ts /
+  login-lockout.ts 상수만 손대면 됨. **이로써 Task L-AUTH(L1~L3) 코드 완료.**

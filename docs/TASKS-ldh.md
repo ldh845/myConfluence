@@ -11,14 +11,14 @@
   확장. 별도 테이블 없이 기존 `User.passwordHash`(nullable)·
   `keycloakId`(nullable)를 재활용한다. 로컬 로그인은 환경변수 플래그
   `LOCAL_LOGIN_ENABLED` 로 on/off.
-- **상태**: 🟢 Active (L1 ✅ Done, L2 ✅ Done, L3 📝 Planned)
+- **상태**: 🟡 Maintenance (L1·L2·L3 전부 ✅ — 코드 완료, VM 브라우저 검증 대기)
 - **하위 사이클**:
   - **L1** — 로컬 로그인 BE(`POST /auth/login`, bcrypt → 기존 `issueToken`/
     `docspace_session` 재사용) + 로그인 화면 ID/PW 폼 + 관리자 '로컬 비번
     설정/초기화' 최소 기능 + `LOCAL_LOGIN_ENABLED` 플래그. ✅ Done
   - **L2** — 관리자 로컬 계정 생성·활성/비활성(퇴사자 대응). ✅ Done
   - **L3** — 비번 정책·로그인 실패 잠금(`failedLoginCount`/`lockedUntil`)·
-    셀프 비번 변경. 📝 Planned
+    셀프 비번 변경. ✅ Done
 - **진척**:
   - **Cycle L1 (2026-06-02) ✅** — 로컬 로그인 BE(`POST /auth/login`, 플래그
     게이트, bcrypt → `docspace_session` 재사용)·`GET /auth/local-login-enabled`·
@@ -43,5 +43,10 @@
     응답에 `Cache-Control: no-store`(middleware) + 추방 시 `location.replace`(히스토리
     미적재). 기존 가드는 이중 방어로 유지. web tsc EXIT 0, api jest 171 passed 회귀 없음.
     상세는 `docs/CYCLES-ldh.md` L2 followup 3.
-- **남은 일**: L3 — 비번 정책·로그인 실패 잠금(`failedLoginCount`/`lockedUntil`)·
-  셀프 비번 변경.
+  - **Cycle L3 (2026-06-04) ✅** — 비번 정책(8자+영문+숫자, 단일 출처)·로그인 실패
+    잠금(5회/15분, 423 + 관리자 unlock)·셀프 비번 변경(`PATCH /auth/me/password`).
+    마이그레이션 1건(failedLoginCount/lockedUntil). api/web tsc·nest build EXIT 0,
+    jest 191 passed(18 suites). 상세는 `docs/CYCLES-ldh.md` Cycle L3.
+- **남은 일**: VM 브라우저 검증만 — ① 약한 비번 생성/변경 거부, ② 5회 오답→잠김(정답도
+  거부), ③ admin 잠금 해제→로그인, ④ 사용자 메뉴 '비밀번호 변경'→새 비번 로그인,
+  ⑤ SSO 계정엔 변경 메뉴 없음.
