@@ -8,6 +8,11 @@
 // 세션 쿠키를 정리하고 /login 으로 하드 이동한다. 이 코드베이스는 공용 래퍼(apiFetch)보다
 // raw fetch("/api/...") 사용이 압도적으로 많아(20 vs 3), 호출부마다 손대는 대신 단일
 // 인터셉터로 모두 포괄하는 것이 가장 견고하다.
+//
+// followup 2 (bfcache): 추방 후 뒤로가기 시 브라우저 bfcache 가 직전 화면을 메모리에서
+// 복원하면 서버/미들웨어/fetch 를 안 타므로 로그아웃 상태인데 이전 페이지가 잔상으로 보인다.
+// 'pageshow' 의 event.persisted(=bfcache 복원)에서 /api/auth/me 로 세션을 1회 재검증 —
+// 죽었으면 401 이 위 fetch 패치를 그대로 타고 추방된다(새 추방 로직 없이 기존 흐름 재사용).
 
 const AUTH_EXEMPT_PREFIXES = [
   // 로그인 실패(잘못된 비번)의 401 이 추방으로 이어지면 안 된다.
@@ -31,6 +36,23 @@ export function shouldEjectOn401(
 ): boolean {
   if (!requestPath.startsWith("/api/")) return false;
   if (AUTH_EXEMPT_PREFIXES.some((p) => requestPath.startsWith(p))) return false;
+  if (currentPathname.startsWith("/login")) return false;
+  return true;
+}
+
+/**
+ * bfcache 복원(pageshow) 시 세션을 재검증해야 하는지 판정하는 순수 함수.
+ * - persisted: PageTransitionEvent.persisted (true 면 bfcache 에서 복원됨).
+ * - currentPathname: 현재 브라우저 경로.
+ *
+ * 재검증 조건: bfcache 복원이면서 /login 화면이 아닐 때. 첫 로드(persisted=false)나
+ * /login 에서는 불필요하다.
+ */
+export function shouldRevalidateOnPageShow(
+  persisted: boolean,
+  currentPathname: string,
+): boolean {
+  if (!persisted) return false;
   if (currentPathname.startsWith("/login")) return false;
   return true;
 }
@@ -95,4 +117,18 @@ export function installSessionGuard(): void {
     }
     return res;
   };
+
+  // followup 2 — bfcache 복원 시 세션 재검증. 죽은 세션이면 /api/auth/me 가 401 →
+  // 위 fetch 패치가 기존 추방 흐름(clear-session + /login)을 그대로 수행한다.
+  window.addEventListener("pageshow", (event) => {
+    const persisted = (event as PageTransitionEvent).persisted;
+    if (!shouldRevalidateOnPageShow(persisted, window.location.pathname)) return;
+    // bfcache 는 JS 힙째 동결한다 → 동결 시점의 ejecting=true 가 복원돼 추방을 막을 수
+    // 있으므로 복원 시 리셋한다.
+    ejecting = false;
+    // 패치된 window.fetch 로 호출해야 401 이 인터셉터를 탄다(originalFetch 아님).
+    void window.fetch("/api/auth/me", { credentials: "include" }).catch(() => {
+      /* 네트워크 오류는 무시 — 살아있으면 200, 죽었으면 401 추방 */
+    });
+  });
 }
