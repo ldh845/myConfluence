@@ -15,6 +15,7 @@ import { AuthService, AuthUser } from './auth.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { UpdatePrefsDto } from './dto/update-prefs.dto';
 import { LoginDto } from './dto/login.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
 
 // Cycle 43 — 자체 인증(signup/login) 제거. Cycle 43 followup — 로그아웃(SLO)은
 // OidcController(GET /auth/oidc/logout)로 이동(Keycloak end_session 의존).
@@ -115,5 +116,21 @@ export class AuthController {
     const user = (req as Request & { user?: AuthUser }).user!;
     const updated = await this.auth.updateMyPrefs(user.id, dto);
     return { user: updated };
+  }
+
+  // Cycle L3 (feature/ldh) — 셀프 비밀번호 변경. 본인 세션(JwtAuthGuard) 필수.
+  // SSO 전용 400 / 현재 비번 불일치 401 / 새 비번 정책 위반 400 은 서비스가 던진다.
+  @Patch('me/password')
+  @UseGuards(JwtAuthGuard)
+  async changePassword(
+    @Req() req: Request,
+    @Body() dto: ChangePasswordDto,
+  ): Promise<{ ok: true }> {
+    const user = (req as Request & { user?: AuthUser }).user!;
+    return this.auth.changeMyPassword(
+      user.id,
+      dto.currentPassword,
+      dto.newPassword,
+    );
   }
 }

@@ -9,7 +9,11 @@ import { useAuth } from "@/lib/auth/useAuth";
 //   · "+ 로컬 계정 생성" 다이얼로그 → POST /api/admin/users
 //   · 계정 유형 배지(SSO/로컬/혼합) + 활성 토글(PATCH /api/admin/users/:id/active)
 //   · "비밀번호 설정/초기화" 다이얼로그(PATCH /api/admin/users/:id/local-password, L1 잔여분)
+// Cycle L3 (feature/ldh) — 로그인 실패 잠금 배지 + "잠금 해제"(PATCH .../unlock) +
+//   생성/비번 설정 다이얼로그에 비밀번호 정책 힌트.
 // SSO 계정의 생성/역할은 여전히 Keycloak 이 source — 안내 배너로 병기.
+
+const PASSWORD_HINT = "8자 이상, 영문과 숫자를 각각 1자 이상 포함";
 
 type AdminUser = {
   id: string;
@@ -22,6 +26,9 @@ type AdminUser = {
   isActive: boolean;
   hasLocalPassword: boolean;
   isSso: boolean;
+  // Cycle L3 — 로그인 실패 잠금 상태.
+  locked: boolean;
+  lockedUntil: string | null;
   lastLoginAt: string | null;
   createdAt: string;
 };
@@ -68,6 +75,22 @@ export default function AdminUsers() {
       onError: (err) => window.alert(err.message),
     },
   );
+
+  // Cycle L3 — 로그인 실패 잠금 해제.
+  const unlock = useMutation<void, Error, string>({
+    mutationFn: async (id) => {
+      const r = await fetch(`/api/admin/users/${id}/unlock`, {
+        method: "PATCH",
+        credentials: "include",
+      });
+      if (!r.ok) {
+        const body = (await r.json().catch(() => ({}))) as { message?: string };
+        throw new Error(body.message ?? "잠금 해제 실패");
+      }
+    },
+    onSuccess: refresh,
+    onError: (err) => window.alert(err.message),
+  });
 
   const toggleActive = (u: AdminUser) => {
     if (u.isActive) {
@@ -166,11 +189,30 @@ export default function AdminUsers() {
                     </span>
                   </td>
                   <td className="px-3 py-2">
-                    {u.isActive ? (
-                      <span className="text-[#36b37e] text-[12px]">● 활성</span>
-                    ) : (
-                      <span className="text-[#de350b] text-[12px]">● 비활성</span>
-                    )}
+                    <div className="flex items-center gap-1.5">
+                      {u.isActive ? (
+                        <span className="text-[#36b37e] text-[12px]">
+                          ● 활성
+                        </span>
+                      ) : (
+                        <span className="text-[#de350b] text-[12px]">
+                          ● 비활성
+                        </span>
+                      )}
+                      {/* Cycle L3 — 로그인 실패 잠금 배지. */}
+                      {u.locked && (
+                        <span
+                          title={
+                            u.lockedUntil
+                              ? `${formatDate(u.lockedUntil)} 까지`
+                              : undefined
+                          }
+                          className="px-1.5 py-0.5 rounded text-[10px] bg-[#fffae6] text-[#974f0c] border border-[#ffe380]"
+                        >
+                          🔒 잠김
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-3 py-2 text-[#42526e]">
                     {u.lastLoginAt ? (
@@ -181,6 +223,17 @@ export default function AdminUsers() {
                   </td>
                   <td className="px-3 py-2">
                     <div className="flex items-center justify-end gap-2">
+                      {/* Cycle L3 — 잠긴 계정만 잠금 해제 노출. */}
+                      {u.locked && (
+                        <button
+                          type="button"
+                          onClick={() => unlock.mutate(u.id)}
+                          disabled={unlock.isPending}
+                          className="px-2 py-1 text-[12px] rounded border border-[#ffe380] text-[#974f0c] hover:bg-[#fffae6] disabled:opacity-40"
+                        >
+                          잠금 해제
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => setPwTarget(u)}
@@ -354,11 +407,14 @@ function CreateLocalUserDialog({
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
-            minLength={4}
+            minLength={8}
             maxLength={200}
             autoComplete="new-password"
             className={inputCls}
           />
+          <span className="block mt-1 text-[11px] text-[#6b778c]">
+            {PASSWORD_HINT}
+          </span>
         </Field>
         {err && <p className="text-[12px] text-[#de350b]">{err}</p>}
         <div className="flex justify-end gap-2 pt-2">
@@ -433,11 +489,14 @@ function SetPasswordDialog({
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
-            minLength={4}
+            minLength={8}
             maxLength={200}
             autoComplete="new-password"
             className={inputCls}
           />
+          <span className="block mt-1 text-[11px] text-[#6b778c]">
+            {PASSWORD_HINT}
+          </span>
         </Field>
         {err && <p className="text-[12px] text-[#de350b]">{err}</p>}
         <div className="flex justify-end gap-2 pt-2">

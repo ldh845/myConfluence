@@ -8,7 +8,8 @@ import {
 
 // Cycle L2 (feature/ldh) — 관리자 로컬 계정 생성(POST /admin/users) 입력.
 // keycloakId 없이 passwordHash 만 가진 로컬 전용 계정을 발급한다. email 은 선택.
-// 비밀번호 복잡도 정책은 L3 — 여기선 최소 길이만 검증(L1 SetLocalPasswordDto 와 동일 기준).
+// Cycle L3 — 비밀번호 정책(8자+영문+숫자) 검증은 서비스의 validatePasswordPolicy
+//   단일 출처가 담당. DTO 는 타입/상한만 막는다(MinLength 제거).
 export class CreateLocalUserDto {
   @IsString()
   @MinLength(1)
@@ -31,7 +32,6 @@ export class CreateLocalUserDto {
   email?: string;
 
   @IsString()
-  @MinLength(4)
   @MaxLength(200)
   password!: string;
 }

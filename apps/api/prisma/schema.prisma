@@ -86,6 +86,12 @@ model User {
   // false 면 로컬 로그인·OIDC 로그인·기존 세션(jwt.strategy) 모두 거부.
   // 기존 사용자는 마이그레이션 default true 로 전원 활성.
   isActive                   Boolean       @default(true)
+  // Cycle L3 (feature/ldh) — 로컬 로그인 brute-force 잠금.
+  //   failedLoginCount: 연속 오답 횟수(성공/잠금 시 0 으로 리셋).
+  //   lockedUntil: 잠금 만료 시각. 미래면 로컬 로그인 423 거부. null 이면 잠금 없음.
+  // OIDC 로그인에는 영향 없음(비번 검증을 Keycloak 이 담당).
+  failedLoginCount           Int           @default(0)
+  lockedUntil                DateTime?
   // Cycle 48 — Keycloak claim 캐시 (Admin 페이지 사용자 목록용).
   // OIDC callback 의 findOrCreateOidcUser 가 매 로그인마다 동기화.
   email                      String?

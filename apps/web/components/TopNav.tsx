@@ -195,6 +195,8 @@ function UserMenu() {
   const { user, isLoading } = useAuth();
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  // Cycle L3 — 셀프 비밀번호 변경 다이얼로그.
+  const [showPwDialog, setShowPwDialog] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
   // ['spaces'] 캐시 공유 — 다른 곳에서 이미 호출 중이라 추가 fetch 없음(보통).
@@ -315,6 +317,19 @@ function UserMenu() {
           >
             내 개인 공간
           </button>
+          {/* Cycle L3 — 로컬 비밀번호 보유자만 '비밀번호 변경' 노출(SSO 전용은 숨김). */}
+          {user.hasLocalPassword && (
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                setShowPwDialog(true);
+              }}
+              className="w-full text-left px-3 py-2 text-[13px] text-[#172b4d] hover:bg-[#f4f5f7]"
+            >
+              비밀번호 변경
+            </button>
+          )}
           <button
             type="button"
             onClick={() => {
@@ -327,6 +342,149 @@ function UserMenu() {
           </button>
         </div>
       )}
+      {showPwDialog && (
+        <ChangePasswordDialog onClose={() => setShowPwDialog(false)} />
+      )}
+    </div>
+  );
+}
+
+// Cycle L3 (feature/ldh) — 셀프 비밀번호 변경 다이얼로그.
+// PATCH /api/auth/me/password { currentPassword, newPassword }. 정책 위반(400)·
+// 현재 비번 오류(401)·SSO 전용(400) 메시지를 서버 message 로 표시.
+function ChangePasswordDialog({ onClose }: { onClose: () => void }) {
+  const [current, setCurrent] = useState("");
+  const [next, setNext] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [err, setErr] = useState<string | null>(null);
+  const [done, setDone] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErr(null);
+    if (next !== confirm) {
+      setErr("새 비밀번호와 확인이 일치하지 않습니다.");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const r = await fetch("/api/auth/me/password", {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ currentPassword: current, newPassword: next }),
+      });
+      if (r.ok) {
+        setDone(true);
+        return;
+      }
+      const body = (await r.json().catch(() => ({}))) as { message?: string };
+      if (r.status === 401) {
+        setErr(body.message ?? "현재 비밀번호가 올바르지 않습니다.");
+      } else if (r.status === 400) {
+        setErr(body.message ?? "비밀번호 정책에 맞지 않습니다.");
+      } else {
+        setErr("비밀번호 변경에 실패했습니다.");
+      }
+    } catch {
+      setErr("요청 중 오류가 발생했습니다.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-sm bg-white rounded-md border border-[#dfe1e6] p-5"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3 className="text-[15px] font-semibold text-[#172b4d] mb-4">
+          비밀번호 변경
+        </h3>
+        {done ? (
+          <div className="space-y-4">
+            <p className="text-[13px] text-[#36b37e]">
+              비밀번호가 변경되었습니다.
+            </p>
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-3 py-2 text-[13px] rounded bg-[#0052cc] text-white hover:bg-[#0747a6]"
+              >
+                확인
+              </button>
+            </div>
+          </div>
+        ) : (
+          <form onSubmit={submit} className="space-y-3">
+            <label className="block">
+              <span className="text-[12px] font-semibold text-[#42526e]">
+                현재 비밀번호
+              </span>
+              <input
+                type="password"
+                value={current}
+                onChange={(e) => setCurrent(e.target.value)}
+                required
+                autoComplete="current-password"
+                className="mt-1 w-full px-3 py-2 text-[13px] border border-[#dfe1e6] rounded focus:outline-none focus:border-[#0052cc]"
+              />
+            </label>
+            <label className="block">
+              <span className="text-[12px] font-semibold text-[#42526e]">
+                새 비밀번호
+              </span>
+              <input
+                type="password"
+                value={next}
+                onChange={(e) => setNext(e.target.value)}
+                required
+                autoComplete="new-password"
+                className="mt-1 w-full px-3 py-2 text-[13px] border border-[#dfe1e6] rounded focus:outline-none focus:border-[#0052cc]"
+              />
+              <span className="block mt-1 text-[11px] text-[#6b778c]">
+                8자 이상, 영문과 숫자를 각각 1자 이상 포함
+              </span>
+            </label>
+            <label className="block">
+              <span className="text-[12px] font-semibold text-[#42526e]">
+                새 비밀번호 확인
+              </span>
+              <input
+                type="password"
+                value={confirm}
+                onChange={(e) => setConfirm(e.target.value)}
+                required
+                autoComplete="new-password"
+                className="mt-1 w-full px-3 py-2 text-[13px] border border-[#dfe1e6] rounded focus:outline-none focus:border-[#0052cc]"
+              />
+            </label>
+            {err && <p className="text-[12px] text-[#de350b]">{err}</p>}
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-3 py-2 text-[13px] rounded border border-[#dfe1e6] text-[#42526e] hover:bg-[#f4f5f7]"
+              >
+                취소
+              </button>
+              <button
+                type="submit"
+                disabled={submitting}
+                className="px-3 py-2 text-[13px] rounded bg-[#0052cc] text-white hover:bg-[#0747a6] disabled:bg-[#a5adba]"
+              >
+                {submitting ? "변경 중..." : "변경"}
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
     </div>
   );
 }

@@ -6,6 +6,8 @@ import {
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma/prisma.service';
+import { assertPasswordPolicy } from '../auth/password-policy';
+import { isLocked } from '../auth/login-lockout';
 
 // Cycle 48 — 관리자 페이지 백엔드 서비스.
 // (1) AppConfig: 시스템 설정 single-row (id="singleton"). 마이그레이션에서
@@ -45,6 +47,7 @@ export class AdminService {
   //   isSso: keycloakId 보유 여부(SSO 연결). 둘 다 true 면 '혼합' 계정.
   // passwordHash/keycloakId 는 내부 계산에만 쓰고 반환 객체에서 제거한다.
   async listUsers() {
+    const now = new Date();
     const users = await this.prisma.user.findMany({
       where: { NOT: { username: 'legacy' } },
       orderBy: { createdAt: 'desc' },
@@ -61,12 +64,17 @@ export class AdminService {
         createdAt: true,
         passwordHash: true,
         keycloakId: true,
+        // Cycle L3 — 잠금 상태 노출(해시는 여전히 비노출).
+        lockedUntil: true,
       },
     });
-    return users.map(({ passwordHash, keycloakId, ...u }) => ({
+    return users.map(({ passwordHash, keycloakId, lockedUntil, ...u }) => ({
       ...u,
       hasLocalPassword: passwordHash != null,
       isSso: keycloakId != null,
+      // 현재 잠겨 있는지 + 만료 시각(미래일 때만 의미). UI 배지/해제 버튼용.
+      locked: isLocked(lockedUntil, now),
+      lockedUntil: isLocked(lockedUntil, now) ? lockedUntil : null,
     }));
   }
 
@@ -90,6 +98,8 @@ export class AdminService {
     hasLocalPassword: true;
     isSso: false;
   }> {
+    // Cycle L3 — 비밀번호 정책(8자+영문+숫자) 검증. 단일 출처.
+    assertPasswordPolicy(input.password);
     const existing = await this.prisma.user.findUnique({
       where: { username: input.username },
     });
@@ -156,6 +166,8 @@ export class AdminService {
     userId: string,
     password: string,
   ): Promise<{ id: string; username: string; hasLocalPassword: true }> {
+    // Cycle L3 — 비밀번호 정책(8자+영문+숫자) 검증. 단일 출처.
+    assertPasswordPolicy(password);
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) {
       throw new NotFoundException({ error: 'user not found' });
@@ -167,5 +179,21 @@ export class AdminService {
       select: { id: true, username: true },
     });
     return { ...updated, hasLocalPassword: true };
+  }
+
+  // Cycle L3 (feature/ldh) — 로그인 실패 잠금 해제. failedLoginCount/lockedUntil 리셋.
+  async unlockUser(
+    userId: string,
+  ): Promise<{ id: string; username: string; locked: false }> {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException({ error: 'user not found' });
+    }
+    const updated = await this.prisma.user.update({
+      where: { id: userId },
+      data: { failedLoginCount: 0, lockedUntil: null },
+      select: { id: true, username: true },
+    });
+    return { ...updated, locked: false };
   }
 }

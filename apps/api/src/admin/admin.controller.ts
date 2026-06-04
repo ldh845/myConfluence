@@ -33,6 +33,8 @@ import { SetActiveDto } from './dto/set-active.dto';
 // Cycle L2 (feature/ldh) — 로컬 계정 관리.
 //   POST  /admin/users           — 로컬 전용 계정 생성
 //   PATCH /admin/users/:id/active — 계정 활성/비활성 토글(자기 자신 비활성화 금지)
+// Cycle L3 (feature/ldh) — 로그인 실패 잠금 해제.
+//   PATCH /admin/users/:id/unlock — failedLoginCount/lockedUntil 리셋
 
 @Controller('admin')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -76,5 +78,10 @@ export class AdminController {
     @Body() dto: SetLocalPasswordDto,
   ) {
     return this.admin.setLocalPassword(id, dto.password);
+  }
+
+  @Patch('users/:id/unlock')
+  unlockUser(@Param('id') id: string) {
+    return this.admin.unlockUser(id);
   }
 }

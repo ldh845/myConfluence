@@ -81,6 +81,13 @@ function LoginPageInner() {
         setError("아이디 또는 비밀번호가 올바르지 않습니다.");
       } else if (r.status === 403) {
         setError("로컬 로그인이 비활성화되어 있습니다.");
+      } else if (r.status === 423) {
+        // Cycle L3 — 로그인 실패 잠금. 서버가 남은 분을 안내 메시지로 준다.
+        const body = (await r.json().catch(() => ({}))) as { message?: string };
+        setError(
+          body.message ??
+            "로그인 시도가 많아 계정이 잠겼습니다. 잠시 후 다시 시도하세요.",
+        );
       } else {
         setError("로그인에 실패했습니다. 잠시 후 다시 시도하세요.");
       }

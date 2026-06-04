@@ -1,12 +1,21 @@
 import {
   BadRequestException,
   ForbiddenException,
+  HttpException,
+  HttpStatus,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma/prisma.service';
+import { assertPasswordPolicy } from './password-policy';
+import {
+  LOCKOUT_DURATION_MS,
+  MAX_FAILED_LOGIN_ATTEMPTS,
+  isLocked,
+  minutesUntil,
+} from './login-lockout';
 
 // FR-001 / FR-002 — 사용자 조회 + 자체 JWT(docspace_session) 발급.
 // Cycle 43(2/2): 자체 인증(bcrypt signup/login) 제거 → 로그인은 Keycloak OIDC 단일.
@@ -27,6 +36,9 @@ export type AuthUser = {
   createdAt: Date;
   // Cycle L2 (feature/ldh) — 계정 활성 상태. jwt.strategy 가 매 요청 검증에 사용.
   isActive: boolean;
+  // Cycle L3 (feature/ldh) — 로컬 비밀번호 보유 여부(해시 자체는 비노출). 프론트가
+  // '비밀번호 변경' 메뉴 노출을 판단하는 데 쓴다. SSO 전용 계정이면 false.
+  hasLocalPassword: boolean;
   // Cycle 49 — 사용자별 환경설정. /auth/me 응답 포함, /auth/me/prefs 로 갱신.
   showPersonalSpaceInSidebar: boolean;
 };
@@ -46,6 +58,7 @@ export class AuthService {
     role: string;
     createdAt: Date;
     isActive: boolean;
+    passwordHash: string | null;
     showPersonalSpaceInSidebar: boolean;
   }): AuthUser {
     return {
@@ -56,6 +69,8 @@ export class AuthService {
       role: user.role,
       createdAt: user.createdAt,
       isActive: user.isActive,
+      // 해시는 노출하지 않고 보유 여부만 불리언으로 전달.
+      hasLocalPassword: user.passwordHash != null,
       showPersonalSpaceInSidebar: user.showPersonalSpaceInSidebar,
     };
   }
@@ -87,6 +102,8 @@ export class AuthService {
   //   - 사용자 없음 / 비번 불일치 → 401 (계정 존재 여부를 노출하지 않음)
   //   - passwordHash 가 null(= SSO 전용 계정) → 400 'SSO 전용' (로컬 비번 미설정 안내)
   // Cycle L2 (feature/ldh) — 비활성 계정(isActive=false)은 비번이 맞아도 401 거부.
+  // Cycle L3 (feature/ldh) — brute-force 잠금. lockedUntil 미래면 423. 오답마다
+  //   failedLoginCount+1, 5회 도달 시 15분 잠금(카운트 리셋). 성공 시 카운트/잠금 리셋.
   async localLogin(
     username: string,
     password: string,
@@ -107,11 +124,83 @@ export class AuthService {
         message: '이 계정은 SSO 전용입니다. 관리자에게 로컬 비밀번호 설정을 요청하세요.',
       });
     }
+    const now = new Date();
+    // 이미 잠겨 있으면 비번 검증 없이 423.
+    if (isLocked(user.lockedUntil, now)) {
+      throw this.lockedException(user.lockedUntil!, now);
+    }
     const ok = await bcrypt.compare(password, user.passwordHash);
     if (!ok) {
+      const nextCount = user.failedLoginCount + 1;
+      if (nextCount >= MAX_FAILED_LOGIN_ATTEMPTS) {
+        // 임계 도달 → 잠금 설정 + 카운트 리셋.
+        const lockedUntil = new Date(now.getTime() + LOCKOUT_DURATION_MS);
+        await this.prisma.user.update({
+          where: { id: user.id },
+          data: { failedLoginCount: 0, lockedUntil },
+        });
+        throw this.lockedException(lockedUntil, now);
+      }
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: { failedLoginCount: nextCount },
+      });
       throw new UnauthorizedException({ error: 'invalid credentials' });
     }
+    // 성공 — 누적 실패/잠금이 있으면 리셋.
+    if (user.failedLoginCount > 0 || user.lockedUntil != null) {
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: { failedLoginCount: 0, lockedUntil: null },
+      });
+    }
     return { user: this.sanitize(user), token: this.signToken(user) };
+  }
+
+  // 423 Locked 예외 — 남은 분을 안내한다.
+  private lockedException(lockedUntil: Date, now: Date): HttpException {
+    const mins = minutesUntil(lockedUntil, now);
+    return new HttpException(
+      {
+        error: 'account locked',
+        message: `로그인 시도가 많아 계정이 잠겼습니다. 약 ${mins}분 후 다시 시도하세요.`,
+      },
+      HttpStatus.LOCKED,
+    );
+  }
+
+  // Cycle L3 (feature/ldh) — 사용자 셀프 비밀번호 변경(PATCH /auth/me/password).
+  //   SSO 전용(passwordHash null) → 400, 현재 비번 불일치 → 401, 새 비번 정책 위반 → 400.
+  //   성공 시 해시 갱신. (잠금 카운트는 건드리지 않음 — 본인 인증을 이미 통과.)
+  async changeMyPassword(
+    userId: string,
+    currentPassword: string,
+    newPassword: string,
+  ): Promise<{ ok: true }> {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      throw new UnauthorizedException({ error: 'invalid credentials' });
+    }
+    if (!user.passwordHash) {
+      throw new BadRequestException({
+        error: 'sso only',
+        message: 'SSO 전용 계정은 비밀번호를 변경할 수 없습니다.',
+      });
+    }
+    const ok = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!ok) {
+      throw new UnauthorizedException({
+        error: 'invalid current password',
+        message: '현재 비밀번호가 올바르지 않습니다.',
+      });
+    }
+    assertPasswordPolicy(newPassword);
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { passwordHash },
+    });
+    return { ok: true };
   }
 
   // Cycle 43 — OIDC(Keycloak) 로그인용. callback 에서 ID 토큰 클레임으로 DocSpace

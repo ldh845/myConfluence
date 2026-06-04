@@ -1,6 +1,6 @@
 import { ForbiddenException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { Response } from 'express';
+import type { Request, Response } from 'express';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 
@@ -8,7 +8,7 @@ import { AuthService } from './auth.service';
 
 describe('AuthController', () => {
   let controller: AuthController;
-  let authMock: { localLogin: jest.Mock };
+  let authMock: { localLogin: jest.Mock; changeMyPassword: jest.Mock };
   let configValues: Record<string, string>;
 
   const makeController = (overrides: Record<string, string> = {}) => {
@@ -20,7 +20,7 @@ describe('AuthController', () => {
     const configMock = {
       get: (key: string, def?: string) => configValues[key] ?? def,
     } as unknown as ConfigService;
-    authMock = { localLogin: jest.fn() };
+    authMock = { localLogin: jest.fn(), changeMyPassword: jest.fn() };
     return new AuthController(authMock as unknown as AuthService, configMock);
   };
 
@@ -88,6 +88,25 @@ describe('AuthController', () => {
         'docspace_session',
         'tok',
         expect.objectContaining({ httpOnly: true, path: '/' }),
+      );
+    });
+  });
+
+  // Cycle L3 — 셀프 비번 변경은 세션 사용자 id 로 서비스에 위임한다.
+  describe('changePassword', () => {
+    it('delegates to auth.changeMyPassword with the session user id', async () => {
+      controller = makeController();
+      authMock.changeMyPassword.mockResolvedValue({ ok: true });
+      const req = { user: { id: 'u1' } } as unknown as Request;
+      const result = await controller.changePassword(req, {
+        currentPassword: 'cur',
+        newPassword: 'newpass123',
+      });
+      expect(result).toEqual({ ok: true });
+      expect(authMock.changeMyPassword).toHaveBeenCalledWith(
+        'u1',
+        'cur',
+        'newpass123',
       );
     });
   });

@@ -1,12 +1,18 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { JwtService } from '@nestjs/jwt';
-import { BadRequestException, UnauthorizedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  HttpException,
+  HttpStatus,
+  UnauthorizedException,
+} from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { AuthService } from './auth.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 // Cycle 49 — AuthService.updateMyPrefs 단위 검증.
 // Cycle L1 (feature/ldh) — localLogin 분기 검증 추가.
+// Cycle L3 (feature/ldh) — 로그인 실패 잠금 + 셀프 비번 변경 검증 추가.
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -37,6 +43,7 @@ describe('AuthService', () => {
       role: 'DEVELOPER',
       createdAt: new Date('2026-05-27T00:00:00Z'),
       isActive: true,
+      passwordHash: null,
       showPersonalSpaceInSidebar: false,
     };
 
@@ -63,6 +70,7 @@ describe('AuthService', () => {
         role: 'DEVELOPER',
         createdAt: baseUser.createdAt,
         isActive: true,
+        hasLocalPassword: false,
         showPersonalSpaceInSidebar: true,
       });
     });
@@ -88,6 +96,9 @@ describe('AuthService', () => {
       createdAt: new Date('2026-06-02T00:00:00Z'),
       isActive: true,
       showPersonalSpaceInSidebar: false,
+      // Cycle L3 — 잠금 상태 필드.
+      failedLoginCount: 0,
+      lockedUntil: null as Date | null,
       // 실제 bcrypt 해시 — 'correct-pass' 로 생성.
       passwordHash: bcrypt.hashSync('correct-pass', 10),
     };
@@ -144,6 +155,129 @@ describe('AuthService', () => {
       await expect(
         service.localLogin('admin', 'correct-pass'),
       ).rejects.toThrow(UnauthorizedException);
+    });
+
+    // Cycle L3 (feature/ldh) — brute-force 잠금.
+    it('increments failedLoginCount on wrong password (below threshold)', async () => {
+      prismaMock.user.findUnique.mockResolvedValue({
+        ...localUser,
+        failedLoginCount: 1,
+      });
+      await expect(service.localLogin('admin', 'wrong-pass')).rejects.toThrow(
+        UnauthorizedException,
+      );
+      expect(prismaMock.user.update).toHaveBeenCalledWith({
+        where: { id: 'u2' },
+        data: { failedLoginCount: 2 },
+      });
+    });
+
+    it('locks account on 5th consecutive wrong password (423)', async () => {
+      prismaMock.user.findUnique.mockResolvedValue({
+        ...localUser,
+        failedLoginCount: 4, // 다음 오답이 5회째
+      });
+      await expect(
+        service.localLogin('admin', 'wrong-pass'),
+      ).rejects.toMatchObject({ status: HttpStatus.LOCKED });
+      // 잠금 설정 + 카운트 리셋.
+      const arg = prismaMock.user.update.mock.calls[0][0];
+      expect(arg.where).toEqual({ id: 'u2' });
+      expect(arg.data.failedLoginCount).toBe(0);
+      expect(arg.data.lockedUntil).toBeInstanceOf(Date);
+    });
+
+    it('rejects with 423 when already locked (no password check)', async () => {
+      const future = new Date(Date.now() + 5 * 60 * 1000);
+      prismaMock.user.findUnique.mockResolvedValue({
+        ...localUser,
+        lockedUntil: future,
+      });
+      await expect(
+        service.localLogin('admin', 'correct-pass'),
+      ).rejects.toBeInstanceOf(HttpException);
+      await expect(
+        service.localLogin('admin', 'correct-pass'),
+      ).rejects.toMatchObject({ status: HttpStatus.LOCKED });
+      // 잠긴 동안엔 update 없음.
+      expect(prismaMock.user.update).not.toHaveBeenCalled();
+    });
+
+    it('allows login after lockedUntil has expired and resets counters', async () => {
+      const past = new Date(Date.now() - 60 * 1000);
+      prismaMock.user.findUnique.mockResolvedValue({
+        ...localUser,
+        failedLoginCount: 0,
+        lockedUntil: past,
+      });
+      const result = await service.localLogin('admin', 'correct-pass');
+      expect(result.token).toBe('signed.jwt.token');
+      // 만료 잠금 흔적 리셋.
+      expect(prismaMock.user.update).toHaveBeenCalledWith({
+        where: { id: 'u2' },
+        data: { failedLoginCount: 0, lockedUntil: null },
+      });
+    });
+
+    it('resets failedLoginCount on successful login', async () => {
+      prismaMock.user.findUnique.mockResolvedValue({
+        ...localUser,
+        failedLoginCount: 3,
+      });
+      await service.localLogin('admin', 'correct-pass');
+      expect(prismaMock.user.update).toHaveBeenCalledWith({
+        where: { id: 'u2' },
+        data: { failedLoginCount: 0, lockedUntil: null },
+      });
+    });
+  });
+
+  // Cycle L3 (feature/ldh) — 셀프 비밀번호 변경.
+  describe('changeMyPassword', () => {
+    const localUser = {
+      id: 'u2',
+      username: 'admin',
+      passwordHash: bcrypt.hashSync('current-pass', 10),
+    };
+
+    it('updates hash when current matches and new passes policy', async () => {
+      prismaMock.user.findUnique.mockResolvedValue(localUser);
+      const result = await service.changeMyPassword(
+        'u2',
+        'current-pass',
+        'newpass123',
+      );
+      expect(result).toEqual({ ok: true });
+      const arg = prismaMock.user.update.mock.calls[0][0];
+      expect(arg.where).toEqual({ id: 'u2' });
+      expect(typeof arg.data.passwordHash).toBe('string');
+      expect(arg.data.passwordHash).not.toBe('newpass123'); // 해시됨
+    });
+
+    it('throws 401 when current password is wrong', async () => {
+      prismaMock.user.findUnique.mockResolvedValue(localUser);
+      await expect(
+        service.changeMyPassword('u2', 'wrong-current', 'newpass123'),
+      ).rejects.toThrow(UnauthorizedException);
+      expect(prismaMock.user.update).not.toHaveBeenCalled();
+    });
+
+    it('throws 400 (SSO only) when account has no passwordHash', async () => {
+      prismaMock.user.findUnique.mockResolvedValue({
+        ...localUser,
+        passwordHash: null,
+      });
+      await expect(
+        service.changeMyPassword('u2', 'whatever', 'newpass123'),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('throws 400 when new password violates policy', async () => {
+      prismaMock.user.findUnique.mockResolvedValue(localUser);
+      await expect(
+        service.changeMyPassword('u2', 'current-pass', 'short'),
+      ).rejects.toThrow(BadRequestException);
+      expect(prismaMock.user.update).not.toHaveBeenCalled();
     });
   });
 });

@@ -18,6 +18,7 @@ describe('JwtStrategy', () => {
     role: 'DEVELOPER',
     createdAt: new Date(),
     isActive: true,
+    hasLocalPassword: false,
     showPersonalSpaceInSidebar: false,
   };
 

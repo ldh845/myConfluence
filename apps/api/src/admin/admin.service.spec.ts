@@ -1,10 +1,15 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { BadRequestException, ConflictException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 import { AdminService } from './admin.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 // Cycle 48 — AdminService 단위 검증 (PrismaService mock).
 // Cycle L2 (feature/ldh) — createLocalUser / setActive / listUsers 매핑 검증 추가.
+// Cycle L3 (feature/ldh) — 비번 정책 적용 / unlockUser / 잠금 매핑 검증 추가.
 
 describe('AdminService', () => {
   let service: AdminService;
@@ -92,6 +97,8 @@ describe('AdminService', () => {
           createdAt: new Date(),
           passwordHash: 'hash',
           keycloakId: 'kc-1',
+          // 미래 잠금 → locked true.
+          lockedUntil: new Date(Date.now() + 10 * 60 * 1000),
         },
         {
           id: 'u2',
@@ -106,18 +113,29 @@ describe('AdminService', () => {
           createdAt: new Date(),
           passwordHash: null,
           keycloakId: 'kc-2',
+          // 과거 잠금 → locked false(만료).
+          lockedUntil: new Date(Date.now() - 10 * 60 * 1000),
         },
       ]);
       const result = await service.listUsers();
       const call = prismaMock.user.findMany.mock.calls[0][0];
       expect(call.where).toEqual({ NOT: { username: 'legacy' } });
       expect(call.orderBy).toEqual({ createdAt: 'desc' });
-      expect(call.select).toMatchObject({ isActive: true });
+      expect(call.select).toMatchObject({ isActive: true, lockedUntil: true });
 
-      // 혼합 계정(hash + keycloak): 둘 다 true.
-      expect(result[0]).toMatchObject({ hasLocalPassword: true, isSso: true });
-      // SSO 전용(hash 없음): 로컬 false, SSO true.
-      expect(result[1]).toMatchObject({ hasLocalPassword: false, isSso: true });
+      // 혼합 계정(hash + keycloak): 둘 다 true. 미래 잠금 → locked true.
+      expect(result[0]).toMatchObject({
+        hasLocalPassword: true,
+        isSso: true,
+        locked: true,
+      });
+      // SSO 전용(hash 없음): 로컬 false, SSO true. 만료 잠금 → locked false + lockedUntil null.
+      expect(result[1]).toMatchObject({
+        hasLocalPassword: false,
+        isSso: true,
+        locked: false,
+        lockedUntil: null,
+      });
       // 원본 해시/키클락 id 는 절대 노출되지 않는다.
       expect(result[0]).not.toHaveProperty('passwordHash');
       expect(result[0]).not.toHaveProperty('keycloakId');
@@ -131,7 +149,7 @@ describe('AdminService', () => {
       name: 'New Bie',
       department: 'IT',
       email: 'newbie@x.com',
-      password: 'pw1234',
+      password: 'newbie123', // 정책 통과(8자+영문+숫자)
     };
 
     it('hashes password, sets keycloakId null, returns no hash', async () => {
@@ -151,7 +169,7 @@ describe('AdminService', () => {
       const createArg = prismaMock.user.create.mock.calls[0][0];
       expect(createArg.data.keycloakId).toBeNull();
       expect(typeof createArg.data.passwordHash).toBe('string');
-      expect(createArg.data.passwordHash).not.toBe('pw1234'); // 평문 아님
+      expect(createArg.data.passwordHash).not.toBe('newbie123'); // 평문 아님
       expect(createArg.select).not.toHaveProperty('passwordHash');
       expect(result).toMatchObject({
         id: 'u9',
@@ -168,6 +186,38 @@ describe('AdminService', () => {
         ConflictException,
       );
       expect(prismaMock.user.create).not.toHaveBeenCalled();
+    });
+
+    // Cycle L3 — 약한 비번은 중복 검사 전에 정책 위반 400.
+    it('throws 400 when password violates policy', async () => {
+      await expect(
+        service.createLocalUser({ ...input, password: 'weak' }),
+      ).rejects.toThrow(BadRequestException);
+      expect(prismaMock.user.findUnique).not.toHaveBeenCalled();
+      expect(prismaMock.user.create).not.toHaveBeenCalled();
+    });
+  });
+
+  // Cycle L3 (feature/ldh) — 로그인 실패 잠금 해제.
+  describe('unlockUser', () => {
+    it('resets failedLoginCount and lockedUntil', async () => {
+      prismaMock.user.findUnique.mockResolvedValue({ id: 'u2' });
+      prismaMock.user.update.mockResolvedValue({ id: 'u2', username: 'bob' });
+      const result = await service.unlockUser('u2');
+      expect(prismaMock.user.update).toHaveBeenCalledWith({
+        where: { id: 'u2' },
+        data: { failedLoginCount: 0, lockedUntil: null },
+        select: { id: true, username: true },
+      });
+      expect(result).toEqual({ id: 'u2', username: 'bob', locked: false });
+    });
+
+    it('throws 404 when user not found', async () => {
+      prismaMock.user.findUnique.mockResolvedValue(null);
+      await expect(service.unlockUser('ghost')).rejects.toThrow(
+        NotFoundException,
+      );
+      expect(prismaMock.user.update).not.toHaveBeenCalled();
     });
   });
 
