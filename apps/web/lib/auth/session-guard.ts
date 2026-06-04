@@ -89,7 +89,9 @@ function eject(originalFetch: typeof fetch): void {
       /* 정리 실패해도 추방은 진행 */
     })
     .finally(() => {
-      window.location.href = "/login?error=session_expired";
+      // followup 3 — href 대신 replace: 죽은 페이지 항목을 /login 으로 교체해
+      // 히스토리에 추방 항목이 쌓이지 않게 한다(뒤로가기로 잔상 복귀 방지).
+      window.location.replace("/login?error=session_expired");
     });
 }
 
