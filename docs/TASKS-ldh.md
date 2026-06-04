@@ -35,5 +35,9 @@
     발견 → 전역 401 핸들러(`POST /auth/clear-session` + `window.fetch` 패치 추방 →
     `/login?error=session_expired`)로 수정. 마이그레이션 없음. jest 171 passed.
     상세는 `docs/CYCLES-ldh.md` L2 followup.
+  - **Cycle L2 followup 2 (2026-06-04) ✅** — 추방 후 뒤로가기 시 bfcache 복원 잔상
+    차단. `window 'pageshow'` 의 `event.persisted` 에서 `/api/auth/me` 재검증 → 죽었으면
+    기존 추방 흐름 그대로 재사용. web tsc EXIT 0, api jest 171 passed 회귀 없음.
+    상세는 `docs/CYCLES-ldh.md` L2 followup 2.
 - **남은 일**: L3 — 비번 정책·로그인 실패 잠금(`failedLoginCount`/`lockedUntil`)·
   셀프 비번 변경.

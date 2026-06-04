@@ -88,3 +88,23 @@
 - **비고**: web 에 테스트 러너가 없어 FE 추방 로직은 순수 함수(`shouldEjectOn401`) 설계 +
   VM 시나리오로 커버. window.fetch 패치는 typeof window 가드 + `__dsSessionGuardInstalled`
   중복 설치 가드를 가진다.
+
+### L2 followup 2 — 2026-06-04 — ✅ Done (bfcache 복원 잔상 차단)
+- **증상**: followup 1 의 401 추방은 정상. 그러나 추방 후 **뒤로가기** 시 브라우저
+  bfcache 가 직전 화면을 메모리에서 복원 — 서버/미들웨어/fetch 를 안 타므로 로그아웃
+  상태인데 이전 페이지가 잔상으로 보인다(새 API 호출은 여전히 401, 화면만 잔상).
+- **원인**: bfcache 복원은 정상 네비게이션/네트워크를 우회하므로 followup 1 의 fetch
+  인터셉터가 발동할 기회가 없다.
+- **수정**: `lib/auth/session-guard.ts` 에 `window 'pageshow'` 리스너 추가 —
+  `event.persisted`(bfcache 복원)일 때 `/api/auth/me` 를 1회 재검증. 살아있으면 200(무동작),
+  죽었으면 401 이 **기존 fetch 패치를 그대로 타고** clear-session + `/login` 추방 수행
+  (새 추방 로직 없이 followup 1 흐름 재사용). bfcache 는 JS 힙째 동결하므로 복원된
+  `ejecting` 플래그를 리셋해 추방이 다시 발동되게 한다. `/login` 에서는 미발동
+  (`shouldRevalidateOnPageShow` 순수 함수로 판정).
+- **커밋**: `ddecdbf`(코드), 본 CYCLES-ldh.md.
+- **검증**: web `tsc --noEmit` EXIT 0, api jest **171 passed** 회귀 없음(FE 단일 파일 변경).
+  마이그레이션 없음.
+- **VM 검증 시나리오**: 추방 후 **뒤로가기** → 잠깐 잔상 보였다가 즉시 `/login` 으로
+  재추방되면 합격.
+- **비고**: web 테스트 러너 부재 → `shouldRevalidateOnPageShow` 순수 함수 설계 + VM
+  시나리오로 커버(followup 1 과 동일 패턴).
