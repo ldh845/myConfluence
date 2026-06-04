@@ -39,8 +39,11 @@ type Attachment = {
 type Props = {
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  onSelect: (href: string | null) => void;
+  onSelect: (href: string | null, text?: string) => void;
   currentHref?: string;
+  currentText?: string;
+  // Cycle XX — 텍스트가 선택된 상태에서 링크 버튼 누르면 이 값으로 연결 문구 초기화.
+  selectedText?: string;
 };
 
 type Tab = "internal" | "external" | "file";
@@ -58,21 +61,26 @@ export default function InternalPageLinkDialog({
   onOpenChange,
   onSelect,
   currentHref,
+  currentText,
+  selectedText,
 }: Props) {
   const [tab, setTab] = useState<Tab>("internal");
   const [url, setUrl] = useState("");
+  const [linkText, setLinkText] = useState("");
   const [q, setQ] = useState("");
   const [debouncedQ, setDebouncedQ] = useState("");
 
-  // 모달이 열릴 때 현재 링크를 외부 URL 입력에 채워 넣어 수정 흐름을 살림.
+  // 모달이 열릴 때 현재 링크/선택 상태를 입력 필드에 채워 넣어 수정 흐름을 살림.
   useEffect(() => {
     if (open) {
       setTab(pickDefaultTab(currentHref));
       setUrl(currentHref ?? "");
+      // 선택 텍스트 > 기존 링크 텍스트 > 빈 값
+      setLinkText(selectedText || currentText || "");
       setQ("");
       setDebouncedQ("");
     }
-  }, [open, currentHref]);
+  }, [open, currentHref, currentText, selectedText]);
 
   // 250ms debounce — 외부 라이브러리 없이 setTimeout으로.
   useEffect(() => {
@@ -106,20 +114,21 @@ export default function InternalPageLinkDialog({
     enabled: !!pageId && open && tab === "file",
   });
 
-  const applyFile = (attId: string) => {
-    onSelect(`/api/attachments/${attId}`);
+  const applyFile = (attId: string, filename?: string) => {
+    onSelect(`/api/attachments/${attId}`, linkText.trim() || filename || undefined);
     onOpenChange(false);
   };
 
   const applyExternal = () => {
     const trimmed = url.trim();
     if (!trimmed) return;
-    onSelect(trimmed);
+    const text = linkText.trim();
+    onSelect(trimmed, text || undefined);
     onOpenChange(false);
   };
 
-  const applyInternal = (pageId: string) => {
-    onSelect(`/?pageId=${pageId}`);
+  const applyInternal = (pageId: string, selectedTitle?: string) => {
+    onSelect(`/?pageId=${pageId}`, linkText.trim() || selectedTitle || undefined);
     onOpenChange(false);
   };
 
@@ -186,7 +195,7 @@ export default function InternalPageLinkDialog({
         </div>
 
         {tab === "internal" && (
-          <section className="space-y-2" role="tabpanel">
+          <section className="space-y-3" role="tabpanel">
             <div className="text-[12px] text-[#6b778c]">
               이 위키 안의 페이지를 검색해 연결합니다.
             </div>
@@ -198,7 +207,7 @@ export default function InternalPageLinkDialog({
               className="w-full px-3 py-1.5 text-[13px] border border-[#dfe1e6] rounded focus:outline-none focus:border-[#0052cc]"
               autoFocus
             />
-            <div className="max-h-[280px] overflow-y-auto border border-[#dfe1e6] rounded">
+            <div className="max-h-[200px] overflow-y-auto border border-[#dfe1e6] rounded">
               {debouncedQ.trim().length === 0 ? (
                 <div className="px-3 py-2 text-[12px] text-[#6b778c]">
                   검색어를 입력하세요.
@@ -217,7 +226,7 @@ export default function InternalPageLinkDialog({
                     <li key={page.id}>
                       <button
                         type="button"
-                        onClick={() => applyInternal(page.id)}
+                        onClick={() => applyInternal(page.id, page.title)}
                         className="w-full text-left px-3 py-2 text-[13px] hover:bg-[#ebecf0] border-b border-[#dfe1e6] last:border-b-0"
                       >
                         <div className="text-[#172b4d] font-medium">
@@ -232,15 +241,30 @@ export default function InternalPageLinkDialog({
                 </ul>
               )}
             </div>
+            <div>
+              <label className="block text-[12px] text-[#6b778c] mb-1">
+                연결 문구 (비우면 선택한 페이지 제목이 표시됨)
+              </label>
+              <input
+                type="text"
+                value={linkText}
+                onChange={(e) => setLinkText(e.target.value)}
+                placeholder="클릭할 때 보이는 텍스트"
+                className="w-full px-3 py-1.5 text-[13px] border border-[#dfe1e6] rounded focus:outline-none focus:border-[#0052cc]"
+              />
+            </div>
           </section>
         )}
 
         {tab === "external" && (
-          <section className="space-y-2" role="tabpanel">
+          <section className="space-y-3" role="tabpanel">
             <div className="text-[12px] text-[#6b778c]">
               외부 URL(http/https)을 입력해 연결합니다.
             </div>
-            <div className="flex gap-2">
+            <div>
+              <label className="block text-[12px] text-[#6b778c] mb-1">
+                URL
+              </label>
               <input
                 type="url"
                 value={url}
@@ -252,14 +276,28 @@ export default function InternalPageLinkDialog({
                   }
                 }}
                 placeholder="https://example.com"
-                className="flex-1 px-3 py-1.5 text-[13px] border border-[#dfe1e6] rounded focus:outline-none focus:border-[#0052cc]"
+                className="w-full px-3 py-1.5 text-[13px] border border-[#dfe1e6] rounded focus:outline-none focus:border-[#0052cc]"
                 autoFocus
               />
+            </div>
+            <div>
+              <label className="block text-[12px] text-[#6b778c] mb-1">
+                연결 문구 (비우면 URL 자체가 표시됨)
+              </label>
+              <input
+                type="text"
+                value={linkText}
+                onChange={(e) => setLinkText(e.target.value)}
+                placeholder="클릭할 때 보이는 텍스트"
+                className="w-full px-3 py-1.5 text-[13px] border border-[#dfe1e6] rounded focus:outline-none focus:border-[#0052cc]"
+              />
+            </div>
+            <div className="flex justify-end">
               <button
                 type="button"
                 onClick={applyExternal}
                 disabled={!url.trim()}
-                className="px-3 py-1.5 text-[12px] rounded bg-[#0052cc] text-white hover:bg-[#0747a6] disabled:bg-[#a5adba]"
+                className="px-4 py-1.5 text-[12px] rounded bg-[#0052cc] text-white hover:bg-[#0747a6] disabled:bg-[#a5adba]"
               >
                 적용
               </button>
@@ -268,11 +306,11 @@ export default function InternalPageLinkDialog({
         )}
 
         {tab === "file" && (
-          <section className="space-y-2" role="tabpanel">
+          <section className="space-y-3" role="tabpanel">
             <div className="text-[12px] text-[#6b778c]">
               이 페이지의 첨부 파일에 연결합니다.
             </div>
-            <div className="max-h-[300px] overflow-y-auto border border-[#dfe1e6] rounded">
+            <div className="max-h-[240px] overflow-y-auto border border-[#dfe1e6] rounded">
               {!pageId ? (
                 <div className="px-3 py-2 text-[12px] text-[#6b778c]">
                   페이지를 먼저 선택하세요.
@@ -287,7 +325,7 @@ export default function InternalPageLinkDialog({
                     <li key={att.id}>
                       <button
                         type="button"
-                        onClick={() => applyFile(att.id)}
+                        onClick={() => applyFile(att.id, att.filename)}
                         className="w-full text-left px-3 py-2 text-[13px] hover:bg-[#ebecf0] border-b border-[#dfe1e6] last:border-b-0"
                       >
                         <div className="text-[#172b4d] font-medium truncate">
@@ -301,6 +339,18 @@ export default function InternalPageLinkDialog({
                   ))}
                 </ul>
               )}
+            </div>
+            <div>
+              <label className="block text-[12px] text-[#6b778c] mb-1">
+                연결 문구 (비우면 파일명이 표시됨)
+              </label>
+              <input
+                type="text"
+                value={linkText}
+                onChange={(e) => setLinkText(e.target.value)}
+                placeholder="클릭할 때 보이는 텍스트"
+                className="w-full px-3 py-1.5 text-[13px] border border-[#dfe1e6] rounded focus:outline-none focus:border-[#0052cc]"
+              />
             </div>
           </section>
         )}

@@ -15,6 +15,13 @@
 
 import type { Editor } from "@tiptap/react";
 import { useEffect, useRef, useState } from "react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import EditorColorPicker from "@/components/EditorColorPicker";
 import InternalPageLinkDialog from "@/components/InternalPageLinkDialog";
 import ImageInsertDialog from "@/components/ImageInsertDialog";
@@ -726,20 +733,84 @@ function MoreInlineDropdown({ editor }: { editor: Editor }) {
 
 function LinkButton({ editor }: { editor: Editor }) {
   const [open, setOpen] = useState(false);
-  const currentHref = editor.getAttributes("link").href as string | undefined;
+  // 텍스트가 선택되어 있으면 그 텍스트를 연결 문구 기본값으로 사용.
+  const selectedText = (() => {
+    const { from, to } = editor.state.selection;
+    if (from === to) return "";
+    return editor.state.doc.textBetween(from, to, "").trim();
+  })();
+
+  const currentAttrs = editor.getAttributes("link");
+  const currentHref = currentAttrs.href as string | undefined;
+
+  // 활성 링크의 텍스트 읽기. 부모 Node 의 자식(Text 노드) 직접 스캔.
+  const getLinkText = (): string | undefined => {
+    if (!editor.isActive("link")) return undefined;
+    const { from, to } = editor.state.selection;
+    if (from !== to) {
+      const text = editor.state.doc.textBetween(from, to, "", "").trim();
+      if (text) return text;
+    }
+    const { $from } = editor.state.selection;
+    const cursorPos = $from.pos;
+    const parent = $from.parent;
+    const blockStart = $from.start($from.depth);
+    // Fragment.resolveIndex 는 undocumented 로 (TipTap 타입에 없음) any 캐스팅.
+    const fragResolve = (f: any) => f.resolveIndex ? f.resolveIndex.bind(f) : null;
+    const resolveIdx = fragResolve(parent.content);
+    let offset = 0;
+    for (let i = 0; i < parent.childCount; i++) {
+      const child = parent.child(i);
+      if (!child.isText) {
+        offset += child.nodeSize;
+        continue;
+      }
+      const tStart = blockStart + offset;
+      const tEnd = tStart + (child.nodeSize);
+      if (cursorPos < tStart || cursorPos > tEnd) {
+        offset += child.nodeSize;
+        continue;
+      }
+      const marks = (child.marks as unknown as Array<{ type: { name: string } }>);
+      const linkMark = marks.find((m) => m.type.name === "link");
+      if (linkMark) {
+        const childText = (child as any).text;
+        const text = childText ? childText.trim() : "";
+        if (text) return text;
+      }
+      offset += child.nodeSize;
+    }
+    return undefined;
+  };
+  const currentText = getLinkText();
 
   // FR-034 (Cycle 11-1) — modal로 외부 URL + 내부 페이지 검색 둘 다 처리.
-  const handleSelect = (href: string | null) => {
+  // 텍스트가 선택되지 않은 상태라면, 지정된 text 또는 URL을 텍스트로 삽입.
+  const handleSelect = (href: string | null, text?: string) => {
     if (href === null || href === "") {
       editor.chain().focus().extendMarkRange("link").unsetLink().run();
       return;
     }
-    editor
-      .chain()
-      .focus()
-      .extendMarkRange("link")
-      .setLink({ href })
-      .run();
+    const { from, to } = editor.state.selection;
+    if (from === to) {
+      // 선택 텍스트 없음 → 사용자가 지정한 문구(또는 URL)를 삽입 후 링크로 감쌈
+      const linkText = text || href;
+      const end = from + linkText.length;
+      editor
+        .chain()
+        .focus()
+        .insertContent(linkText)
+        .setTextSelection({ from, to: end })
+        .setLink({ href })
+        .run();
+    } else {
+      editor
+        .chain()
+        .focus()
+        .extendMarkRange("link")
+        .setLink({ href })
+        .run();
+    }
   };
 
   // Cycle 54-A — Ctrl/Cmd+K 단축키. **편집 모드(editor.isEditable === true)
@@ -774,6 +845,8 @@ function LinkButton({ editor }: { editor: Editor }) {
         onOpenChange={setOpen}
         onSelect={handleSelect}
         currentHref={currentHref}
+        currentText={currentText}
+        selectedText={selectedText || undefined}
       />
     </>
   );
@@ -949,6 +1022,84 @@ function TableButton({ editor }: { editor: Editor }) {
   );
 }
 
+// 셀 배경색 선택기 — 표 컨텍스트 툴바용. 기존 EditorColorPicker와 동일한 DropdownMenu 패턴 사용.
+function CellColorPicker({
+  currentColor,
+  onSelect,
+}: {
+  currentColor: string | null;
+  onSelect: (color: string | null) => void;
+}) {
+  const colors: { label: string; color: string | null }[] = [
+    { label: "없음", color: null },
+    { label: "은회색", color: "#f4f5f7" },
+    { label: "연보라", color: "#eae6ff" },
+    { label: "연파랑", color: "#deebff" },
+    { label: "연청록", color: "#c8f9dc" },
+    { label: "연연두", color: "#e3fcef" },
+    { label: "연노랑", color: "#fffae6" },
+    { label: "연분홍", color: "#ffdcep" },
+    { label: "연자홍", color: "#ffcccc" },
+    { label: "중회색", color: "#dfe1e6" },
+    { label: "중보라", color: "#d5dbff" },
+    { label: "중파랑", color: "#b3d4ff" },
+  ];
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          title="셀 배경색"
+          className="min-w-[28px] h-7 px-2 rounded text-[13px] flex items-center justify-center text-[#42526e] hover:bg-[#ebecf0] gap-1"
+        >
+          <AppIcon name="background" size={16} alt="셀 배경색" />
+          <span
+            className="w-3 h-3 rounded-sm border border-[#dfe1e6] shrink-0"
+            style={
+              currentColor
+                ? { backgroundColor: currentColor }
+                : {
+                    background:
+                      "repeating-linear-gradient(45deg,#e5e7eb,#e5e7eb 3px,#fff 3px,#fff 6px)",
+                  }
+            }
+            aria-hidden
+          />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="min-w-[180px]">
+        {colors.map((c, i) => (
+          <div key={c.label}>
+            <DropdownMenuItem
+              onSelect={(e) => {
+                e.preventDefault();
+                onSelect(c.color);
+              }}
+              className="text-[12px] flex items-center gap-2"
+            >
+              <span
+                className="w-4 h-4 rounded border border-[#dfe1e6]"
+                style={
+                  c.color
+                    ? { backgroundColor: c.color }
+                    : {
+                        background:
+                          "repeating-linear-gradient(45deg,#e5e7eb,#e5e7eb 4px,#fff 4px,#fff 8px)",
+                      }
+                }
+                aria-hidden
+              />
+              {c.label}
+            </DropdownMenuItem>
+            {i === 0 && <DropdownMenuSeparator />}
+          </div>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 // Cycle 54-D — '+ 더 많은 내용 삽입'. SlashMenu 와 동일한 카탈로그
 //   (SLASH_ITEMS) 를 키보드/마우스로 탐색해 같은 .command() 흐름으로 위임.
 //   buttontrigger 라 slash 토큰이 없으므로 range 는 현재 커서 위치 (빈 range).
@@ -1085,7 +1236,7 @@ function InsertMoreButton({ editor }: { editor: Editor }) {
 //   ⑥ 정렬 (위/가운데/아래) — TableCell.verticalAlign attr
 //   ⑦ 머릿행 / 머릿열 토글 (TipTap 기본 명령)
 //   ⑧ 표 삭제
-//   ※ 행/열 잘라내기·복사, 번호 열, 셀 색상은 Cycle 88 followup.
+//   ⑨ 셀 색상 — TableCell.backgroundColor / TableHeader.backgroundColor
 function TableContextToolbar({ editor }: { editor: Editor }) {
   const run = (fn: () => void) => () => {
     fn();
@@ -1103,6 +1254,13 @@ function TableContextToolbar({ editor }: { editor: Editor }) {
     null;
   const setVAlign = (v: "top" | "middle" | "bottom") => {
     editor.chain().focus().setCellAttribute("verticalAlign", v).run();
+  };
+  const currentBgColor =
+    (editor.getAttributes("tableCell").backgroundColor as string | undefined) ??
+    (editor.getAttributes("tableHeader").backgroundColor as string | undefined) ??
+    null;
+  const setCellBgColor = (color: string | null) => {
+    editor.chain().focus().setCellAttribute("backgroundColor", color).run();
   };
 
   return (
@@ -1193,6 +1351,8 @@ function TableContextToolbar({ editor }: { editor: Editor }) {
           ⤓
         </TB>
       </BtnGroup>
+      <Divider />
+      <CellColorPicker currentColor={currentBgColor} onSelect={setCellBgColor} />
       <Divider />
       <BtnGroup>
         <TB
