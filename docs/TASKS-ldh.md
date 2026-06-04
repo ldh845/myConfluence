@@ -30,5 +30,10 @@
     자기 자신 비활성화 400)·로그인 차단 3곳(로컬/OIDC/jwt 세션)·관리자 화면(생성·유형
     배지·토글·비번 설정). L1 남은 일 '관리자 비번 설정 UI' 닫힘. api/web tsc·nest
     build EXIT 0, jest 167 passed. 상세는 `docs/CYCLES-ldh.md` Cycle L2.
-- **남은 일**: L2 브라우저 확인(VM, LOCAL_LOGIN_ENABLED=true — 계정 생성→로컬 로그인,
-  비활성화→로컬·OIDC·기존 세션 거부, 자기 자신 비활성화 거부), L3 착수.
+  - **Cycle L2 followup (2026-06-04) ✅** — 2026-06-04 VM 검증 완료(계정 생성/로컬
+    로그인/비활성 거부/셀프 락아웃 정상). 단, 비활성 사용자 기존 세션의 캐시 화면 잔상
+    발견 → 전역 401 핸들러(`POST /auth/clear-session` + `window.fetch` 패치 추방 →
+    `/login?error=session_expired`)로 수정. 마이그레이션 없음. jest 171 passed.
+    상세는 `docs/CYCLES-ldh.md` L2 followup.
+- **남은 일**: L3 — 비번 정책·로그인 실패 잠금(`failedLoginCount`/`lockedUntil`)·
+  셀프 비번 변경.
