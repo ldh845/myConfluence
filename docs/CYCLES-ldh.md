@@ -108,3 +108,25 @@
   재추방되면 합격.
 - **비고**: web 테스트 러너 부재 → `shouldRevalidateOnPageShow` 순수 함수 설계 + VM
   시나리오로 커버(followup 1 과 동일 패턴).
+
+### L2 followup 3 — 2026-06-04 — ✅ Done (캐시 금지 + 히스토리 정리로 근본 차단)
+- **증상**: followup 2 후에도 추방 → **뒤로가기 1회**는 재추방되지만, **더 누르면**
+  비로그인 상태로 페이지가 계속 보임. 그 항목에선 pageshow persisted 재검증이 미발동.
+- **원인(추정)**: 인증 페이지 HTML 에 캐시 금지 헤더가 없어 bfcache 외 일반 HTTP
+  디스크 캐시 복원 경로가 남아 있음(이 경로는 `pageshow.persisted=false` 라 followup 2
+  재검증이 안 탐). 개별 가드로 막는 대신 **근본 차단**으로 전환.
+- **해법**:
+  - `middleware.ts` — 인증된 보호 라우트 통과 응답에 `Cache-Control: no-store` 부착.
+    공개 페이지(/login)·정적 자산(_next/static 등)은 조기 return 으로 제외. 효과:
+    인증 페이지가 캐시에 저장되지 않아 뒤로가기가 **항상** 미들웨어를 타고, 쿠키 없으면
+    무조건 `/login` redirect.
+  - `lib/auth/session-guard.ts` — 추방 네비게이션을 `location.href` → `location.replace`
+    로 변경. 죽은 페이지 항목을 `/login` 으로 교체해 히스토리에 추방 항목이 쌓이지 않게.
+  - 기존 가드(401 인터셉터·pageshow 재검증)는 **이중 방어로 유지**.
+- **트레이드오프**: 정상 사용자도 뒤로가기 시 bfcache 즉시 복원 대신 일반 로딩을 거친다
+  (약간의 속도 손해를 보안/정확성과 교환).
+- **커밋**: `ca74a3a`(코드), 본 CYCLES-ldh.md.
+- **검증**: web `tsc --noEmit` EXIT 0, api jest **171 passed** 회귀 없음. 마이그레이션 없음.
+- **VM 검증 시나리오**: 추방 후 **뒤로가기 연타** — 몇 번을 눌러도 내용이 안 보이고 항상
+  `/login` 이면 합격. (시크릿/캐시 비운 새 세션 권장 — 이전 배포의 캐시된 HTML 이 남아
+  있으면 첫 테스트가 오염될 수 있음.)

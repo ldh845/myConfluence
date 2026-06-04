@@ -39,5 +39,9 @@
     차단. `window 'pageshow'` 의 `event.persisted` 에서 `/api/auth/me` 재검증 → 죽었으면
     기존 추방 흐름 그대로 재사용. web tsc EXIT 0, api jest 171 passed 회귀 없음.
     상세는 `docs/CYCLES-ldh.md` L2 followup 2.
+  - **Cycle L2 followup 3 (2026-06-04) ✅** — 뒤로가기 연타 잔상 근본 차단. 보호 라우트
+    응답에 `Cache-Control: no-store`(middleware) + 추방 시 `location.replace`(히스토리
+    미적재). 기존 가드는 이중 방어로 유지. web tsc EXIT 0, api jest 171 passed 회귀 없음.
+    상세는 `docs/CYCLES-ldh.md` L2 followup 3.
 - **남은 일**: L3 — 비번 정책·로그인 실패 잠금(`failedLoginCount`/`lockedUntil`)·
   셀프 비번 변경.
