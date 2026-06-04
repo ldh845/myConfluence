@@ -27,7 +27,10 @@ function LoginPageInner() {
 
   // Cycle L2 (feature/ldh) — OIDC 콜백이 비활성 계정을 거부하면
   // /login?error=account_disabled 로 돌려보낸다. 안내 메시지로 표시.
-  const accountDisabled = searchParams.get("error") === "account_disabled";
+  // Cycle L2 followup — 전역 401 추방 시 /login?error=session_expired 로 진입.
+  const errorCode = searchParams.get("error");
+  const accountDisabled = errorCode === "account_disabled";
+  const sessionExpired = errorCode === "session_expired";
 
   useEffect(() => {
     if (!isLoading && user) router.replace(HOME_PATH);
@@ -109,6 +112,12 @@ function LoginPageInner() {
         {accountDisabled && (
           <p className="text-[12px] text-[#de350b] bg-[#ffebe6] border border-[#ffbdad] rounded px-3 py-2">
             비활성화된 계정입니다. 관리자에게 문의하세요.
+          </p>
+        )}
+
+        {sessionExpired && (
+          <p className="text-[12px] text-[#de350b] bg-[#ffebe6] border border-[#ffbdad] rounded px-3 py-2">
+            세션이 만료되었거나 계정이 비활성화되었습니다. 다시 로그인해 주세요.
           </p>
         )}
 

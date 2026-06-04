@@ -26,6 +26,8 @@ import { LoginDto } from './dto/login.dto';
 // 켜진 경우에만 로컬 로그인 경로를 노출. OIDC 는 무관하게 그대로 동작.
 //  GET   /auth/local-login-enabled — 플래그 노출(프론트가 폼 표시 여부 결정, public)
 //  POST  /auth/login               — username/password 로컬 로그인 → docspace_session 쿠키
+// Cycle L2 followup (feature/ldh) — 전역 401 추방용 경량 세션 정리.
+//  POST  /auth/clear-session       — 세션 쿠키만 제거(인증 불요, SLO 미경유)
 
 @Controller('auth')
 export class AuthController {
@@ -64,6 +66,19 @@ export class AuthController {
   @Get('local-login-enabled')
   localLoginConfig(): { enabled: boolean } {
     return { enabled: this.localLoginEnabled };
+  }
+
+  // Cycle L2 followup (feature/ldh) — 전역 401 추방 시 호출하는 경량 세션 정리.
+  // 쿠키가 httpOnly 라 클라이언트가 직접 지울 수 없으므로 서버 엔드포인트가 필요하다.
+  // 비활성/만료 세션이 대상이라 Keycloak end_session(SLO)은 타지 않는다 — 비활성
+  // 사용자는 Keycloak 왕복이 실패할 수 있어 로컬 쿠키 정리만 한다(인증 가드 없음).
+  // 완전 로그아웃(SLO)은 별도 경로(GET /auth/oidc/logout)가 담당.
+  @Post('clear-session')
+  clearSession(@Res({ passthrough: true }) res: Response): { ok: true } {
+    res.clearCookie(this.cookieName, { path: '/' });
+    // OIDC id_token 보관 쿠키(있으면)도 함께 정리.
+    res.clearCookie('oidc_id_token', { path: '/' });
+    return { ok: true };
   }
 
   // 로컬 로그인. 플래그가 꺼져 있으면 403 — 경로 자체를 막는다.
