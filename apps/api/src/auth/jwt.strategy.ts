@@ -31,6 +31,9 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
   async validate(payload: JwtPayload): Promise<AuthUser> {
     const user = await this.auth.findById(payload.sub);
     if (!user) throw new UnauthorizedException();
+    // Cycle L2 (feature/ldh) — 비활성 계정은 유효한 JWT 가 남아 있어도 즉시 차단.
+    // 7일 만료 토큰이 비활성화 직후에도 통과하는 구멍을 막는다.
+    if (!user.isActive) throw new UnauthorizedException();
     return user;
   }
 }

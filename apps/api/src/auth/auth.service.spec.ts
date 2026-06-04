@@ -36,6 +36,7 @@ describe('AuthService', () => {
       department: 'Eng',
       role: 'DEVELOPER',
       createdAt: new Date('2026-05-27T00:00:00Z'),
+      isActive: true,
       showPersonalSpaceInSidebar: false,
     };
 
@@ -61,6 +62,7 @@ describe('AuthService', () => {
         department: 'Eng',
         role: 'DEVELOPER',
         createdAt: baseUser.createdAt,
+        isActive: true,
         showPersonalSpaceInSidebar: true,
       });
     });
@@ -84,6 +86,7 @@ describe('AuthService', () => {
       department: 'IT',
       role: 'ADMIN',
       createdAt: new Date('2026-06-02T00:00:00Z'),
+      isActive: true,
       showPersonalSpaceInSidebar: false,
       // 실제 bcrypt 해시 — 'correct-pass' 로 생성.
       passwordHash: bcrypt.hashSync('correct-pass', 10),
@@ -130,6 +133,17 @@ describe('AuthService', () => {
       await expect(service.localLogin('ghost', 'x')).rejects.toThrow(
         UnauthorizedException,
       );
+    });
+
+    // Cycle L2 (feature/ldh) — 비활성 계정은 비번이 맞아도 거부.
+    it('throws 401 when account is deactivated (isActive=false)', async () => {
+      prismaMock.user.findUnique.mockResolvedValue({
+        ...localUser,
+        isActive: false,
+      });
+      await expect(
+        service.localLogin('admin', 'correct-pass'),
+      ).rejects.toThrow(UnauthorizedException);
     });
   });
 });

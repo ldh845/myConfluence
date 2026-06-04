@@ -82,6 +82,10 @@ model User {
   name                       String
   department                 String
   role                       Role          @default(DEVELOPER)
+  // Cycle L2 (feature/ldh) — 계정 활성/비활성. 퇴사자 등 차단 수단.
+  // false 면 로컬 로그인·OIDC 로그인·기존 세션(jwt.strategy) 모두 거부.
+  // 기존 사용자는 마이그레이션 default true 로 전원 활성.
+  isActive                   Boolean       @default(true)
   // Cycle 48 — Keycloak claim 캐시 (Admin 페이지 사용자 목록용).
   // OIDC callback 의 findOrCreateOidcUser 가 매 로그인마다 동기화.
   email                      String?

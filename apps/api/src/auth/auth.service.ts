@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -24,6 +25,8 @@ export type AuthUser = {
   department: string;
   role: string;
   createdAt: Date;
+  // Cycle L2 (feature/ldh) — 계정 활성 상태. jwt.strategy 가 매 요청 검증에 사용.
+  isActive: boolean;
   // Cycle 49 — 사용자별 환경설정. /auth/me 응답 포함, /auth/me/prefs 로 갱신.
   showPersonalSpaceInSidebar: boolean;
 };
@@ -42,6 +45,7 @@ export class AuthService {
     department: string;
     role: string;
     createdAt: Date;
+    isActive: boolean;
     showPersonalSpaceInSidebar: boolean;
   }): AuthUser {
     return {
@@ -51,6 +55,7 @@ export class AuthService {
       department: user.department,
       role: user.role,
       createdAt: user.createdAt,
+      isActive: user.isActive,
       showPersonalSpaceInSidebar: user.showPersonalSpaceInSidebar,
     };
   }
@@ -81,6 +86,7 @@ export class AuthService {
   // 에러 의미:
   //   - 사용자 없음 / 비번 불일치 → 401 (계정 존재 여부를 노출하지 않음)
   //   - passwordHash 가 null(= SSO 전용 계정) → 400 'SSO 전용' (로컬 비번 미설정 안내)
+  // Cycle L2 (feature/ldh) — 비활성 계정(isActive=false)은 비번이 맞아도 401 거부.
   async localLogin(
     username: string,
     password: string,
@@ -88,6 +94,12 @@ export class AuthService {
     const user = await this.prisma.user.findUnique({ where: { username } });
     if (!user) {
       throw new UnauthorizedException({ error: 'invalid credentials' });
+    }
+    if (!user.isActive) {
+      throw new UnauthorizedException({
+        error: 'account disabled',
+        message: '비활성화된 계정입니다. 관리자에게 문의하세요.',
+      });
     }
     if (!user.passwordHash) {
       throw new BadRequestException({
@@ -108,6 +120,9 @@ export class AuthService {
   // Cycle 48 — 매 로그인마다 Keycloak claim 동기화:
   //   - role: realm_access.roles 의 'admin' 유무로 ADMIN vs DEVELOPER 토글
   //   - email / emailVerified / lastLoginAt 캐시 갱신
+  // Cycle L2 (feature/ldh) — 기존 사용자가 비활성(isActive=false)이면 로그인 거부
+  //   (ForbiddenException). 신규 생성 사용자는 default 활성이므로 통과.
+  //   컨트롤러(OidcController.callback)가 이를 잡아 /login?error=account_disabled 로 redirect.
   async findOrCreateOidcUser(claims: {
     sub: string;
     username: string;
@@ -135,6 +150,9 @@ export class AuthService {
       where: { keycloakId: claims.sub },
     });
     if (bySub) {
+      if (!bySub.isActive) {
+        throw new ForbiddenException({ error: 'account disabled' });
+      }
       const updated = await this.prisma.user.update({
         where: { id: bySub.id },
         data: syncData,
@@ -146,6 +164,9 @@ export class AuthService {
       where: { username: claims.username },
     });
     if (byUsername) {
+      if (!byUsername.isActive) {
+        throw new ForbiddenException({ error: 'account disabled' });
+      }
       const linked = await this.prisma.user.update({
         where: { id: byUsername.id },
         data: { keycloakId: claims.sub, ...syncData },

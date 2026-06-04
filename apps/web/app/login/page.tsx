@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useState, type FormEvent } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth/useAuth";
 import { apiFetch } from "@/lib/api";
 
@@ -14,8 +14,9 @@ import { apiFetch } from "@/lib/api";
 
 const HOME_PATH = "/home";
 
-export default function LoginPage() {
+function LoginPageInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user, isLoading } = useAuth();
 
   const [localEnabled, setLocalEnabled] = useState(false);
@@ -23,6 +24,10 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  // Cycle L2 (feature/ldh) — OIDC 콜백이 비활성 계정을 거부하면
+  // /login?error=account_disabled 로 돌려보낸다. 안내 메시지로 표시.
+  const accountDisabled = searchParams.get("error") === "account_disabled";
 
   useEffect(() => {
     if (!isLoading && user) router.replace(HOME_PATH);
@@ -101,6 +106,12 @@ export default function LoginPage() {
           사내 계정(SSO)으로 로그인합니다.
         </p>
 
+        {accountDisabled && (
+          <p className="text-[12px] text-[#de350b] bg-[#ffebe6] border border-[#ffbdad] rounded px-3 py-2">
+            비활성화된 계정입니다. 관리자에게 문의하세요.
+          </p>
+        )}
+
         <button
           type="button"
           onClick={startSso}
@@ -169,5 +180,14 @@ export default function LoginPage() {
         )}
       </div>
     </div>
+  );
+}
+
+// useSearchParams 는 Suspense 경계 안에서 호출되어야 한다(Next 14 권장 패턴).
+export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginPageInner />
+    </Suspense>
   );
 }

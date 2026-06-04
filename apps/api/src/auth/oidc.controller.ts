@@ -1,4 +1,11 @@
-import { Controller, Get, Logger, Req, Res } from '@nestjs/common';
+import {
+  Controller,
+  ForbiddenException,
+  Get,
+  Logger,
+  Req,
+  Res,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Request, Response } from 'express';
 import { AuthService } from './auth.service';
@@ -123,6 +130,12 @@ export class OidcController {
       }
       res.redirect(this.postLoginRedirect);
     } catch (err) {
+      // Cycle L2 (feature/ldh) — 비활성 계정은 OIDC 인증 자체는 성공해도 DocSpace
+      // 진입을 거부. 로그인 페이지로 돌려보내며 안내 메시지 쿼리를 붙인다.
+      if (err instanceof ForbiddenException) {
+        res.redirect(`${this.loginPath}?error=account_disabled`);
+        return;
+      }
       this.logger.error(
         `OIDC callback failed: ${err instanceof Error ? err.message : String(err)}`,
       );
