@@ -55,12 +55,20 @@
     DB role 사용 — 재로그인 불필요)·관리자 화면 역할 셀 인터랙티브화(로컬만 select, SSO 는
     Keycloak 안내). 마이그레이션 없음. api/web tsc·nest build EXIT 0, jest 196 passed.
     상세는 `docs/CYCLES-ldh.md` Cycle L4.
-- **남은 일**: L4 VM 브라우저 검증만 —
-  - ⑥ localtest→ADMIN 변경→재로그인 시 톱니바퀴(관리자 메뉴) 노출,
-  - ⑦ localtest 로그인 상태에서 DEVELOPER 강등→새로고침 시 톱니바퀴 사라짐(즉시 반영),
-  - ⑧ SSO 계정(admin·testuser2) 행 역할 컨트롤 비활성,
-  - ⑨ 자기 자신 행 비활성.
+  - **Cycle L4 followup (2026-06-05) ✅** — API 응답 캐시 금지. 권한/세션(`/auth/me` 등)
+    응답이 브라우저 디스크 캐시에 남아 역할 변경 즉시 반영이 최초 1회 안 먹던 증상 →
+    전역 미들웨어로 `Cache-Control: no-store` 부착(파일 다운로드 2경로 제외). api만 변경,
+    마이그레이션 없음. api tsc·nest build EXIT 0, jest 201 passed(19 suites).
+    상세는 `docs/CYCLES-ldh.md` Cycle L4 followup.
+- **남은 일**: L4 followup VM 검증만 —
+  - ⑩ 역할 변경이 재로그인 없이 **최초부터** 즉시 반영되는지,
+  - ⑪ `/api/auth/me` 응답 헤더 `Cache-Control: no-store` 확인,
+  - ⑫ 본문 이미지 페이지 새로고침 시 이미지 캐시 로드(성능 저하 없음) 확인.
   - (L4 감사 로그(역할 변경 이력)는 ActivityLog 페이지/공간 중심 한계로 deferred.)
-- **검증 완료(VM)**: L1·L2(2026-06-04)·L3(2026-06-04~05) 브라우저 검증 합격 — 약한 비번
-  거부 / 5회 오답 잠김 / admin 잠금 해제 / 셀프 비번 변경 / 순수 SSO 계정(admin·testuser2)
-  변경 메뉴 미노출 + 계정 유형 3종(로컬·혼합·SSO) 메뉴 노출 매트릭스까지 전부 확인.
+- **검증 완료(VM)**:
+  - L1·L2(2026-06-04)·L3(2026-06-04~05) — 약한 비번 거부 / 5회 오답 잠김 / admin 잠금
+    해제 / 셀프 비번 변경 / 순수 SSO 계정(admin·testuser2) 변경 메뉴 미노출 + 계정 유형
+    3종(로컬·혼합·SSO) 메뉴 노출 매트릭스까지 전부 확인.
+  - L4(2026-06-05) ⑥~⑨ — 승격 시 톱니바퀴 노출 / 강등 시 사라짐 / SSO·혼합 행 역할 컨트롤
+    비활성 + Keycloak 안내 / 자기 자신 행 비활성까지 전부 합격. 단 ⑥ 검증 중 "역할 변경
+    즉시 반영이 최초 1회 미동작(재로그인 후 일관 동작)"을 발견 → 이것이 L4 followup 의 동기.

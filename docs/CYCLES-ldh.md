@@ -217,3 +217,38 @@
 - **비고**: `role` 컬럼은 Cycle 43 부터 존재 → 마이그레이션 불필요. Role enum 은 5종
   (ADMIN/PART_LEADER/DEVELOPER/DESIGNER/PM)이나 로컬 계정은 생성 시 DEVELOPER 고정이고
   본 기능도 ADMIN↔DEVELOPER 만 노출 — 나머지 역할은 범위 외. **Task L-AUTH 확장 완료.**
+
+---
+
+## Cycle L4 followup — 2026-06-05 — ✅ Done (API 응답 캐시 금지)
+- **제목**: 권한/세션 정보의 브라우저 디스크 캐시 잔재 차단 (API 에 no-store)
+- **카테고리**: BE(api) / 인증·캐시 (마이그레이션 없음)
+- **커밋**: `6ec7caf`(코드), 본 CYCLES-ldh.md
+- **증상(VM 피드백)**: L4 검증 중 역할 변경 즉시 반영이 **최초 1회 미동작** → 재로그인
+  후부터 일관 동작. 서버는 매 요청 DB role 을 읽으므로(jwt.strategy, 테스트로 박제)
+  서버 로직 문제 아님.
+- **원인 추정**: API 응답(`/auth/me` 등)에 캐시 금지 헤더가 없어 브라우저가 디스크
+  캐시의 **옛 응답(role 포함)** 을 재사용. 재로그인 시 쿼리스트링/쿠키 변화로 캐시가
+  깨지며 비로소 새 값이 반영된 것으로 보임. Cycle L2 followup 3 이 페이지 HTML 에
+  적용한 no-store 를 API 응답에도 확장한다.
+- **변경 파일**:
+  - `common/no-store.middleware.ts`(신규) — 전역 express 미들웨어. 응답에
+    `Cache-Control: no-store` 부착. 단, GET 파일 다운로드 라우트는 제외(정규식 매칭).
+  - `main.ts` — `app.use(cookieParser())` 직후 `app.use(noStore)` 등록.
+  - `common/no-store.middleware.spec.ts`(신규) — 일반 API/뮤테이션/첨부 목록엔 부착,
+    다운로드 2경로엔 미부착 검증.
+- **적용 방식**: `app.use()` 전역 미들웨어(기존 cookieParser 와 동일 패턴). API 는
+  `setGlobalPrefix` 없이 bare 경로로 라우팅되고 web 이 `/api` 를 스트립하므로 미들웨어가
+  보는 `req.path` 에는 `/api` 접두가 없다 → `/auth/me`, `/attachments/:id` 형태로 매칭.
+- **제외 라우트(파일 다운로드 — 본문 이미지/첨부 성능 보호)**: no-store 미부착, 기존
+  (헤더 없음 → 브라우저 휴리스틱 캐시) 동작 유지.
+  - `GET /attachments/:id`                        (`AttachmentsController.download`)
+  - `GET /share/:token/attachments/:attachmentId` (`PageSharesController.downloadAttachment`)
+  - ※ 첨부 **목록**(`GET /pages/:id/attachments`)은 JSON 이므로 no-store 대상(제외 아님).
+- **검증**: api `tsc --noEmit` EXIT 0, `nest build` EXIT 0, jest **201 passed (19 suites)**
+  (L4 196 + no-store 미들웨어 5). 마이그레이션 없음. web 변경 없음.
+- **남은 일**: VM 검증 — ① 역할 변경 → 대상 새로고침 → **항상 즉시 반영(최초 포함)**,
+  ② F12 Network 의 `/api/auth/me` 응답 헤더에 `Cache-Control: no-store` 확인,
+  ③ 본문 이미지 있는 페이지 새로고침 → 이미지가 캐시 로드(안 느려짐) 확인.
+- **비고**: api 만 변경(web 무관). 다운로드 라우트 이름 변경 시 미들웨어 정규식도 함께
+  갱신 필요(주석에 명시). no-store 는 mutation/redirect 응답에 붙어도 무해(캐시 안 됨).
