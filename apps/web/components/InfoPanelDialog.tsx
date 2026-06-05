@@ -8,6 +8,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import AppIcon from "@/components/AppIcon";
 
 // Cycle 85 — '정보' 패널 삽입 다이얼로그.
 //   제목(선택) + '정보 아이콘 표시' 체크박스. '삽입' 시 infoPanel 노드 삽입(빈 paragraph 포함).
@@ -88,8 +89,8 @@ export default function InfoPanelDialog({
             <div className="rounded border-l-4 border-[#0052cc] bg-[#deebff] p-3">
               <div className="flex items-start gap-2">
                 {showIcon && (
-                  <span className="text-[#0052cc] text-[18px] leading-none mt-0.5 shrink-0">
-                    ⓘ
+                  <span className="text-[#0052cc] leading-none mt-0.5 shrink-0">
+                    <AppIcon name="information" size={18} alt="정보" />
                   </span>
                 )}
                 <div className="flex-1 min-w-0">

@@ -50,6 +50,11 @@ const ICON_SRC = {
   // Cycle 87 — 표 컨텍스트 툴바 아이콘(좌/우 열 추가). 행 추가는 같은 자산을 90° 회전.
   columns: "/icons/columns.png",
   columns_left: "/icons/columns_left.png",
+  // Cycle 88-2 — 새 아이콘 등록.
+  cellDivide: "/icons/cell_divide.png",
+  cellMerge: "/icons/cell_merge.png",
+  space: "/icons/space.png",
+  tag: "/icons/tag.png",
 } as const;
 
 export type IconName = keyof typeof ICON_SRC;

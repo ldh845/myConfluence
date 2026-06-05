@@ -12,6 +12,7 @@ import {
   STATUS_COLORS,
   type StatusColorKey,
 } from "@/lib/tiptap/status-badge";
+import AppIcon from "@/components/AppIcon";
 
 // Cycle 85 — '상태' 매크로 삽입 다이얼로그.
 //   좌측: 제목 입력 + 색상 선택. 우측: 미리보기(새로고침 버튼).
@@ -138,9 +139,10 @@ export default function StatusMacroDialog({
             <div className="min-h-[64px] border border-[#dfe1e6] rounded p-3 flex items-center justify-center bg-[#f4f5f7]">
               <span
                 key={previewKey}
-                className="inline-block px-2 py-0.5 rounded-[3px] text-[11px] font-semibold uppercase tracking-wide leading-none"
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-[3px] text-[11px] font-semibold uppercase tracking-wide leading-none"
                 style={{ backgroundColor: c.bg, color: c.text }}
               >
+                <AppIcon name="tag" size={12} alt="상태" />
                 {text.trim() || "상태"}
               </span>
             </div>

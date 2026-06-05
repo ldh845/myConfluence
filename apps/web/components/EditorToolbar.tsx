@@ -1318,13 +1318,13 @@ function TableContextToolbar({ editor }: { editor: Editor }) {
           title="셀 병합 (먼저 두 개 이상 셀 드래그 선택)"
           onClick={run(() => editor.chain().focus().mergeCells().run())}
         >
-          ⊞⊟
+          <AppIcon name="cellMerge" size={16} alt="셀 병합" />
         </TB>
         <TB
           title="병합된 셀 나누기"
           onClick={run(() => editor.chain().focus().splitCell().run())}
         >
-          ⊟⊞
+          <AppIcon name="cellDivide" size={16} alt="병합된 셀 나누기" />
         </TB>
       </BtnGroup>
       <Divider />

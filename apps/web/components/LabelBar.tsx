@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import AppIcon from "@/components/AppIcon";
 
 // Cycle 78 — 페이지 레이블(태그) 바. 칩 표시 + 클릭 팝업에서 추가/제거.
 //   PATCH /api/pages/:id { labels } 로 전체 교체(서버가 정규화). 로컬 낙관 갱신.
@@ -88,18 +89,20 @@ export default function LabelBar({
 
   return (
     <div ref={ref} className="relative flex flex-wrap items-center gap-1.5">
-      {/* Cycle 82 followup — 🏷️ 자체가 추가 트리거. 별도 '+ 레이블 추가' 버튼 제거. */}
+      {/* Cycle 82 followup — 태그 아이콘 자체가 추가 트리거. 별도 '+ 레이블 추가' 버튼 제거. */}
       {editable ? (
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
           title="레이블 추가"
-          className="text-[13px] text-[#6b778c] hover:text-[#0052cc] leading-none"
+          className="shrink-0 text-[#6b778c] hover:text-[#0052cc] leading-none"
         >
-          🏷️
+          <AppIcon name="tag" size={16} alt="레이블" />
         </button>
       ) : (
-        <span className="text-[13px] text-[#6b778c]">🏷️</span>
+        <span className="shrink-0 text-[#6b778c] leading-none">
+          <AppIcon name="tag" size={16} alt="레이블" />
+        </span>
       )}
       {labels.length === 0 && !editable && (
         <span className="text-[13px] text-[#6b778c]">레이블 없음</span>
