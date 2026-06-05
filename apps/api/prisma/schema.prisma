@@ -130,6 +130,8 @@ model User {
   // payload.actorName 으로 fallback).
   notificationsReceived      Notification[] @relation("NotificationRecipient")
   notificationsCreated       Notification[] @relation("NotificationActor")
+  // Cycle L6 (feature/ldh) — 그룹(부서/팀) 멤버십. user 삭제 시 Cascade.
+  groupMemberships           GroupMember[] @relation("UserGroupMember")
 }
 
 model Space {
@@ -473,4 +475,41 @@ model PageRestriction {
   @@id([pageId, userId])
   @@index([pageId])
   @@index([userId])
+}
+
+// Cycle L6 (feature/ldh) — 그룹(부서/팀)의 출처.
+//   LOCAL: DocSpace 에서 직접 생성·관리. KEYCLOAK: L8 동기화로 들어온 그룹(수정·멤버
+//   편집 금지 — source 보호 가드를 지금 선반영). 현재 전부 LOCAL.
+enum GroupSource {
+  LOCAL
+  KEYCLOAK
+}
+
+// Cycle L6 (feature/ldh) — 그룹 모델(그릇만). 권한 판정에는 아직 영향 없음.
+//   L7 에서 SpaceMemberGroup 으로 공간 권한에 결합(개인 vs 그룹 max, deny 없음).
+//   "Group" 은 SQL 예약어와 겹칠 수 있어 @@map 으로 테이블명 분리.
+model Group {
+  id          String        @id @default(cuid())
+  name        String        @unique
+  description String?
+  source      GroupSource   @default(LOCAL)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  members     GroupMember[]
+
+  @@map("groups")
+}
+
+// Cycle L6 (feature/ldh) — 그룹 멤버십(그룹 ↔ 사용자). 복합 PK, 양쪽 Cascade.
+model GroupMember {
+  groupId   String
+  group     Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation("UserGroupMember", fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@id([groupId, userId])
+  @@index([groupId])
+  @@index([userId])
+  @@map("group_members")
 }

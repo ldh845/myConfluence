@@ -142,7 +142,7 @@ function AdminGearButton() {
 
   if (user?.role !== "ADMIN") return null;
 
-  const go = (tab: "general" | "users") => {
+  const go = (tab: "general" | "users" | "groups") => {
     setOpen(false);
     router.push(`/admin?tab=${tab}`);
   };
@@ -182,6 +182,14 @@ function AdminGearButton() {
             className="w-full text-left px-3 py-2 text-[13px] text-[#172b4d] hover:bg-[#f4f5f7]"
           >
             사용자 관리
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => go("groups")}
+            className="w-full text-left px-3 py-2 text-[13px] text-[#172b4d] hover:bg-[#f4f5f7]"
+          >
+            그룹 관리
           </button>
         </div>
       )}
