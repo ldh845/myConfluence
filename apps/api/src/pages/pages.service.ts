@@ -416,20 +416,15 @@ export class PagesService {
     status: PageStatus | null,
     user: { id: string; name: string; role: string } | null,
   ) {
+    // Cycle L5-2 정책 11 — 페이지 편집 권한자면 누구나 상태 변경(작성자/ADMIN 한정
+    //   임시 정책 제거 → assertCanEditPage 로 일원화). 비편집자/뷰어는 403, 비로그인도 403.
     if (!user) throw new ForbiddenException({ error: 'unauthorized' });
+    await this.perms.assertCanEditPage(id, user);
     const page = await this.prisma.page.findFirst({
       where: { id, deletedAt: null },
       select: { id: true, spaceId: true, authorId: true, status: true },
     });
     if (!page) throw new NotFoundException({ error: 'not found' });
-
-    const isAdmin = user.role === 'ADMIN';
-    const isAuthor = page.authorId != null && page.authorId === user.id;
-    if (!isAdmin && !isAuthor) {
-      throw new ForbiddenException({
-        error: 'forbidden: not page author or admin',
-      });
-    }
 
     const from = page.status ?? null;
     if (from !== status) {

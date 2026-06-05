@@ -1,5 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { SpacesService } from './spaces.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ActivitiesService } from '../activities/activities.service';
@@ -193,5 +197,60 @@ describe('SpacesService — shortcuts (Cycle 74-F)', () => {
       [{ where: { id: 'a', spaceId: 's' }, data: { position: 1 } }],
       [{ where: { id: 'b', spaceId: 's' }, data: { position: 2 } }],
     ]);
+  });
+});
+
+// Cycle L5-2 (feature/ldh) — 정책 12: setHomePage 는 공간 관리 권한(assertCanManage) 필수.
+describe('SpacesService — setHomePage (Cycle L5-2)', () => {
+  let service: SpacesService;
+  let prismaMock: {
+    space: { findUnique: jest.Mock; update: jest.Mock };
+    page: { findFirst: jest.Mock };
+  };
+  let permsMock: { assertCanManage: jest.Mock };
+
+  beforeEach(async () => {
+    prismaMock = {
+      space: {
+        findUnique: jest.fn().mockResolvedValue({ id: 's' }),
+        update: jest.fn().mockResolvedValue({ id: 's', homePageId: 'pg' }),
+      },
+      page: {
+        findFirst: jest.fn().mockResolvedValue({ id: 'pg', spaceId: 's' }),
+      },
+    };
+    permsMock = { assertCanManage: jest.fn().mockResolvedValue(undefined) };
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        SpacesService,
+        { provide: PrismaService, useValue: prismaMock },
+        { provide: ActivitiesService, useValue: { log: jest.fn() } },
+        { provide: SpacePermissionService, useValue: permsMock },
+      ],
+    }).compile();
+    service = module.get<SpacesService>(SpacesService);
+  });
+
+  const ADMIN = { id: 'admin', role: 'ADMIN' };
+
+  it('관리 권한 통과 → 홈 페이지 지정', async () => {
+    await service.setHomePage('s', 'pg', ADMIN);
+    expect(permsMock.assertCanManage).toHaveBeenCalledWith('s', ADMIN);
+    expect(prismaMock.space.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 's' },
+        data: { homePageId: 'pg' },
+      }),
+    );
+  });
+
+  it('관리 권한 없으면 403 + update 안 함', async () => {
+    permsMock.assertCanManage.mockRejectedValueOnce(
+      new ForbiddenException({ error: 'forbidden' }),
+    );
+    await expect(
+      service.setHomePage('s', 'pg', { id: 'u', role: 'DEVELOPER' }),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(prismaMock.space.update).not.toHaveBeenCalled();
   });
 });

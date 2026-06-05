@@ -379,7 +379,9 @@ export class SpacesService {
   }
 
   // Cycle 33 — 공간의 홈 페이지 지정. homePageId 페이지가 그 공간 소속이어야 함.
-  async setHomePage(spaceId: string, homePageId: string) {
+  // Cycle L5-2 정책 12 — 공간 관리 권한(assertCanManage) 필수. 무권한 변경 구멍 폐쇄.
+  async setHomePage(spaceId: string, homePageId: string, user: Actor) {
+    await this.perms.assertCanManage(spaceId, user);
     const space = await this.prisma.space.findUnique({
       where: { id: spaceId },
       select: { id: true },

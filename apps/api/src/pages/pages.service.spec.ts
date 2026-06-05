@@ -20,6 +20,8 @@ const permsMock = {
   canView: () => true,
   canEdit: () => true,
   canManage: () => true,
+  // Cycle L5-2 — changeStatus 가 편집 권한 가드를 호출. 기본 통과, 테스트별 override.
+  assertCanEditPage: jest.fn().mockResolvedValue(undefined),
 };
 
 // Cycle 51 — recent({ limit?, spaceId?, offset? }) 검증.
@@ -409,12 +411,12 @@ describe('PagesService — remove (Cycle 56 cascade option)', () => {
   });
 });
 
-// Cycle 70 — changeStatus(id, status, user) 검증.
-//   - 임시 가드: 작성자(authorId===user.id) 또는 ADMIN 만 허용, 그 외 Forbidden
-//   - 비로그인(user=null) Forbidden / 미존재 NotFound
+// Cycle 70 / Cycle L5-2 — changeStatus(id, status, user) 검증.
+//   - 정책(L5-2): assertCanEditPage 로 일원화 — 편집 권한자면 누구나(작성자 아니어도 OK),
+//     비편집자/뷰어는 403. 비로그인(user=null) Forbidden / 미존재 NotFound.
 //   - 성공 시 status/statusAt/statusById 갱신 + page.status_changed 활동 기록(payload from/to)
 //   - 동일 상태(no-op) → update/log 미호출
-describe('PagesService — changeStatus (Cycle 70)', () => {
+describe('PagesService — changeStatus (Cycle 70 / L5-2)', () => {
   let service: PagesService;
   let prismaMock: {
     page: { findFirst: jest.Mock; update: jest.Mock };
@@ -429,6 +431,8 @@ describe('PagesService — changeStatus (Cycle 70)', () => {
       },
     };
     activitiesMock = { log: jest.fn().mockResolvedValue(undefined) };
+    // L5-2 — 편집 권한 가드는 기본 통과(테스트별 reject 로 거부 케이스 검증). 격리를 위해 새 fn.
+    permsMock.assertCanEditPage = jest.fn().mockResolvedValue(undefined);
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         PagesService,
@@ -446,10 +450,9 @@ describe('PagesService — changeStatus (Cycle 70)', () => {
   });
 
   const AUTHOR = { id: 'u-author', name: '작성자', role: 'DEVELOPER' };
-  const ADMIN = { id: 'u-admin', name: '관리자', role: 'ADMIN' };
-  const OTHER = { id: 'u-other', name: '타인', role: 'DEVELOPER' };
+  const EDITOR = { id: 'u-editor', name: '편집자(비작성자)', role: 'DEVELOPER' };
 
-  // 첫 findFirst = 가드용(select), 둘째 findFirst = findOne(반환값).
+  // 첫 findFirst = 본문 로드(select), 둘째 findFirst = findOne(반환값).
   const seed = (authorId: string | null, status: string | null) => {
     prismaMock.page.findFirst
       .mockResolvedValueOnce({ id: 'p-1', spaceId: 'sp-1', authorId, status })
@@ -462,15 +465,12 @@ describe('PagesService — changeStatus (Cycle 70)', () => {
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
-  it('작성자/ADMIN 아님 → Forbidden, update·log 미호출', async () => {
-    prismaMock.page.findFirst.mockResolvedValueOnce({
-      id: 'p-1',
-      spaceId: 'sp-1',
-      authorId: 'u-author',
-      status: null,
-    });
+  it('편집 권한 없음(뷰어/비편집자) → Forbidden, update·log 미호출', async () => {
+    permsMock.assertCanEditPage.mockRejectedValueOnce(
+      new ForbiddenException({ error: 'forbidden' }),
+    );
     await expect(
-      service.changeStatus('p-1', 'TODO', OTHER),
+      service.changeStatus('p-1', 'TODO', EDITOR),
     ).rejects.toBeInstanceOf(ForbiddenException);
     expect(prismaMock.page.update).not.toHaveBeenCalled();
     expect(activitiesMock.log).not.toHaveBeenCalled();
@@ -479,37 +479,30 @@ describe('PagesService — changeStatus (Cycle 70)', () => {
   it('미존재 페이지 → NotFound', async () => {
     prismaMock.page.findFirst.mockResolvedValueOnce(null);
     await expect(
-      service.changeStatus('missing', 'TODO', ADMIN),
+      service.changeStatus('missing', 'TODO', AUTHOR),
     ).rejects.toBeInstanceOf(NotFoundException);
   });
 
-  it('작성자 → 상태 변경 + page.status_changed 기록(payload from/to)', async () => {
-    seed('u-author', null);
-    await service.changeStatus('p-1', 'IN_PROGRESS', AUTHOR);
+  it('편집 권한자(작성자 아님)도 상태 변경 가능 (정책 11 핵심)', async () => {
+    // 페이지 작성자는 다른 사람이지만, EDITOR 가 편집 권한자이면 통과해야 한다.
+    seed('someone-else', 'TODO');
+    await service.changeStatus('p-1', 'DONE', EDITOR);
+    expect(permsMock.assertCanEditPage).toHaveBeenCalledWith('p-1', EDITOR);
     expect(prismaMock.page.update).toHaveBeenCalledWith({
       where: { id: 'p-1' },
       data: {
-        status: 'IN_PROGRESS',
+        status: 'DONE',
         statusAt: expect.any(Date),
-        statusById: 'u-author',
+        statusById: 'u-editor',
       },
     });
     expect(activitiesMock.log).toHaveBeenCalledWith(
       expect.objectContaining({
         type: 'page.status_changed',
         pageId: 'p-1',
-        actorId: 'u-author',
-        payload: { from: null, to: 'IN_PROGRESS' },
+        actorId: 'u-editor',
+        payload: { from: 'TODO', to: 'DONE' },
       }),
-    );
-  });
-
-  it('ADMIN(작성자 아님) → 허용', async () => {
-    seed('u-author', 'TODO');
-    await service.changeStatus('p-1', 'DONE', ADMIN);
-    expect(prismaMock.page.update).toHaveBeenCalled();
-    expect(activitiesMock.log).toHaveBeenCalledWith(
-      expect.objectContaining({ payload: { from: 'TODO', to: 'DONE' } }),
     );
   });
 

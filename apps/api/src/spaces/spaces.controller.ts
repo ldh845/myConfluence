@@ -70,11 +70,15 @@ export class SpacesController {
     });
   }
 
-  // Cycle 33 — 공간 홈 페이지 지정.
+  // Cycle 33 — 공간 홈 페이지 지정. Cycle L5-2 — 공간 관리 권한 필수(service 에서 판정).
   @Patch(':id')
   @UseGuards(JwtAuthGuard)
-  setHomePage(@Param('id') id: string, @Body() dto: SetHomePageDto) {
-    return this.spaces.setHomePage(id, dto.homePageId);
+  setHomePage(
+    @Param('id') id: string,
+    @Body() dto: SetHomePageDto,
+    @Req() req: Request,
+  ) {
+    return this.spaces.setHomePage(id, dto.homePageId, userFromReq(req));
   }
 
   // Cycle 74-B — 공간 도구 '개요' 탭: 이름/설명/공개범위 변경. canManage 는 service 에서.

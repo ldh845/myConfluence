@@ -9,7 +9,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { IsOptional, IsString } from 'class-validator';
-import { NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import type { Request } from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { OptionalJwtAuthGuard } from '../auth/optional-jwt-auth.guard';
@@ -43,15 +43,38 @@ export class ReactionsController {
     private readonly prisma: PrismaService,
   ) {}
 
+  // Cycle L5-2 정책 6 — 리액션 토글은 '페이지 읽기 권한'(comment 면 comment→page 해석).
   @Post('reactions/toggle')
   @UseGuards(JwtAuthGuard)
   @HttpCode(200)
-  toggle(@Body() dto: ToggleReactionDto, @Req() req: Request) {
+  async toggle(@Body() dto: ToggleReactionDto, @Req() req: Request) {
+    const pageId = await this.resolvePageId(dto.pageId, dto.commentId);
+    await this.perms.assertCanViewPage(pageId, userFromReq(req));
     return this.reactions.toggle({
       pageId: dto.pageId,
       commentId: dto.commentId,
       emoji: dto.emoji,
       userId: req.user!.id,
+    });
+  }
+
+  // 토글 대상(page 또는 comment)으로부터 소속 페이지 id 를 구한다.
+  private async resolvePageId(
+    pageId?: string,
+    commentId?: string,
+  ): Promise<string> {
+    if (pageId) return pageId;
+    if (commentId) {
+      const comment = await this.prisma.comment.findUnique({
+        where: { id: commentId },
+        select: { pageId: true },
+      });
+      if (!comment) throw new NotFoundException({ error: 'comment not found' });
+      return comment.pageId;
+    }
+    // page/comment 둘 다 없으면 service.toggle 이 400 으로 처리하도록 형식상 빈 값 차단.
+    throw new BadRequestException({
+      error: 'exactly one of pageId/commentId required',
     });
   }
 
