@@ -30,3 +30,28 @@
 - `InfoPanelDialog.tsx` / `StatusMacroDialog.tsx` — 삽입 다이얼로그 (미리보기)
 - `InfoPanelNodeView.tsx` / `StatusBadgeNodeView.tsx` — 에디터에서 실제 렌더링 (ReactNodeView)
 - `renderHTML` (tiptap extension) — ProseMirror → HTML 직렬화용 (현재 NodeView 우선)
+
+---
+
+## 2026-06-05 — 알림/지켜보기 기능 활성화 + 구체화
+
+### 변경 파일
+
+| 파일 | 변경 내용 |
+|------|---------|
+| `AppIcon.tsx` | `crossedEye` 아이콘 등록 (`crossed-eye.svg` 매핑) |
+| `PageHeader.tsx` | **지켜보기 기능 활성화**: `disabled` 제거, `watch` ↔ `crossedEye` 아이콘 토글, `W` 단축키 복귀 |
+| `NotificationBellButton.tsx` | **UI 아이콘 교체** (이모지 → AppIcon), **Polling 1분→10초**, 알림 설정 다이얼로그(멘션/댓글/업데이트별 수신 설정, localStorage 기반), 알림 센터(/notifications) 링크 추가 |
+| `app/(app)/notifications/page.tsx` | **신규 작성**: 알림 센터 전용 페이지 (타입별 필터 탭: 전체/미읽음/멘션/댓글/업데이트, 페이지네이션 100 개, 모두 읽음 처리) |
+
+### 기능 상세
+
+- **지켜보기 (Watch)**: Backend API(`/pages/:id/watch`) 가 이미 동작 중. FE 에서 활성화하여 `WatchList` 토글 + `notifyWatchers` 알림 연동.
+- **실시간성**: Polling `refetchInterval` 60 초 → 10 초로 단축. (향 후 SSE/WebSocket 도입 단계 분리)
+- **알림 설정**: `localStorage` 로 현재 사용자의 알림 유형별 수신 여부 저장. Backend `User.notificationPrefs` 필드 연동은 추 후.
+- **UI 아이콘**: `NotificationBellButton` 드롭 다운 알림 목록 및 `notifications/page.tsx` 에서 `ⓘ/🏷️/🔔` 이모지 → `AppIcon` 으로 교체. `NotificationBellButton` 헤더에 '알림 센터 >' 링크와 '설정' 버튼 추가.
+
+### 이슈 해결
+
+- **지켜보기 비활성화**: `Cycle 61 followup` 에서 비활성화 상태 → 활성화 + 아이콘/단축키 복원.
+- **NotificationBellButton 아이콘 이모지**: 아이콘 파일로 교체.

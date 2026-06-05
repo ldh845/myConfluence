@@ -55,6 +55,7 @@ const ICON_SRC = {
   cellMerge: "/icons/cell_merge.png",
   space: "/icons/space.png",
   tag: "/icons/tag.png",
+  crossedEye: "/icons/crossed-eye.svg",
 } as const;
 
 export type IconName = keyof typeof ICON_SRC;
