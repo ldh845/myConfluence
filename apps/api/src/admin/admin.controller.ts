@@ -19,6 +19,7 @@ import { UpdateConfigDto } from './dto/update-config.dto';
 import { SetLocalPasswordDto } from './dto/set-local-password.dto';
 import { CreateLocalUserDto } from './dto/create-local-user.dto';
 import { SetActiveDto } from './dto/set-active.dto';
+import { SetRoleDto } from './dto/set-role.dto';
 
 // Cycle 48 — 관리자 전용 라우트. ADMIN role 만 접근 가능.
 //   GET  /admin/config   — 시스템 설정 조회 (AppConfig singleton)
@@ -35,6 +36,8 @@ import { SetActiveDto } from './dto/set-active.dto';
 //   PATCH /admin/users/:id/active — 계정 활성/비활성 토글(자기 자신 비활성화 금지)
 // Cycle L3 (feature/ldh) — 로그인 실패 잠금 해제.
 //   PATCH /admin/users/:id/unlock — failedLoginCount/lockedUntil 리셋
+// Cycle L4 (feature/ldh) — 로컬 전용 계정 역할 변경.
+//   PATCH /admin/users/:id/role — ADMIN/DEVELOPER (SSO/자기 자신 거부)
 
 @Controller('admin')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -70,6 +73,16 @@ export class AdminController {
   ) {
     const requester = (req as Request & { user?: AuthUser }).user!;
     return this.admin.setActive(id, dto.isActive, requester.id);
+  }
+
+  @Patch('users/:id/role')
+  setRole(
+    @Param('id') id: string,
+    @Body() dto: SetRoleDto,
+    @Req() req: Request,
+  ) {
+    const requester = (req as Request & { user?: AuthUser }).user!;
+    return this.admin.setRole(id, dto.role, requester.id);
   }
 
   @Patch('users/:id/local-password')

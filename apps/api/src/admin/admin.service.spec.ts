@@ -10,6 +10,7 @@ import { PrismaService } from '../prisma/prisma.service';
 // Cycle 48 — AdminService 단위 검증 (PrismaService mock).
 // Cycle L2 (feature/ldh) — createLocalUser / setActive / listUsers 매핑 검증 추가.
 // Cycle L3 (feature/ldh) — 비번 정책 적용 / unlockUser / 잠금 매핑 검증 추가.
+// Cycle L4 (feature/ldh) — setRole(로컬 변경 / SSO 거부 / 자기 자신 거부 / 404) 검증 추가.
 
 describe('AdminService', () => {
   let service: AdminService;
@@ -256,6 +257,58 @@ describe('AdminService', () => {
       });
       const result = await service.setActive('admin-1', true, 'admin-1');
       expect(result.isActive).toBe(true);
+    });
+  });
+
+  // Cycle L4 (feature/ldh) — 로컬 전용 계정 역할 변경.
+  describe('setRole', () => {
+    it('updates role for a local-only account (keycloakId null)', async () => {
+      prismaMock.user.findUnique.mockResolvedValue({
+        id: 'u2',
+        username: 'localtest',
+        keycloakId: null,
+      });
+      prismaMock.user.update.mockResolvedValue({
+        id: 'u2',
+        username: 'localtest',
+        role: 'ADMIN',
+      });
+      const result = await service.setRole('u2', 'ADMIN', 'admin-1');
+      expect(prismaMock.user.update).toHaveBeenCalledWith({
+        where: { id: 'u2' },
+        data: { role: 'ADMIN' },
+        select: { id: true, username: true, role: true },
+      });
+      expect(result).toEqual({ id: 'u2', username: 'localtest', role: 'ADMIN' });
+    });
+
+    it('throws 400 when target is an SSO account (keycloakId present)', async () => {
+      prismaMock.user.findUnique.mockResolvedValue({
+        id: 'u3',
+        username: 'ssouser',
+        keycloakId: 'kc-3',
+      });
+      await expect(service.setRole('u3', 'ADMIN', 'admin-1')).rejects.toThrow(
+        BadRequestException,
+      );
+      expect(prismaMock.user.update).not.toHaveBeenCalled();
+    });
+
+    it('throws 400 when changing own role (before DB lookup)', async () => {
+      await expect(
+        service.setRole('admin-1', 'DEVELOPER', 'admin-1'),
+      ).rejects.toThrow(BadRequestException);
+      // 자기 자신은 DB 조회 전에 차단.
+      expect(prismaMock.user.findUnique).not.toHaveBeenCalled();
+      expect(prismaMock.user.update).not.toHaveBeenCalled();
+    });
+
+    it('throws 404 when user not found', async () => {
+      prismaMock.user.findUnique.mockResolvedValue(null);
+      await expect(service.setRole('ghost', 'ADMIN', 'admin-1')).rejects.toThrow(
+        NotFoundException,
+      );
+      expect(prismaMock.user.update).not.toHaveBeenCalled();
     });
   });
 });

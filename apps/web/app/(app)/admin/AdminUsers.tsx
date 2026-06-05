@@ -92,6 +92,37 @@ export default function AdminUsers() {
     onError: (err) => window.alert(err.message),
   });
 
+  // Cycle L4 — 로컬 전용 계정 역할 변경(ADMIN/DEVELOPER).
+  const setRole = useMutation<void, Error, { id: string; role: string }>({
+    mutationFn: async ({ id, role }) => {
+      const r = await fetch(`/api/admin/users/${id}/role`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role }),
+      });
+      if (!r.ok) {
+        const body = (await r.json().catch(() => ({}))) as { message?: string };
+        throw new Error(body.message ?? "역할 변경 실패");
+      }
+    },
+    onSuccess: refresh,
+    onError: (err) => window.alert(err.message),
+  });
+
+  const changeRole = (u: AdminUser, role: string) => {
+    if (role === u.role) return;
+    // ADMIN 승격은 권한이 큰 변경이라 확인을 받는다.
+    if (
+      role === "ADMIN" &&
+      !window.confirm(
+        `'${u.name}(@${u.username})' 계정을 ADMIN 으로 승격하시겠습니까?\nADMIN 은 사용자 관리 등 모든 관리자 기능에 접근할 수 있습니다.`,
+      )
+    )
+      return;
+    setRole.mutate({ id: u.id, role });
+  };
+
   const toggleActive = (u: AdminUser) => {
     if (u.isActive) {
       if (
@@ -178,15 +209,34 @@ export default function AdminUsers() {
                     />
                   </td>
                   <td className="px-3 py-2">
-                    <span
-                      className={`px-2 py-0.5 rounded text-[11px] ${
-                        u.role === "ADMIN"
-                          ? "bg-[#ffebe6] text-[#bf2600]"
-                          : "bg-[#dfe1e6] text-[#42526e]"
-                      }`}
-                    >
-                      {u.role}
-                    </span>
+                    {/* Cycle L4 — 로컬 전용 계정만 역할 변경 가능. SSO/혼합은
+                        Keycloak 이 source(다음 로그인 때 원복)라 비활성 + 안내.
+                        자기 자신 행도 비활성(셀프 권한 박탈 방지). */}
+                    {u.isSso ? (
+                      <div className="flex items-center gap-1.5">
+                        <RoleBadge role={u.role} />
+                        <span
+                          className="text-[10px] text-[#6b778c]"
+                          title="SSO 계정의 역할은 Keycloak 에서 관리됩니다"
+                        >
+                          Keycloak 관리
+                        </span>
+                      </div>
+                    ) : me?.id === u.id ? (
+                      <span title="자기 자신의 역할은 변경할 수 없습니다">
+                        <RoleBadge role={u.role} />
+                      </span>
+                    ) : (
+                      <select
+                        value={u.role === "ADMIN" ? "ADMIN" : "DEVELOPER"}
+                        onChange={(e) => changeRole(u, e.target.value)}
+                        disabled={setRole.isPending}
+                        className="px-2 py-1 text-[12px] border border-[#dfe1e6] rounded bg-white text-[#42526e] focus:outline-none focus:border-[#0052cc] disabled:opacity-40"
+                      >
+                        <option value="DEVELOPER">DEVELOPER</option>
+                        <option value="ADMIN">ADMIN</option>
+                      </select>
+                    )}
                   </td>
                   <td className="px-3 py-2">
                     <div className="flex items-center gap-1.5">
@@ -287,6 +337,21 @@ export default function AdminUsers() {
         />
       )}
     </div>
+  );
+}
+
+// Cycle L4 — 역할 배지(SSO/자기 자신 행처럼 변경 불가일 때 표시).
+function RoleBadge({ role }: { role: string }) {
+  return (
+    <span
+      className={`px-2 py-0.5 rounded text-[11px] ${
+        role === "ADMIN"
+          ? "bg-[#ffebe6] text-[#bf2600]"
+          : "bg-[#dfe1e6] text-[#42526e]"
+      }`}
+    >
+      {role}
+    </span>
   );
 }
 

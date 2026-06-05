@@ -157,6 +157,40 @@ export class AdminService {
     });
   }
 
+  // Cycle L4 (feature/ldh) — 로컬 전용 계정의 전역 역할 변경(ADMIN/DEVELOPER).
+  //   SSO/혼합 계정(keycloakId 보유)은 거부 → 그 역할의 source 는 Keycloak realm role
+  //   이라(Cycle 48) 여기서 바꿔도 다음 OIDC 로그인 때 원복된다. 400 으로 막고 안내.
+  //   자기 자신의 역할 변경도 막는다(셀프 권한 박탈/혼란 방지) → 400 (L2 active 토글과 동일 패턴).
+  //   role 컬럼은 기존재 → 마이그레이션 없음. jwt.strategy 가 매 요청 DB role 을 읽으므로
+  //   변경은 재로그인 없이 다음 요청부터 즉시 반영된다.
+  async setRole(
+    userId: string,
+    role: 'ADMIN' | 'DEVELOPER',
+    requesterId: string,
+  ): Promise<{ id: string; username: string; role: string }> {
+    if (userId === requesterId) {
+      throw new BadRequestException({
+        error: 'cannot change own role',
+        message: '자기 자신의 역할은 변경할 수 없습니다.',
+      });
+    }
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException({ error: 'user not found' });
+    }
+    if (user.keycloakId != null) {
+      throw new BadRequestException({
+        error: 'sso role managed externally',
+        message: 'SSO 계정의 역할은 Keycloak 에서 관리됩니다.',
+      });
+    }
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: { role },
+      select: { id: true, username: true, role: true },
+    });
+  }
+
   // Cycle L1 (feature/ldh) — 관리자가 대상 사용자의 로컬 비밀번호를 설정/초기화.
   // passwordHash 를 채우면 그 사용자는 SSO 와 별개로 로컬 로그인이 가능해진다
   // (LOCAL_LOGIN_ENABLED 플래그가 켜진 환경에서). bcrypt salt rounds 10.
