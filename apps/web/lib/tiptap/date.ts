@@ -27,19 +27,28 @@ export function formatKoreanDate(iso: string | null | undefined): string {
 // Cycle 62 — 네이티브 date picker 를 띄우고, 선택 시 onPick(ISO) 호출.
 //   화면 밖 hidden input 으로 picker 만 노출. showPicker 미지원 브라우저는
 //   focus+click fallback. 취소(blur)는 cleanup 만.
+//   Cycle 88-4 — anchor(커서 위치 rect) 전달 시 해당 위치 근처에 picker 가 뜨도록.
 export function pickDate(
   initial: string | undefined,
   onPick: (iso: string) => void,
+  anchor?: { top: number; left: number },
 ): void {
   const input = document.createElement("input");
   input.type = "date";
   input.value = initial && ISO_RE.test(initial) ? initial : todayIso();
   input.style.position = "fixed";
-  input.style.left = "0";
-  input.style.top = "0";
+  input.style.zIndex = "9999";
+  // anchor 가 있으면 그 근처(조금 내려서 겹치지 않게)에 배치
+  input.style.left = anchor ? `${Math.min(anchor.left, window.innerWidth - 220)}px` : "0";
+  input.style.top = anchor ? `${anchor.top + 24}px` : "0";
   input.style.opacity = "0";
-  input.style.pointerEvents = "none";
+  input.style.width = "100px";
+  input.style.height = "24px";
   document.body.appendChild(input);
+  
+  // 브라우저가 레이아웃을 재계산하고 실제 화면 좌표를 캐시하도록 강제
+  void input.offsetWidth;
+
   let done = false;
   const cleanup = () => {
     if (input.parentNode) input.parentNode.removeChild(input);
