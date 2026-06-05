@@ -151,6 +151,8 @@ model Space {
   owner        User?         @relation("SpaceOwner", fields: [ownerId], references: [id], onDelete: SetNull)
   // Cycle 74-A — 스페이스 멤버(권한). PRIVATE 접근/역할의 출처. 공간 삭제 시 Cascade.
   members      SpaceMember[] @relation("SpaceMembers")
+  // Cycle L7 (feature/ldh) — 스페이스에 부여된 그룹 권한. 개인 멤버십과 max 결합.
+  memberGroups SpaceMemberGroup[] @relation("SpaceMemberGroups")
   // Cycle 74-F — 사이드바 바로가기. 공간 삭제 시 Cascade.
   shortcuts    SpaceShortcut[] @relation("SpaceShortcuts")
   // Cycle 33 — 공간의 명시적 홈(메인) 페이지. 공간 생성 시 자동 생성.
@@ -496,6 +498,8 @@ model Group {
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
   members     GroupMember[]
+  // Cycle L7 (feature/ldh) — 이 그룹이 권한을 부여받은 스페이스들.
+  spaceGrants SpaceMemberGroup[] @relation("GroupSpaceGrants")
 
   @@map("groups")
 }
@@ -512,4 +516,19 @@ model GroupMember {
   @@index([groupId])
   @@index([userId])
   @@map("group_members")
+}
+
+// Cycle L7 (feature/ldh) — 스페이스 ↔ 그룹 권한 부여. 개인 SpaceMember 와 별개이며
+//   권한 판정 시 둘을 max 결합(높은 역할 승리, deny 없음). 양쪽 Cascade.
+model SpaceMemberGroup {
+  spaceId   String
+  space     Space     @relation("SpaceMemberGroups", fields: [spaceId], references: [id], onDelete: Cascade)
+  groupId   String
+  group     Group     @relation("GroupSpaceGrants", fields: [groupId], references: [id], onDelete: Cascade)
+  role      SpaceRole @default(VIEWER)
+  createdAt DateTime  @default(now())
+
+  @@id([spaceId, groupId])
+  @@index([groupId])
+  @@map("space_member_groups")
 }

@@ -85,11 +85,16 @@ describe('SpacePermissionService — visibility WHERE 필터', () => {
     expect(svc.spaceVisibilityWhere(ADMIN_GLOBAL)).toEqual({});
     expect(svc.pageVisibilityWhere(ADMIN_GLOBAL)).toEqual({});
   });
-  it('로그인 사용자: PUBLIC + 멤버 PRIVATE + 본인 PERSONAL', () => {
+  // Cycle L7 — 그룹을 통해 권한 받은 비공개 공간도 가시성에 포함(개인 멤버십 가지와 별개 OR).
+  it('로그인 사용자: PUBLIC + 멤버 PRIVATE + 그룹 PRIVATE + 본인 PERSONAL', () => {
     expect(svc.spaceVisibilityWhere(DEV)).toEqual({
       OR: [
         { visibility: 'PUBLIC' },
         { visibility: 'PRIVATE', members: { some: { userId: 'u1' } } },
+        {
+          visibility: 'PRIVATE',
+          memberGroups: { some: { group: { members: { some: { userId: 'u1' } } } } },
+        },
         { visibility: 'PERSONAL', ownerId: 'u1' },
       ],
     });
@@ -100,6 +105,10 @@ describe('SpacePermissionService — visibility WHERE 필터', () => {
         OR: [
           { visibility: 'PUBLIC' },
           { visibility: 'PRIVATE', members: { some: { userId: 'u1' } } },
+          {
+            visibility: 'PRIVATE',
+            memberGroups: { some: { group: { members: { some: { userId: 'u1' } } } } },
+          },
           { visibility: 'PERSONAL', ownerId: 'u1' },
         ],
       },
@@ -147,6 +156,8 @@ describe('SpacePermissionService — assertCanViewPage (Cycle L5)', () => {
             opts.memberRole != null ? { role: opts.memberRole } : null,
           ),
       },
+      // Cycle L7 — loadAccess 가 그룹 부여 역할도 조회. 기본 빈 배열(그룹 영향 없음).
+      spaceMemberGroup: { findMany: jest.fn().mockResolvedValue([]) },
       pageRestriction: {
         findUnique: jest.fn().mockResolvedValue(opts.restriction ?? null),
       },
@@ -222,10 +233,79 @@ describe('SpacePermissionService — loadAccess', () => {
       spaceMember: {
         findUnique: jest.fn().mockResolvedValue({ role: 'EDITOR' }),
       },
+      spaceMemberGroup: { findMany: jest.fn().mockResolvedValue([]) },
     };
     const s = new SpacePermissionService(prisma as never);
     const a = await s.loadAccess('s', 'u1');
     expect(a?.role).toBe('EDITOR');
     expect(a?.space.visibility).toBe('PRIVATE');
+  });
+});
+
+// Cycle L7 (feature/ldh) — 유효 역할 = max(개인 멤버십, 소속 그룹 부여 역할들).
+//   회귀 방어: 그룹이 비면 개인 역할 그대로(개인 권한 불변). 그룹은 올리기만 함(deny 없음).
+describe('SpacePermissionService — 그룹 결합 유효 역할 (Cycle L7)', () => {
+  const build = (
+    memberRole: string | null,
+    groupRoles: string[],
+    visibility = 'PRIVATE',
+  ) => {
+    const prisma = {
+      space: {
+        findUnique: jest
+          .fn()
+          .mockResolvedValue({ id: 's', visibility, ownerId: null }),
+      },
+      spaceMember: {
+        findUnique: jest
+          .fn()
+          .mockResolvedValue(memberRole ? { role: memberRole } : null),
+      },
+      spaceMemberGroup: {
+        findMany: jest
+          .fn()
+          .mockResolvedValue(groupRoles.map((role) => ({ role }))),
+      },
+    };
+    return new SpacePermissionService(prisma as never);
+  };
+
+  it('개인 없음 + 그룹 뷰어 → VIEWER (canView OK, canEdit 거부)', async () => {
+    const s = build(null, ['VIEWER']);
+    const a = (await s.loadAccess('s', 'u1'))!;
+    expect(a.role).toBe('VIEWER');
+    expect(s.canView(a, DEV)).toBe(true);
+    expect(s.canEdit(a, DEV)).toBe(false);
+  });
+
+  it('개인 없음 + 그룹 편집자 → EDITOR (canEdit OK)', async () => {
+    const s = build(null, ['EDITOR']);
+    const a = (await s.loadAccess('s', 'u1'))!;
+    expect(a.role).toBe('EDITOR');
+    expect(s.canEdit(a, DEV)).toBe(true);
+  });
+
+  it('개인 뷰어 + 그룹 편집자 → max=EDITOR', async () => {
+    const s = build('VIEWER', ['EDITOR']);
+    expect((await s.loadAccess('s', 'u1'))!.role).toBe('EDITOR');
+  });
+
+  it('개인 편집자 + 그룹 뷰어 → EDITOR (그룹이 강등 못 함)', async () => {
+    const s = build('EDITOR', ['VIEWER']);
+    expect((await s.loadAccess('s', 'u1'))!.role).toBe('EDITOR');
+  });
+
+  it('여러 그룹 → 최고 역할 채택(VIEWER+ADMIN → ADMIN)', async () => {
+    const s = build(null, ['VIEWER', 'ADMIN']);
+    const a = (await s.loadAccess('s', 'u1'))!;
+    expect(a.role).toBe('ADMIN');
+    expect(s.canManage(a, DEV)).toBe(true);
+  });
+
+  it('그룹 권한 없는 비공개 공간 → null(차단 유지) — 회귀', async () => {
+    const s = build(null, []);
+    const a = (await s.loadAccess('s', 'u1'))!;
+    expect(a.role).toBeNull();
+    expect(s.canView(a, DEV)).toBe(false);
   });
 });

@@ -45,8 +45,39 @@ export class SpacePermissionService {
         select: { role: true },
       });
       role = m?.role ?? null;
+      // Cycle L7 (feature/ldh) — 개인 멤버십 역할에 더해, 사용자가 속한 그룹들 중
+      //   이 공간에 권한이 부여된 그룹의 역할도 합산한다. 유효 역할 = max(개인, 그룹들).
+      //   그룹은 역할을 '올려주기만' 한다(deny 없음) → 개인 권한이 더 높으면 그대로 유지.
+      //   소속 그룹 ∩ 공간 부여 그룹을 단일 findMany 로 조회(N+1 없음).
+      const grants = await this.prisma.spaceMemberGroup.findMany({
+        where: { spaceId, group: { members: { some: { userId } } } },
+        select: { role: true },
+      });
+      for (const g of grants) role = this.higherRole(role, g.role);
     }
     return { space, role };
+  }
+
+  // Cycle L7 — 역할 등급(ADMIN > EDITOR > VIEWER > 없음). 개인·그룹 역할 max 결합용.
+  private roleRank(role: SpaceRole | null): number {
+    switch (role) {
+      case 'ADMIN':
+        return 3;
+      case 'EDITOR':
+        return 2;
+      case 'VIEWER':
+        return 1;
+      default:
+        return 0;
+    }
+  }
+
+  // 두 역할 중 더 높은 쪽을 반환(동급이면 a). null 은 '권한 없음'으로 최하위.
+  private higherRole(
+    a: SpaceRole | null,
+    b: SpaceRole | null,
+  ): SpaceRole | null {
+    return this.roleRank(b) > this.roleRank(a) ? b : a;
   }
 
   canView(access: SpaceAccess, user: Actor): boolean {
@@ -206,6 +237,13 @@ export class SpacePermissionService {
       ors.push({
         visibility: 'PRIVATE',
         members: { some: { userId: user.id } },
+      });
+      // Cycle L7 (feature/ldh) — 소속 그룹을 통해 권한을 받은 비공개 공간도 목록에
+      //   노출(접근 가능과 일관). 개인 멤버십과 별개의 OR 가지로만 추가 → 기존 가시성
+      //   조건을 약화하지 않는다(없던 접근만 더해짐).
+      ors.push({
+        visibility: 'PRIVATE',
+        memberGroups: { some: { group: { members: { some: { userId: user.id } } } } },
       });
       ors.push({ visibility: 'PERSONAL', ownerId: user.id });
     }

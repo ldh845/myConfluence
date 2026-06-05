@@ -254,3 +254,101 @@ describe('SpacesService — setHomePage (Cycle L5-2)', () => {
     expect(prismaMock.space.update).not.toHaveBeenCalled();
   });
 });
+
+// Cycle L7 (feature/ldh) — 스페이스 그룹 권한(SpaceMemberGroup) CRUD. canManage 가드.
+describe('SpacesService — member-groups (Cycle L7)', () => {
+  let service: SpacesService;
+  let prismaMock: {
+    group: { findUnique: jest.Mock };
+    spaceMemberGroup: {
+      findMany: jest.Mock;
+      findUnique: jest.Mock;
+      upsert: jest.Mock;
+      update: jest.Mock;
+      deleteMany: jest.Mock;
+    };
+  };
+  let permsMock: { assertCanManage: jest.Mock };
+
+  beforeEach(async () => {
+    prismaMock = {
+      group: { findUnique: jest.fn().mockResolvedValue({ id: 'g1' }) },
+      spaceMemberGroup: {
+        findMany: jest.fn().mockResolvedValue([]),
+        findUnique: jest.fn(),
+        upsert: jest.fn().mockResolvedValue({}),
+        update: jest.fn().mockResolvedValue({}),
+        deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+    };
+    permsMock = { assertCanManage: jest.fn().mockResolvedValue(undefined) };
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        SpacesService,
+        { provide: PrismaService, useValue: prismaMock },
+        { provide: ActivitiesService, useValue: { log: jest.fn() } },
+        { provide: SpacePermissionService, useValue: permsMock },
+      ],
+    }).compile();
+    service = module.get<SpacesService>(SpacesService);
+  });
+
+  const ADMIN = { id: 'admin', role: 'ADMIN' };
+
+  it('addMemberGroup → 그룹 없으면 404', async () => {
+    prismaMock.group.findUnique.mockResolvedValueOnce(null);
+    await expect(
+      service.addMemberGroup('s', 'ghost', 'EDITOR', ADMIN),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    expect(prismaMock.spaceMemberGroup.upsert).not.toHaveBeenCalled();
+  });
+
+  it('addMemberGroup → upsert(idempotent)', async () => {
+    await service.addMemberGroup('s', 'g1', 'EDITOR', ADMIN);
+    expect(permsMock.assertCanManage).toHaveBeenCalledWith('s', ADMIN);
+    expect(prismaMock.spaceMemberGroup.upsert).toHaveBeenCalledWith({
+      where: { spaceId_groupId: { spaceId: 's', groupId: 'g1' } },
+      update: { role: 'EDITOR' },
+      create: { spaceId: 's', groupId: 'g1', role: 'EDITOR' },
+    });
+  });
+
+  it('updateMemberGroupRole → 부여 없으면 404', async () => {
+    prismaMock.spaceMemberGroup.findUnique.mockResolvedValueOnce(null);
+    await expect(
+      service.updateMemberGroupRole('s', 'g1', 'ADMIN', ADMIN),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    expect(prismaMock.spaceMemberGroup.update).not.toHaveBeenCalled();
+  });
+
+  it('updateMemberGroupRole → update', async () => {
+    prismaMock.spaceMemberGroup.findUnique.mockResolvedValueOnce({
+      groupId: 'g1',
+    });
+    await service.updateMemberGroupRole('s', 'g1', 'ADMIN', ADMIN);
+    expect(prismaMock.spaceMemberGroup.update).toHaveBeenCalledWith({
+      where: { spaceId_groupId: { spaceId: 's', groupId: 'g1' } },
+      data: { role: 'ADMIN' },
+    });
+  });
+
+  it('removeMemberGroup → deleteMany', async () => {
+    await service.removeMemberGroup('s', 'g1', ADMIN);
+    expect(prismaMock.spaceMemberGroup.deleteMany).toHaveBeenCalledWith({
+      where: { spaceId: 's', groupId: 'g1' },
+    });
+  });
+
+  it('관리 권한 없으면 403 (addMemberGroup)', async () => {
+    permsMock.assertCanManage.mockRejectedValueOnce(
+      new ForbiddenException({ error: 'forbidden' }),
+    );
+    await expect(
+      service.addMemberGroup('s', 'g1', 'EDITOR', {
+        id: 'u',
+        role: 'DEVELOPER',
+      }),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(prismaMock.spaceMemberGroup.upsert).not.toHaveBeenCalled();
+  });
+});

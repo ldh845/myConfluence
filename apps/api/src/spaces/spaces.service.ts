@@ -199,6 +199,82 @@ export class SpacesService {
     return { ok: true };
   }
 
+  // ─── Cycle L7 (feature/ldh) — 스페이스 그룹 권한(SpaceMemberGroup) 관리 ──────
+  //   모두 canManage 가드. 개인 멤버십과 별개의 부여이며 판정 시 max 결합된다.
+  //   ※ 마지막 ADMIN 보호는 개인 SpaceMember 기준만 유지(그룹 ADMIN 은 카운트 안 함) —
+  //     공간엔 항상 개인 ADMIN 1명 이상이 보장되므로 그룹 제거로 잠기지 않는다.
+
+  async listMemberGroups(id: string, user: Actor) {
+    await this.perms.assertCanManage(id, user);
+    return this.prisma.spaceMemberGroup.findMany({
+      where: { spaceId: id },
+      orderBy: { createdAt: 'asc' },
+      select: {
+        groupId: true,
+        role: true,
+        createdAt: true,
+        group: {
+          select: {
+            id: true,
+            name: true,
+            source: true,
+            _count: { select: { members: true } },
+          },
+        },
+      },
+    });
+  }
+
+  async addMemberGroup(
+    id: string,
+    groupId: string,
+    role: 'ADMIN' | 'EDITOR' | 'VIEWER',
+    user: Actor,
+  ) {
+    await this.perms.assertCanManage(id, user);
+    const group = await this.prisma.group.findUnique({
+      where: { id: groupId },
+      select: { id: true },
+    });
+    if (!group) throw new NotFoundException({ error: 'group not found' });
+    // 이미 부여돼 있으면 역할 갱신(idempotent).
+    await this.prisma.spaceMemberGroup.upsert({
+      where: { spaceId_groupId: { spaceId: id, groupId } },
+      update: { role },
+      create: { spaceId: id, groupId, role },
+    });
+    return { ok: true };
+  }
+
+  async updateMemberGroupRole(
+    id: string,
+    groupId: string,
+    role: 'ADMIN' | 'EDITOR' | 'VIEWER',
+    user: Actor,
+  ) {
+    await this.perms.assertCanManage(id, user);
+    const current = await this.prisma.spaceMemberGroup.findUnique({
+      where: { spaceId_groupId: { spaceId: id, groupId } },
+      select: { groupId: true },
+    });
+    if (!current) {
+      throw new NotFoundException({ error: 'group grant not found' });
+    }
+    await this.prisma.spaceMemberGroup.update({
+      where: { spaceId_groupId: { spaceId: id, groupId } },
+      data: { role },
+    });
+    return { ok: true };
+  }
+
+  async removeMemberGroup(id: string, groupId: string, user: Actor) {
+    await this.perms.assertCanManage(id, user);
+    await this.prisma.spaceMemberGroup.deleteMany({
+      where: { spaceId: id, groupId },
+    });
+    return { ok: true };
+  }
+
   // Cycle 74-D — 감사 로그 탭. canManage 가드 후 ActivityLog 를 스페이스 단위로 필터.
   async getAuditLog(
     id: string,

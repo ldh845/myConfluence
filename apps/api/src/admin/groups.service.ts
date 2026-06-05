@@ -24,6 +24,15 @@ const MEMBER_USER_SELECT = {
 export class GroupsService {
   constructor(private readonly prisma: PrismaService) {}
 
+  // Cycle L7 (feature/ldh) — 그룹 선택용 최소 디렉터리(id/name/source). 인증 사용자
+  //   누구나(공간 관리자가 그룹을 공간에 부여할 때 선택). 멤버 등 민감 정보 미포함.
+  listBasic() {
+    return this.prisma.group.findMany({
+      orderBy: { name: 'asc' },
+      select: { id: true, name: true, source: true },
+    });
+  }
+
   // 목록 — 멤버 수 포함. source 배지·정렬은 FE.
   async list() {
     const groups = await this.prisma.group.findMany({

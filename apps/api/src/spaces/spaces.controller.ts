@@ -19,6 +19,8 @@ import { SetHomePageDto } from './dto/set-home-page.dto';
 import { UpdateSpaceSettingsDto } from './dto/update-space-settings.dto';
 import { AddMemberDto } from './dto/add-member.dto';
 import { UpdateMemberRoleDto } from './dto/update-member-role.dto';
+import { AddMemberGroupDto } from './dto/add-member-group.dto';
+import { UpdateMemberGroupRoleDto } from './dto/update-member-group-role.dto';
 import {
   AddShortcutDto,
   UpdateShortcutDto,
@@ -135,6 +137,54 @@ export class SpacesController {
     @Req() req: Request,
   ) {
     return this.spaces.removeMember(id, userId, userFromReq(req));
+  }
+
+  // ─── Cycle L7 (feature/ldh) — 스페이스 그룹 권한. canManage 는 service. ───
+  @Get(':id/member-groups')
+  @UseGuards(JwtAuthGuard)
+  listMemberGroups(@Param('id') id: string, @Req() req: Request) {
+    return this.spaces.listMemberGroups(id, userFromReq(req));
+  }
+
+  @Post(':id/member-groups')
+  @UseGuards(JwtAuthGuard)
+  addMemberGroup(
+    @Param('id') id: string,
+    @Body() dto: AddMemberGroupDto,
+    @Req() req: Request,
+  ) {
+    return this.spaces.addMemberGroup(
+      id,
+      dto.groupId,
+      dto.role,
+      userFromReq(req),
+    );
+  }
+
+  @Patch(':id/member-groups/:groupId')
+  @UseGuards(JwtAuthGuard)
+  updateMemberGroupRole(
+    @Param('id') id: string,
+    @Param('groupId') groupId: string,
+    @Body() dto: UpdateMemberGroupRoleDto,
+    @Req() req: Request,
+  ) {
+    return this.spaces.updateMemberGroupRole(
+      id,
+      groupId,
+      dto.role,
+      userFromReq(req),
+    );
+  }
+
+  @Delete(':id/member-groups/:groupId')
+  @UseGuards(JwtAuthGuard)
+  removeMemberGroup(
+    @Param('id') id: string,
+    @Param('groupId') groupId: string,
+    @Req() req: Request,
+  ) {
+    return this.spaces.removeMemberGroup(id, groupId, userFromReq(req));
   }
 
   // Cycle 74-D — 감사 로그(공간 단위 ActivityLog 필터 뷰). canManage 는 service.
