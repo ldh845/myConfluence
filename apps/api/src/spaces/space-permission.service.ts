@@ -147,6 +147,26 @@ export class SpacePermissionService {
     if (!m) throw new ForbiddenException({ error: 'page restricted' });
   }
 
+  // Cycle L5 (feature/ldh) — pageId 로부터 스페이스 + 페이지 제한을 묶어 읽기 권한 assert.
+  //   기존 assertCanEditPage 의 '읽기판'. 첨부/다이어그램/버전/댓글/리액션 등 pageId 로
+  //   키되는 읽기 엔드포인트가 공통으로 사용해 비공개·개인 공간·VIEW_EDIT 제한 페이지의
+  //   부속 데이터(첨부·다이어그램·버전·댓글·리액션) 누수를 차단한다.
+  //   PUBLIC 공간이면 누구나 통과(기존 본문 읽기와 동일 정책) → 공개 흐름 무변화.
+  async assertCanViewPage(pageId: string, user: Actor): Promise<void> {
+    const page = await this.prisma.page.findUnique({
+      where: { id: pageId },
+      select: {
+        id: true,
+        spaceId: true,
+        authorId: true,
+        restrictionMode: true,
+      },
+    });
+    if (!page) throw new NotFoundException({ error: 'page not found' });
+    const access = await this.assertCanView(page.spaceId, user);
+    await this.assertCanViewPageRestriction(page, user, access);
+  }
+
   // Cycle 83 — 페이지 제한 관리 권한(작성자/공간 관리자/전역 ADMIN).
   async canManagePageRestriction(pageId: string, user: Actor): Promise<boolean> {
     if (!user) return false;

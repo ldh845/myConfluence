@@ -65,6 +65,10 @@ export class ActivitiesService {
     dateTo?: Date;
     limit?: number;
     offset?: number;
+    // Cycle L5 (feature/ldh) — 공개 활동 피드(GET /activities) 가시성 제한.
+    //   호출자가 actor 기반 where(접근 가능한 스페이스 OR spaceId=null)를 주면 AND 로 적용.
+    //   공간 단위 감사 로그(getAuditLog)는 이미 canManage 가드라 미전달 → 무영향.
+    visibilityWhere?: Prisma.ActivityLogWhereInput;
   }) {
     const limit = Math.min(Math.max(opts.limit ?? 20, 1), 100);
     const offset = Math.max(opts.offset ?? 0, 0);
@@ -88,6 +92,8 @@ export class ActivitiesService {
             },
           }
         : {}),
+      // Cycle L5 — 가시성 제한(OR 절). 위 조건들과 AND 로 결합된다.
+      ...(opts.visibilityWhere ?? {}),
     };
     const [items, total] = await Promise.all([
       this.prisma.activityLog.findMany({

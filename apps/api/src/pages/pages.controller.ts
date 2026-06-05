@@ -137,9 +137,11 @@ export class PagesController {
   }
 
   // FR-024 (Cycle 18-1a) — 휴지통 목록. 정적 path → :id 위에.
+  // Cycle L5 — 인증 필수 + 가시성 필터(접근 불가 스페이스의 삭제 페이지 누수 차단).
   @Get('trash')
-  listTrash() {
-    return this.pages.listTrash();
+  @UseGuards(JwtAuthGuard)
+  listTrash(@Req() req: Request) {
+    return this.pages.listTrash(userFromReq(req));
   }
 
   // FR-130 (Cycle 22) — 홈 화면 최근 수정 페이지.
@@ -346,13 +348,20 @@ export class PagesController {
     return this.pages.copy(id, dto, actorFromReq(req));
   }
 
+  // Cycle L5 — 무가드였던 다이어그램/버전 목록에 읽기 권한 가드 추가.
+  //   비공개/개인 공간·VIEW_EDIT 제한 페이지의 다이어그램/편집 이력 누수 차단.
+  //   PUBLIC 은 그대로 통과(OptionalJwt — 공개 흐름 무변화).
   @Get(':id/diagrams')
-  listDiagrams(@Param('id') id: string) {
+  @UseGuards(OptionalJwtAuthGuard)
+  async listDiagrams(@Param('id') id: string, @Req() req: Request) {
+    await this.perms.assertCanViewPage(id, userFromReq(req));
     return this.pages.listDiagrams(id);
   }
 
   @Get(':id/versions')
-  listVersions(@Param('id') id: string) {
+  @UseGuards(OptionalJwtAuthGuard)
+  async listVersions(@Param('id') id: string, @Req() req: Request) {
+    await this.perms.assertCanViewPage(id, userFromReq(req));
     return this.pages.listVersions(id);
   }
 

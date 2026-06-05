@@ -970,9 +970,14 @@ export class PagesService {
   }
 
   // FR-024 (Cycle 18-1a) — 휴지통 목록.
-  listTrash() {
+  // Cycle L5 (feature/ldh) — 휴지통 목록도 가시성 필터 적용. 접근 불가한 스페이스의
+  //   삭제 페이지(제목·존재)가 새지 않게 pageVisibilityWhere 로 제한. 전역 ADMIN 은 전체.
+  listTrash(actor: Actor) {
     return this.prisma.page.findMany({
-      where: { NOT: { deletedAt: null } },
+      where: {
+        NOT: { deletedAt: null },
+        ...this.perms.pageVisibilityWhere(actor),
+      },
       orderBy: { deletedAt: 'desc' },
       select: {
         id: true,

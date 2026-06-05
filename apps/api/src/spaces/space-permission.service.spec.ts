@@ -1,3 +1,4 @@
+import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import {
   SpacePermissionService,
   type Actor,
@@ -108,6 +109,97 @@ describe('SpacePermissionService — visibility WHERE 필터', () => {
     expect(svc.spaceVisibilityWhere(ANON)).toEqual({
       OR: [{ visibility: 'PUBLIC' }],
     });
+  });
+});
+
+// Cycle L5 (feature/ldh) — assertCanViewPage: pageId → 스페이스 + 페이지 제한 읽기 가드.
+//   첨부/다이어그램/버전/댓글/리액션 읽기 엔드포인트가 공통으로 쓰는 프리미티브.
+describe('SpacePermissionService — assertCanViewPage (Cycle L5)', () => {
+  const build = (opts: {
+    page: {
+      spaceId: string;
+      authorId: string | null;
+      restrictionMode: string;
+    } | null;
+    space?: { visibility: string; ownerId: string | null };
+    memberRole?: string | null;
+    restriction?: { role: string } | null;
+  }) => {
+    const prisma = {
+      page: {
+        findUnique: jest
+          .fn()
+          .mockResolvedValue(opts.page ? { id: 'p', ...opts.page } : null),
+      },
+      space: {
+        findUnique: jest
+          .fn()
+          .mockResolvedValue(
+            opts.space
+              ? { id: opts.page?.spaceId ?? 's', ...opts.space }
+              : null,
+          ),
+      },
+      spaceMember: {
+        findUnique: jest
+          .fn()
+          .mockResolvedValue(
+            opts.memberRole != null ? { role: opts.memberRole } : null,
+          ),
+      },
+      pageRestriction: {
+        findUnique: jest.fn().mockResolvedValue(opts.restriction ?? null),
+      },
+    };
+    return new SpacePermissionService(prisma as never);
+  };
+
+  it('페이지 없으면 404', async () => {
+    const s = build({ page: null });
+    await expect(s.assertCanViewPage('p', DEV)).rejects.toThrow(
+      NotFoundException,
+    );
+  });
+
+  it('PUBLIC 페이지(NONE 제한)는 익명도 통과', async () => {
+    const s = build({
+      page: { spaceId: 's', authorId: 'a', restrictionMode: 'NONE' },
+      space: { visibility: 'PUBLIC', ownerId: null },
+    });
+    await expect(s.assertCanViewPage('p', ANON)).resolves.toBeUndefined();
+  });
+
+  it('PRIVATE 비멤버는 403', async () => {
+    const s = build({
+      page: { spaceId: 's', authorId: 'a', restrictionMode: 'NONE' },
+      space: { visibility: 'PRIVATE', ownerId: null },
+      memberRole: null,
+    });
+    await expect(s.assertCanViewPage('p', DEV)).rejects.toThrow(
+      ForbiddenException,
+    );
+  });
+
+  it('VIEW_EDIT 제한: 멤버라도 제한 멤버 아니면 403', async () => {
+    const s = build({
+      page: { spaceId: 's', authorId: 'other', restrictionMode: 'VIEW_EDIT' },
+      space: { visibility: 'PRIVATE', ownerId: null },
+      memberRole: 'VIEWER',
+      restriction: null,
+    });
+    await expect(s.assertCanViewPage('p', DEV)).rejects.toThrow(
+      ForbiddenException,
+    );
+  });
+
+  it('VIEW_EDIT 제한: 제한 멤버면 통과', async () => {
+    const s = build({
+      page: { spaceId: 's', authorId: 'other', restrictionMode: 'VIEW_EDIT' },
+      space: { visibility: 'PRIVATE', ownerId: null },
+      memberRole: 'VIEWER',
+      restriction: { role: 'VIEW' },
+    });
+    await expect(s.assertCanViewPage('p', DEV)).resolves.toBeUndefined();
   });
 });
 

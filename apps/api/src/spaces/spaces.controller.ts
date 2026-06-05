@@ -58,13 +58,16 @@ export class SpacesController {
   }
 
   // Cycle 33 — 공간 생성 시 홈 페이지 자동 생성. 인증 시 actor 전달.
+  // Cycle L5 — 인증 필수로 강화(OptionalJwt→Jwt). 웹 미들웨어는 직접 API 호출(curl)을
+  //   막지 못해 비인증 생성(소유자·멤버 없는 ownerless 공간)이 가능했던 구멍을 폐쇄.
+  //   개인 공간 자동 생성은 별도 경로(getOrCreatePersonal)라 무영향. 이제 생성자가 ADMIN 멤버.
   @Post()
-  @UseGuards(OptionalJwtAuthGuard)
+  @UseGuards(JwtAuthGuard)
   create(@Body() dto: CreateSpaceDto, @Req() req: Request) {
-    return this.spaces.create(
-      dto,
-      req.user ? { id: req.user.id, name: req.user.name } : null,
-    );
+    return this.spaces.create(dto, {
+      id: req.user!.id,
+      name: req.user!.name,
+    });
   }
 
   // Cycle 33 — 공간 홈 페이지 지정.
