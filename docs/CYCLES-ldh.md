@@ -459,3 +459,58 @@
 - **비고**: 마이그레이션은 신규 테이블 2 + enum 1(무중단·재작성 없음). 그룹은 아직 어떤
   권한에도 연결 안 됨 → 본 사이클 배포는 기존 동작에 영향 0. L8 보호 가드를 미리 넣어
   L8 도입 시 그룹 BE 변경 불필요.
+
+---
+
+## Cycle L7 — 2026-06-05 — ✅ Done (그룹을 스페이스 권한에 적용)
+- **제목**: Task L-AUTHZ 4단계 — 그룹↔스페이스 권한 결합(개인∪그룹 max)
+- **카테고리**: BE(판정 로직) + FE + DB / 인가 (마이그레이션 1건) ⚠️ 회귀 민감
+- **커밋**: `baebe72`(코드), 본 CYCLES-ldh.md
+- **배경**: L6 그룹 그릇을 실제 스페이스 권한에 연결. 판정 로직(SpacePermissionService)을
+  건드리는 사이클이라 **기존 개인 권한 동작 불변**이 최우선.
+- **결합 규칙(확정)**: 사용자의 공간 유효 역할 = **max(개인 SpaceMember 역할, 소속 그룹들이
+  그 공간에 부여받은 역할들)**. 높은 쪽 승리, **deny 규칙 없음**(그룹은 역할을 올려주기만
+  하고 빼앗지 않음). 역할 등급 ADMIN(3) > EDITOR(2) > VIEWER(1) > 없음(0).
+- **DB(마이그레이션 1건 `20260605010000_space_member_group`)**:
+  - `SpaceMemberGroup`(@@map `space_member_groups`): spaceId+groupId 복합 PK,
+    role(기존 `SpaceRole` enum 재사용), 양쪽 FK Cascade. `Space.memberGroups`/
+    `Group.spaceGrants` 역관계 추가. 기존 `SpaceMember` 그대로(개인 권한 유지).
+- **BE 판정 로직 — 단일 변경점**:
+  - `SpacePermissionService.loadAccess` 한 곳만 확장: 개인 역할 조회 후 `spaceMemberGroup.
+    findMany({ where: { spaceId, group: { members: { some: { userId } } } } })`(단일 쿼리,
+    N+1 없음)로 소속 그룹 부여 역할을 모아 `higherRole` 로 max 결합 → `access.role` 에 반영.
+  - **canView/canEdit/canManage·assertCan\* 가 전부 `access.role` 만 보므로 자동 반영**
+    (한 곳 수정으로 전부 적용, 시그니처 무변경).
+  - `roleRank`/`higherRole` 헬퍼 추가.
+  - 가시성 필터 `accessibleSpaceOr` 에 그룹 기반 PRIVATE 가지 추가(접근 가능과 목록 노출
+    일관). 기존 OR 가지는 그대로 — **없던 접근만 더해짐(약화 없음)**.
+- **보존한 기존 분기(약화 없음 명시)**: 전역 ADMIN override / PUBLIC 통과 / PERSONAL
+  소유자 판정 / PRIVATE 비멤버 차단 / 개인 역할 비교 — 전부 그대로. 그룹이 비면
+  `loadAccess` 결과가 종전과 동일(개인 권한 불변).
+- **BE 그룹 권한 부여 API(공간 manage 가드)**: `GET/POST/PATCH/DELETE
+  /spaces/:id/member-groups[/:groupId]`(목록/부여(idempotent upsert)/역할변경/제거).
+  부여 시 그룹 없으면 404. + `GET /groups`(인증, ADMIN 아님 — 공간 관리자가 그룹 선택용,
+  `GroupsDirectoryController`. id/name/source 만).
+  - ※ 마지막 ADMIN 보호는 개인 SpaceMember 기준만 유지(그룹 제거로 잠기지 않음).
+- **FE**: `SpaceMemberGroupsPanel.tsx`(신규) — 공간 '권한' 탭에 '그룹' 섹션(부여 목록·
+  역할 변경·제거 + 그룹 선택 드롭다운 추가). `SpaceSettings` 권한 탭을 '멤버(개인)' +
+  '그룹' 2섹션으로 구성.
+- **테스트(+12, 회귀 방어)**:
+  - `space-permission.service.spec.ts` — **기존 canView/Edit/Manage 테스트 전부 통과
+    (개인 권한 불변 증명)** + L7 결합 6분기(그룹 뷰어→canView OK/canEdit 거부, 그룹
+    편집자→canEdit OK, 개인 뷰어+그룹 편집자→EDITOR, 개인 편집자+그룹 뷰어→EDITOR(강등
+    안 됨), 다중 그룹 max=ADMIN, 그룹 없는 비공개→차단 유지). 가시성 필터 기대값에 그룹
+    가지 반영.
+  - `spaces.service.spec.ts` — member-group CRUD 6분기(404/upsert/update/delete/manage 403).
+- **검증**: api `tsc` EXIT 0, web `tsc` EXIT 0, `nest build` EXIT 0, jest **273 passed
+  (26 suites)**(L6 261 + space-permission 6 + spaces member-groups 6). 마이그레이션은
+  `prisma generate` + `prisma validate` 통과 + SQL 정적 검증(로컬 Postgres 미가동 →
+  `migrate deploy` 미수행, VM 배포 시 자동 적용).
+- **남은 일**:
+  - L7 VM 검증: ① 비공개 공간에 그룹을 편집자로 부여 → 그룹 멤버(개인 권한 없는 사용자)
+    편집 가능, ② 그룹/그룹권한 제거 → 접근 불가, ③ 개인 편집자+그룹 뷰어 → 편집 유지(max),
+    ④ 개인 권한만 쓰던 공간 변화 없음(회귀).
+  - L7-2(페이지 제한 그룹 적용), L8(Keycloak 동기화).
+- **비고**: 판정 결합을 `loadAccess` 단일 지점에 둔 게 핵심 — 분기마다 손대지 않아 회귀
+  표면 최소. 그룹 부여는 KEYCLOAK 그룹도 가능(공간측 부여이지 그룹 수정이 아님). 페이지
+  단위 제한(83) 그룹 적용은 범위 분리(L7-2).
