@@ -345,3 +345,66 @@
   없는 독립 모듈이라 어느 컨트롤러 모듈이든 import 로 주입(순환 의존 無). DI 와이어링은
   `nest build` 로 컴파일 검증(런타임 부트스트랩은 DB 필요 → VM 에서 확인). 첨부/다이어그램
   은 자원 id 로 키되므로 컨트롤러에서 소속 pageId 해석 후 권한 판정.
+
+---
+
+## Cycle L5-2 — 2026-06-05 — ✅ Done (쓰기 경로 권한 정책 적용 — 🟡 13개)
+- **제목**: Task L-AUTHZ 2단계 — L5 인벤토리의 🟡(인증됐으나 권한 미검사 쓰기) 폐쇄
+- **카테고리**: BE(api) / 인가(authorization) (마이그레이션 없음 — 기존 프리미티브 재사용)
+- **커밋**: `77d1d3b`(코드), 본 CYCLES-ldh.md
+- **배경**: L5 에서 무인증 쓰기·데이터 누수(🔴🟠⚪, VM 검증 합격)를 닫았고, 남은 🟡 13개
+  — "인증은 됐으나 공간/페이지 권한 미검사 쓰기" — 를 정책 검토 후 본 사이클에서 적용.
+  마이그레이션·신규 프리미티브 없이 기존 `assertCanViewPage`/`assertCanEditPage`/
+  `assertCanManage` 재사용.
+
+### 확정 정책 (사용자 검토 완료 — 최종 결정)
+| # | 엔드포인트 | 적용 권한 | 위치 | 비고 |
+|---|---|---|---|---|
+| 1 | `POST /pages/:pageId/comments` | `assertCanViewPage` | comments.ctrl | 뷰어도 댓글 가능 |
+| 2 | `PATCH /comments/:id`(수정) | **본인만** | comments.ctrl | 공간관리자·전역 ADMIN 도 불가(내용 조작 방지). *초기안에서 변경* |
+| 3 | `DELETE /comments/:id` | 본인 OR `assertCanManage` | comments.ctrl | 공간 관리(전역 ADMIN 포함) 모더레이션 허용 |
+| 4 | `POST /comments/:id/resolve` | `assertCanEditPage` | comments.ctrl | |
+| 5 | `POST /comments/:id/unresolve` | `assertCanEditPage` | comments.ctrl | |
+| 6 | `POST /reactions/toggle` | `assertCanViewPage` | reactions.ctrl | comment 면 comment→page 해석 |
+| 7 | `POST /pages/:id/watch` | `assertCanViewPage` | watches.ctrl | 조회/해제(본인 데이터)는 그대로 |
+| 8 | `POST /pages/:id/share` | `assertCanEditPage` | page-shares.ctrl | |
+| 9 | `POST /pages/:id/share/rotate` | `assertCanEditPage` | page-shares.ctrl | |
+| 10 | `DELETE /pages/:id/share` | `assertCanEditPage` | page-shares.ctrl | |
+| 11 | `PATCH /pages/:id/status` | `assertCanEditPage` | pages.service | 기존 "작성자/ADMIN" 임시 정책 제거·일원화 — 편집 권한자면 누구나 |
+| 12 | `PATCH /spaces/:id`(setHomePage) | `assertCanManage` | spaces.service | user 인자 추가 |
+
+- **변경 파일**:
+  - `comments/comments.service.ts` — `getContext(id)`(댓글→{pageId,spaceId,authorId}) 추가.
+    `comments/comments.controller.ts` — 정책 1~5 적용(작성/수정/삭제/resolve/unresolve).
+  - `reactions/reactions.controller.ts` — toggle 정책 6(`resolvePageId` 로 page/comment 해석).
+  - `watches/watches.controller.ts`·module — 정책 7(+SpacePermissionModule).
+  - `page-shares/page-shares.controller.ts`·module — 정책 8~10(+SpacePermissionModule).
+  - `pages/pages.service.ts` — `changeStatus` 정책 11(작성자/ADMIN 블록 제거 →
+    `assertCanEditPage` 일원화).
+  - `spaces/spaces.service.ts`(`setHomePage` user 인자 + `assertCanManage`)·
+    `spaces/spaces.controller.ts`(`@Req` 전달).
+- **enforcement 위치**: 자원 id→page 해석이 필요한 댓글/리액션은 컨트롤러에서 처리(L5
+  패턴). `changeStatus` 는 기존 service 가드+테스트가 있어 service 에서 일원화,
+  `setHomePage` 도 service 에서. 나머지는 컨트롤러.
+- **테스트 (+24, 25 suites)**:
+  - `comments.controller.spec.ts`(신규) — 정책 1~5, 특히 **2번(전역 ADMIN 도 타인 댓글
+    수정 403)** 명시 13분기.
+  - `reactions.controller.spec.ts`(신규) — toggle page/comment 해석 + 거부 3분기.
+  - `watches.controller.spec.ts`(신규) — watch 읽기 권한 2분기.
+  - `page-shares.controller.spec.ts`(신규) — 발급/회전/취소 편집 권한 6분기.
+  - `spaces.service.spec.ts` — `setHomePage` manage 권한 2분기.
+  - `pages.service.spec.ts` — `changeStatus` 재작성: **11번 핵심(작성자 아닌 편집자 허용 /
+    비편집자 403)** 반영.
+- **검증**: api `tsc --noEmit` EXIT 0, `nest build` EXIT 0, jest **245 passed (25 suites)**
+  (L5 221 + 신규 24). 마이그레이션 없음. web 변경 없음. 기존 221 회귀 없음(changeStatus
+  기존 테스트는 정책 변경에 맞춰 갱신).
+- **남은 일**:
+  - L5-2 VM 검증: ⑦ 뷰어 공개 공간 댓글 OK/비공개 비멤버 403, ⑧ 남의 댓글 수정 403(관리자
+    포함)·본인 OK, ⑨ 남의 댓글 삭제 본인/관리자 OK·그 외 403, ⑩ 비편집자 상태변경 403·
+    편집자 OK, ⑪ 비편집자 공유 발급·resolve 403, ⑫ 비관리자 setHomePage 403, ⑬ PUBLIC
+    공간 댓글·리액션·watch 회귀 없음.
+  - L6~L8(그룹 권한) 설계.
+- **비고**: 정책 2(수정 본인만)는 초기 제안(본인 OR 관리자)에서 사용자 검토로 변경 —
+  타인 댓글 내용 조작 방지가 모더레이션(삭제만 관리자 허용)보다 우선. 정책 11 로 페이지
+  상태 변경이 "작성자 한정"에서 "편집 권한자"로 넓어짐(편집자 협업 자연스러움). **이로써
+  Task L-AUTHZ enforcement 보강(L5+L5-2) 코드 완료 — 이후는 그룹 권한(L6~).**
