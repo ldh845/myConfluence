@@ -80,15 +80,19 @@
 - **범위**: 기존 3계층 권한(전역 role(48) / 스페이스 멤버십·공개범위(74-A) /
   페이지 제한(83))의 enforcement 빈틈을 닫고, 개인 단위뿐인 권한 부여를
   그룹(부서/팀) 단위로 확장한다.
-- **상태**: 🟢 Active (L5·L5-2 ✅ — enforcement 빈틈 전부 폐쇄, 다음은 L6 그룹 권한)
+- **상태**: 🟢 Active (L5·L5-2·L6 ✅ — 그룹 그릇 완성, 다음은 L7 권한 결합)
 - **하위 사이클**:
   - **L5** — 권한 가드 구멍 보강: 무인증 쓰기(🔴4) + 데이터 누수 읽기(🟠10) 폐쇄
     + `assertCanViewPage` 프리미티브. ✅ Done
   - **L5-2** — 인증됐으나 공간/페이지 권한 미검사 쓰기(🟡13: 댓글 작성/수정/삭제·resolve,
     리액션 toggle, watch, page-share 발급/회전/취소, 페이지 상태 변경, setHomePage) 보강.
     확정 정책 12항목 적용. ✅ Done
-  - **L6** — 그룹 모델 + 관리자 그룹 관리(생성·멤버). 📝 Planned
-  - **L7** — 스페이스 권한·페이지 제한에 그룹 적용. 📝 Planned
+  - **L6** — 그룹 모델(Group/GroupMember, source LOCAL/KEYCLOAK) + 관리자 그룹 관리
+    (CRUD·멤버, KEYCLOAK 보호 가드). 권한 판정 영향 없음(그릇만). ✅ Done
+  - **L7** — 스페이스 권한·페이지 제한에 그룹 적용. 확정 설계: `SpaceMemberGroup`
+    (공간↔그룹↔역할) 추가, 권한 판정에서 개인 멤버십 vs 소속 그룹 역할을 **max 결합**
+    (높은 쪽 승리, **deny 규칙 없음**). 공간 권한 탭·페이지 제한 UI 에 그룹 선택 추가.
+    `SpacePermissionService.loadAccess`/`assertCan*` 가 그룹 역할까지 합산. 📝 Planned
   - **L8** — Keycloak 그룹 동기화. 📝 Planned
 - **진척**:
   - **Cycle L5 (2026-06-05) ✅** — apps/api 전수 인벤토리(18 컨트롤러 ~70 라우트) 후
@@ -102,14 +106,23 @@
     3종·상태변경=편집 권한, 리액션 toggle·watch=읽기 권한, setHomePage=공간관리. 기존
     프리미티브 재사용, 마이그레이션 없음. api tsc·nest build EXIT 0, jest 245 passed(25 suites).
     상세·정책 표는 `docs/CYCLES-ldh.md` Cycle L5-2.
+  - **Cycle L6 (2026-06-05) ✅** — 그룹 모델(마이그레이션 1건: groups/group_members,
+    GroupSource enum) + 관리자 그룹 관리 BE(7개 라우트, ADMIN 전용) + FE '그룹' 탭
+    (CRUD·멤버 추가/제거, UserSearchCombobox 재활용). source=KEYCLOAK 보호 가드(403)
+    L8 대비 선반영. 권한 판정 무변경. api/web tsc·nest build EXIT 0, jest 261 passed(26 suites).
+    상세는 `docs/CYCLES-ldh.md` Cycle L6.
 - **남은 일**:
-  - L5-2 VM 검증(적용 정책 기준) — 아래 시나리오 ⑦~⑬.
-  - L6~L8(그룹 권한) 설계.
+  - L6 VM 검증 — admin 그룹 탭 CRUD·멤버 / 비ADMIN 차단 / 기존 기능 무영향.
+  - L7(그룹↔공간 권한 max 결합) 구현, L8(Keycloak 동기화) 설계.
 - **검증 완료(VM)**:
   - **L5(2026-06-05)** — ④⑥ UI 확인(비멤버의 활동 피드·휴지통에 비공개 항목 미노출 +
     PUBLIC 공간 기존 흐름 회귀 없음), ①⑤ 콘솔 fetch 로 403 확인(비공개 페이지 댓글 목록·
     버전 이력·첨부 업로드). ②③ 은 동일 프리미티브(assertCanViewPage/EditPage) 재사용
     경로 + 단위 테스트 커버를 근거로 검증 생략 결정. → L5 시나리오 ①~⑥ 종결.
+  - **L5-2(2026-06-05)** — ⑦(뷰어 댓글 작성 OK)·⑧(타인 댓글 수정 불가/본인 OK)·⑩(뷰어
+    상태변경 불가 → 편집자 승급 후 OK, 작성자 아니어도) UI 합격. ⑨⑪⑫ 는 콘솔 전용
+    항목이라 동일 프리미티브 재사용 + 단위 테스트 커버 근거로 생략. ⑬(PUBLIC 회귀)은
+    일상 사용에서 이상 없음 확인. → L5-2 시나리오 ⑦~⑬ 종결.
 - **L5-2 VM 검증 시나리오**:
   - ⑦ 뷰어(읽기 권한만)가 공개 공간 페이지에 댓글 작성 → OK / 비공개 비멤버는 403.
   - ⑧ 남의 댓글 수정 → 403(공간 관리자·전역 ADMIN 으로도 403), 본인 댓글 수정 → OK.

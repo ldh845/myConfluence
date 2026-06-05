@@ -408,3 +408,54 @@
   타인 댓글 내용 조작 방지가 모더레이션(삭제만 관리자 허용)보다 우선. 정책 11 로 페이지
   상태 변경이 "작성자 한정"에서 "편집 권한자"로 넓어짐(편집자 협업 자연스러움). **이로써
   Task L-AUTHZ enforcement 보강(L5+L5-2) 코드 완료 — 이후는 그룹 권한(L6~).**
+
+---
+
+## Cycle L6 — 2026-06-05 — ✅ Done (그룹 모델 + 관리자 그룹 관리)
+- **제목**: Task L-AUTHZ 3단계 — 조직(부서/팀) 단위 운영을 위한 그룹 '그릇'
+- **카테고리**: BE + FE + DB / 인가(그룹 모델) (마이그레이션 1건)
+- **커밋**: `b53f29d`(코드), 본 CYCLES-ldh.md
+- **배경**: 권한 부여가 개인 단위뿐이라 조직 단위 운영 불가. L6 는 그룹의 모델 +
+  관리자 관리 화면까지만. **권한 판정 로직은 일절 미변경** — 그룹이 실제 권한에 영향
+  주는 결합은 L7(SpaceMemberGroup + max). 결합 정책(L7 예고): 개인 vs 그룹 높은 쪽
+  승리(max), deny 규칙 없음.
+- **DB(마이그레이션 1건 `20260605000000_groups`)**:
+  - `enum GroupSource { LOCAL KEYCLOAK }`.
+  - `Group`(@@map `groups`): id/name(unique)/description?/source(@default LOCAL)/
+    createdAt/updatedAt. "Group" SQL 예약어 회피용 @@map.
+  - `GroupMember`(@@map `group_members`): groupId+userId 복합 PK, 양쪽 FK Cascade.
+  - `User.groupMemberships` 역관계 추가.
+- **BE(`admin/groups.*`, 전부 RolesGuard ADMIN — AdminController 와 동일 가드)**:
+  - `GET /admin/groups`(멤버 수 포함) · `POST /admin/groups`(중복 name 409) ·
+    `PATCH /admin/groups/:id`(KEYCLOAK 403, name 변경 시 중복 409) ·
+    `DELETE /admin/groups/:id`(멤버십 cascade, KEYCLOAK 403) ·
+    `GET /admin/groups/:id/members` · `POST /admin/groups/:id/members`(KEYCLOAK 403) ·
+    `DELETE /admin/groups/:id/members/:userId`(KEYCLOAK 403).
+  - **중복 멤버 추가 정책**: **idempotent**(409 대신) — `{ok:true, alreadyMember:true}`
+    반환, create 미호출. UI 가 같은 사람을 또 추가해도 무해.
+  - **source 보호 가드**: 수정·삭제·멤버 편집 진입점이 공통 `loadLocal()` 통과 →
+    `source=KEYCLOAK` 이면 403. L8 동기화 그룹을 DocSpace 에서 못 건드리게 선반영
+    (현재 생성은 전부 LOCAL 이라 실사용 영향 없음).
+  - GroupsController/Service 를 AdminModule 에 등록.
+- **FE(`/admin` '그룹' 탭)**:
+  - `AdminGroups.tsx`(신규) — 그룹 목록(이름·설명·유형 배지·멤버 수) + '+ 그룹 생성'
+    다이얼로그 + 그룹 선택 시 멤버 패널(목록 + `UserSearchCombobox` 추가/제거) + 삭제
+    (확인 다이얼로그). KEYCLOAK 그룹은 삭제·멤버 편집 비활성 + 안내.
+  - `admin/page.tsx` Tab 에 `groups` 추가, `TopNav` 톱니바퀴 드롭다운에 '그룹 관리'
+    (`?tab=groups`).
+- **테스트(+16)**: `groups.service.spec.ts`(신규) — list 평탄화, create 중복 409,
+  update KEYCLOAK 403·name 중복 409, remove KEYCLOAK 403·404, addMember KEYCLOAK 403·
+  user 404·신규 create·idempotent, removeMember KEYCLOAK 403, listMembers 평탄화.
+  ※ '비ADMIN 403' 은 컨트롤러 클래스 `@UseGuards(JwtAuthGuard, RolesGuard) @Roles('ADMIN')`
+  로 강제(다른 /admin 라우트와 동일) — RolesGuard 는 `roles.guard.spec` 가 커버.
+- **검증**: api `tsc --noEmit` EXIT 0, web `tsc --noEmit` EXIT 0, `nest build` EXIT 0,
+  jest **261 passed (26 suites)**(L5-2 245 + groups 16). 마이그레이션은 `prisma generate`
+  + `prisma validate` 통과 + SQL 정적 검증(로컬 Postgres 미가동 → `migrate deploy` 미수행,
+  VM 배포 시 자동 적용).
+- **남은 일**:
+  - L6 VM 검증: ① admin 그룹 탭 → 생성 → 멤버 추가/제거 → 삭제, ② localtest(DEVELOPER)
+    /admin 접근 불가 그대로, ③ 기존 공간 권한·페이지 기능 영향 없음(판정 로직 무변경).
+  - L7(그룹↔공간 권한 max 결합) 구현, L8(Keycloak 동기화) 설계.
+- **비고**: 마이그레이션은 신규 테이블 2 + enum 1(무중단·재작성 없음). 그룹은 아직 어떤
+  권한에도 연결 안 됨 → 본 사이클 배포는 기존 동작에 영향 0. L8 보호 가드를 미리 넣어
+  L8 도입 시 그룹 BE 변경 불필요.
