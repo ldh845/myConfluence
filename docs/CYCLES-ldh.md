@@ -252,3 +252,96 @@
   ③ 본문 이미지 있는 페이지 새로고침 → 이미지가 캐시 로드(안 느려짐) 확인.
 - **비고**: api 만 변경(web 무관). 다운로드 라우트 이름 변경 시 미들웨어 정규식도 함께
   갱신 필요(주석에 명시). no-store 는 mutation/redirect 응답에 붙어도 무해(캐시 안 됨).
+
+---
+
+## Cycle L5 — 2026-06-05 — ✅ Done (권한 가드 구멍 보강 — enforcement 빈틈 폐쇄)
+- **제목**: Task L-AUTHZ 1단계 — apps/api 권한 enforcement 전수 조사 + 보안 핵심 폐쇄
+- **카테고리**: BE(api) / 인가(authorization) (마이그레이션 없음 — 스키마 변경 불필요)
+- **커밋**: `4a28a06`(코드), 본 CYCLES-ldh.md
+- **배경**: 기존 3계층 권한(전역 role(48)/스페이스 멤버십·공개범위(74-A)/페이지 제한(83))은
+  본문 CRUD 엔 잘 적용됐으나, 부속 리소스(첨부·다이어그램·버전·댓글·리액션·활동)와 일부
+  경로에 가드가 누락돼 있었다(Task I 잔여). 전역 APP_GUARD 가 없어 컨트롤러별로 가드를
+  걸어야 하는데 일부가 빠진 것.
+
+### 1단계 산출물 — 전수 인벤토리 (18 컨트롤러 ~70 라우트)
+정상 가드(pages 본문 CRUD·spaces 멤버/설정/바로가기·admin/auth·notifications/saves 등
+~40개)는 생략. **발견된 구멍**과 처리:
+
+| # | 엔드포인트 | 보강 전 | 요구 권한 | 보강 후 | 처리 |
+|---|---|---|---|---|---|
+| 🔴1 | `POST /pages/:pageId/attachments` | 가드 0 | 페이지 편집 | JwtAuthGuard + `assertCanEditPage` | **L5** |
+| 🔴2 | `DELETE /attachments/:id` | 가드 0 | 페이지 편집 | JwtAuthGuard + `assertCanEditPage`(첨부→page) | **L5** |
+| 🔴3 | `PATCH /diagrams/:id` | 가드 0 | 페이지 편집 | JwtAuthGuard + `assertCanEditPage`(diagram→page) | **L5** |
+| 🔴4 | `DELETE /diagrams/:id` | 가드 0 | 페이지 편집 | JwtAuthGuard + `assertCanEditPage` | **L5** |
+| 🟠5 | `GET /pages/:pageId/attachments` | 가드 0 | 페이지 읽기 | OptionalJwt + `assertCanViewPage` | **L5** |
+| 🟠6 | `GET /attachments/:id`(다운로드) | 가드 0 | 페이지 읽기 | OptionalJwt + `assertCanViewPage`(첨부→page) | **L5** |
+| 🟠7 | `GET /diagrams/:id` | 가드 0 | 페이지 읽기 | OptionalJwt + `assertCanViewPage` | **L5** |
+| 🟠8 | `GET /pages/:id/diagrams` | 가드 0 | 페이지 읽기 | OptionalJwt + `assertCanViewPage` | **L5** |
+| 🟠9 | `GET /pages/:id/versions` | 가드 0 | 페이지 읽기 | OptionalJwt + `assertCanViewPage` | **L5** |
+| 🟠10 | `GET /pages/trash` | 가드 0 | 가시성 필터 | JwtAuthGuard + `pageVisibilityWhere` | **L5** |
+| 🟠11 | `GET /pages/:id/comments` | 가드 0 | 페이지 읽기 | OptionalJwt + `assertCanViewPage` | **L5** |
+| 🟠12 | `GET /pages/:id/reactions` | 가드 0 | 페이지 읽기 | OptionalJwt + `assertCanViewPage` | **L5** |
+| 🟠13 | `GET /comments/:id/reactions` | 가드 0 | 페이지 읽기 | OptionalJwt + `assertCanViewPage`(댓글→page) | **L5** |
+| 🟠14 | `GET /activities` | 가드 0 | 가시성 필터 | OptionalJwt + 스페이스 가시성 OR(null) 필터 | **L5** |
+| ⚪15 | `POST /spaces` | OptionalJwt(익명 생성 가능) | 인증 | JwtAuthGuard(생성자 ADMIN 멤버) | **L5** |
+| 🟡16 | `POST /pages/:pageId/comments` | JwtAuthGuard만 | 페이지 읽기 | (정책 검토) | L5-2 |
+| 🟡17 | `PATCH·DELETE /comments/:id` | JwtAuthGuard만(소유권 X) | 소유자/관리 | (정책 검토) | L5-2 |
+| 🟡18 | `POST /comments/:id/resolve·unresolve` | JwtAuthGuard만 | 페이지 편집 | (정책 검토) | L5-2 |
+| 🟡19 | `POST /reactions/toggle` | JwtAuthGuard만 | 페이지 읽기 | (정책 검토) | L5-2 |
+| 🟡20 | `POST /pages/:id/watch` | JwtAuthGuard만 | 페이지 읽기 | (정책 검토) | L5-2 |
+| 🟡21 | `POST·DELETE /pages/:id/share`·`/rotate` | JwtAuthGuard만 | 페이지 편집 | (정책 검토) | L5-2 |
+| 🟡22 | `PATCH /pages/:id/status` | JwtAuthGuard+작성자/ADMIN | 페이지 편집 | (정책 검토) | L5-2 |
+| 🟡23 | `PATCH /spaces/:id`(setHomePage) | JwtAuthGuard만 | 공간 관리 | (정책 검토) | L5-2 |
+
+- **인지했으나 미수정(근거)**: `GET /users`·`/users/:id`(멘션 디렉터리, 비밀 미포함),
+  `GET .../save`·`/watch`·saves 토글(본인 데이터 probe, 저위험) — 필요 시 L5-2 검토.
+- **오탐 정정**: 에이전트가 의심한 spaces 멤버/설정/바로가기·페이지 제한 멤버 라우트는
+  서비스 계층에서 `assertCanManage`/`assertCanManagePageRestriction` 호출 확인 → 정상.
+
+### 2단계 — 보강 (🔴4 + 🟠10 + ⚪1 = 15곳, 8 컨트롤러)
+- **신규 프리미티브**: `SpacePermissionService.assertCanViewPage(pageId, user)` — 기존
+  `assertCanEditPage` 의 읽기판(페이지 로드 → 공간 `assertCanView` → VIEW_EDIT 제한 검사).
+  거의 모든 읽기 보강이 이 1개를 재사용. PUBLIC 공간은 그대로 통과(공개 흐름 무변화).
+- **변경 파일**:
+  - `spaces/space-permission.service.ts` — `assertCanViewPage` 추가.
+  - `pages/pages.service.ts` — `listTrash(actor)` 가시성 필터. `pages/pages.controller.ts`
+    — trash JwtAuthGuard, diagrams/versions 목록 OptionalJwt + `assertCanViewPage`.
+  - `attachments/*` — controller 가드 전면(업로드/삭제=편집, 목록/다운로드=읽기) +
+    module 에 AuthModule·SpacePermissionModule.
+  - `diagrams/*` — controller 가드(조회=읽기, 수정/삭제=편집, diagram→pageId 해석) + module.
+  - `comments/comments.controller.ts`·module — 목록 읽기 가드(쓰기는 L5-2).
+  - `reactions/reactions.controller.ts`·module — 목록 읽기 가드(toggle 은 L5-2).
+  - `activities/*` — controller OptionalJwt + 가시성 필터, service `list` 에 옵션
+    `visibilityWhere`(감사 로그 `getAuditLog` 는 미전달 → 무영향).
+  - `spaces/spaces.controller.ts` — `POST /spaces` OptionalJwt→Jwt.
+- **POST /spaces 재검토 결과**: 개인 공간 자동 생성은 별도 메서드 `getOrCreatePersonal`
+  (OIDC 콜백·`GET /spaces/personal`)을 쓰므로 `create` 컨트롤러에 인증을 걸어도 안 깨진다.
+  컨트롤러가 유일 호출자, 내부 서비스-서비스 호출 없음 → **깨지는 흐름 없음**. 익명
+  생성(소유자·멤버 없는 ownerless 공간) 차단은 개선.
+
+### 3단계 — 테스트 (+20, 21 suites)
+- `space-permission.service.spec.ts` — `assertCanViewPage` 5분기(404 / PUBLIC 익명 통과 /
+  PRIVATE 비멤버 403 / VIEW_EDIT 비제한멤버 403 / 제한멤버 통과).
+- `attachments/attachments.controller.spec.ts`(신규) — 업로드·목록·다운로드·삭제 권한
+  확인 + 거부 시 부작용(저장/스트림/삭제) 미발생 7분기.
+- `diagrams/diagrams.controller.spec.ts`(신규) — 조회/수정/삭제 권한 + 거부 전파 5분기.
+- `activities/activities.service.spec.ts` — `visibilityWhere` AND 결합 3분기.
+
+- **검증**: api `tsc --noEmit` EXIT 0, `nest build` EXIT 0, jest **221 passed (21 suites)**
+  (L4 followup 201 + assertCanViewPage 5 + attachments ctrl 7 + diagrams ctrl 5 +
+  activities visibility 3). 마이그레이션 없음. web 변경 없음. 기존 201 전부 회귀 없음.
+- **남은 일**:
+  - **L5-2**: 🟡 16~23(인증됐으나 공간/페이지 권한 미검사 쓰기) — 정책 판단(뷰어 댓글
+    허용 범위·댓글 수정 권한·상태 변경 권한 등) 후 별도 사이클.
+  - **L5 VM 검증**(보강된 구멍 기준):
+    ① 비멤버로 비공개 공간 첨부 업로드 → 403(디스크/DB 미기록),
+    ② 비멤버로 비공개 첨부 다운로드 → 403,
+    ③ 비멤버로 비공개 페이지 `PATCH /diagrams/:id` → 403(내용 무변화),
+    ④ 비멤버의 휴지통·활동 피드에 비공개 항목 미노출,
+    ⑤ 비멤버로 비공개 페이지 버전 이력·댓글 목록 → 403,
+    ⑥ 전체공개(PUBLIC) 공간은 위 전부 기존대로 정상 — 회귀 없음.
+- **비고**: 전역 APP_GUARD 부재 → 컨트롤러별 가드가 원칙. `SpacePermissionModule` 은 의존
+  없는 독립 모듈이라 어느 컨트롤러 모듈이든 import 로 주입(순환 의존 無). DI 와이어링은
+  `nest build` 로 컴파일 검증(런타임 부트스트랩은 DB 필요 → VM 에서 확인). 첨부/다이어그램
+  은 자원 id 로 키되므로 컨트롤러에서 소속 pageId 해석 후 권한 판정.
