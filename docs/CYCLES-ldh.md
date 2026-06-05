@@ -165,9 +165,55 @@
   changeMyPassword 4 + admin unlock 2 + createLocalUser 정책 1 + controller changePassword 1).
   마이그레이션은 `prisma validate` 통과 + SQL 정적 검증(로컬 Postgres 미가동 → migrate
   deploy 미수행, VM 배포 시 자동 적용).
-- **남은 일**: VM 브라우저 검증만 — ① 약한 비번 생성/변경 거부, ② 5회 오답→잠김(정답도
-  거부), ③ admin 잠금 해제→로그인, ④ 사용자 메뉴 '비밀번호 변경'→새 비번 로그인,
-  ⑤ SSO 계정엔 변경 메뉴 없음.
+- **남은 일**: 없음 — VM 브라우저 검증 완료(2026-06-04~05). ① 약한 비번 생성/변경 거부,
+  ② 5회 오답→잠김(정답도 거부), ③ admin 잠금 해제→로그인, ④ 사용자 메뉴 '비밀번호 변경'
+  →새 비번 로그인, ⑤ 순수 SSO 계정(admin·testuser2) 변경 메뉴 미노출까지 전부 합격.
+  계정 유형 3종(로컬·혼합·SSO) 메뉴 노출 매트릭스도 검증됨.
 - **비고**: 마이그레이션은 ADD COLUMN ×2(NOT NULL DEFAULT 0 / nullable) — 무중단·재작성
   없음. 423 은 NestJS `HttpStatus.LOCKED`. 정책/잠금 기준 변경은 password-policy.ts /
   login-lockout.ts 상수만 손대면 됨. **이로써 Task L-AUTH(L1~L3) 코드 완료.**
+
+---
+
+## Cycle L4 — 2026-06-05 — ✅ Done (계정 역할 관리 — ADMIN/DEVELOPER 변경)
+- **제목**: Task L-AUTH 확장 — 로컬 전용 계정의 전역 역할을 DocSpace 에서 변경
+- **카테고리**: BE + FE / 인증·계정운영 (마이그레이션 없음 — role 컬럼 기존재)
+- **커밋**: `4a47f31`(코드), 본 CYCLES-ldh.md
+- **배경**: 로컬 계정(L2)은 생성 시 무조건 DEVELOPER 이고 ADMIN 으로 올릴 길이 없었다.
+  전역 역할 source of truth 는 Keycloak realm role(Cycle 48 — OIDC 로그인마다
+  `realm_access.roles` 의 'admin' 유무로 `User.role` 동기화)이라 SSO 계정 역할을
+  DocSpace 에서 바꾸면 다음 로그인 때 원복된다. → 역할 변경은 **로컬 전용 계정
+  (keycloakId=null)에만** 허용, SSO/혼합은 Keycloak 관리로 안내.
+- **변경 파일**:
+  - BE: `admin/dto/set-role.dto.ts`(신규, `@IsIn(['ADMIN','DEVELOPER'])`),
+    `admin/admin.service.ts`(`setRole` — 자기 자신 400 → 404 → SSO 400 → update),
+    `admin/admin.controller.ts`(`PATCH /admin/users/:id/role`, `@Req` 로 requester.id)
+  - FE: `app/(app)/admin/AdminUsers.tsx`(역할 셀을 인터랙티브 컨트롤로 — 로컬 전용만
+    `<select>` ADMIN/DEVELOPER, SSO/혼합은 배지+`Keycloak 관리` 안내, 자기 자신 행은
+    배지만; ADMIN 승격 시 확인 다이얼로그; `setRole` mutation → 성공 시 목록 갱신;
+    `RoleBadge` 헬퍼 추출)
+  - 테스트: `admin/admin.service.spec.ts`(setRole 4분기 — 로컬 변경/SSO 거부/자기
+    자신 거부/404), `auth/jwt.strategy.spec.ts`(validate 가 토큰 payload 가 아닌
+    **DB role** 을 반영하는지 1분기)
+- **즉시 반영(재로그인 불필요)**: `jwt.strategy.validate` 가 L2 부터 매 요청
+  `auth.findById(payload.sub)` → `sanitize` 로 **DB 의 role** 을 `req.user.role` 에
+  채운다(토큰 payload 의 role 은 사용 안 함). 따라서 역할 변경은 다음 요청부터 즉시
+  반영 — **기존 코드가 이미 그렇게 동작**하므로 jwt.strategy 변경 없음(테스트로 보장만 추가).
+- **가드 3종**: ① 대상 `keycloakId != null`(SSO/혼합) → 400 "SSO 계정의 역할은 Keycloak
+  에서 관리됩니다" ② 자기 자신(`userId === requesterId`) → 400(DB 조회 전 차단)
+  ③ 대상 없음 → 404. 허용 역할은 `ADMIN`/`DEVELOPER` 둘뿐(DTO `@IsIn`).
+- **검증**: api `tsc --noEmit` EXIT 0, web `tsc --noEmit` EXIT 0, `nest build` EXIT 0,
+  jest **196 passed (18 suites)**(L3 191 + setRole 4 + jwt DB role 1). 마이그레이션 없음.
+- **남은 일**:
+  - VM 브라우저 검증 — ① localtest → ADMIN 변경 → localtest 재로그인 시 톱니바퀴(관리자
+    메뉴) 노출, ② localtest 로그인된 상태에서 DEVELOPER 강등 → 새로고침 시 톱니바퀴 사라짐
+    (재로그인 불필요 — 즉시 반영), ③ SSO 계정(admin·testuser2) 행 역할 컨트롤 비활성,
+    ④ 자기 자신 행 비활성.
+  - **역할 변경 감사 로그(deferred)**: 기존 `ActivityLog` 는 페이지/공간 중심 모델이고
+    `lib/activity-format.ts` 의 `formatActivity` 에도 `user.role_changed` 케이스가 없어
+    `default` 분기에서 원시 타입 문자열로 깨져 보이며 `/activity` "전체" 피드를 오염시킨다.
+    스펙 지침("부자연스러우면 구현하지 말고 남은 일에 기록")에 따라 미구현. 도입 시
+    `ActivityType` 유니온 + 포매터 케이스 + 피드 필터까지 함께 설계 필요.
+- **비고**: `role` 컬럼은 Cycle 43 부터 존재 → 마이그레이션 불필요. Role enum 은 5종
+  (ADMIN/PART_LEADER/DEVELOPER/DESIGNER/PM)이나 로컬 계정은 생성 시 DEVELOPER 고정이고
+  본 기능도 ADMIN↔DEVELOPER 만 노출 — 나머지 역할은 범위 외. **Task L-AUTH 확장 완료.**
