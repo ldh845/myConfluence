@@ -752,3 +752,27 @@
   force-recreate 는 런타임 Keycloak 계정을 초기화하나 testuser2 등은 시드로 영구(L8). 기존
   세션은 쿠키 삭제 후 재로그인. L8(그룹 claim)과 L10(department)은 source 가 달라 충돌 없음 —
   부서가 그룹으로도 오면 KEYCLOAK 이 이기고 L10 은 스킵.
+
+---
+
+## Cycle L10 followup — 2026-06-08 — ✅ Done (그룹 배지에 DEPARTMENT 유형 반영)
+- **제목**: 관리자 그룹 탭 유형 배지의 DEPARTMENT 오표시 수정 (표시 버그)
+- **카테고리**: FE only / 버그 수정 (마이그레이션·BE 무관)
+- **커밋**: `7d26d0f`(코드), 본 CYCLES-ldh.md
+- **증상(VM 피드백)**: L10 으로 부서 자동 그룹이 `source=DEPARTMENT` 로 저장·반환되는데,
+  관리자 그룹 탭(AdminGroups)의 유형 배지가 LOCAL/KEYCLOAK 두 종류만 알아 DEPARTMENT
+  그룹이 **"로컬" 로 잘못 표시**됐다. 데이터는 정상, 표시만 틀린 버그.
+- **원인**: `SourceBadge` 와 편집 잠금 조건이 `source === "KEYCLOAK"`(isKc) 이분법으로
+  하드코딩 — DEPARTMENT 를 인지하지 못해 else 분기("로컬")로 떨어짐.
+- **해법(FE)**:
+  - `SourceBadge` 를 3종 맵(로컬=초록 / Keycloak=파랑 / **부서=보라 "부서"**)으로 확장.
+  - 편집 잠금을 `source !== "LOCAL"`(`managedNote()` 가 null 이 아님) 기준으로 일반화 →
+    KEYCLOAK 처럼 **DEPARTMENT 도 삭제·멤버 추가/제거 비활성** + 안내 문구(부서 자동 관리).
+    BE 는 L10 의 `loadLocal` 가드로 이미 403 차단(FE 잠금은 UX 일치).
+  - `SpaceMemberGroupsPanel` 의 source union·표기에 DEPARTMENT 추가(그룹 선택 드롭다운
+    " (부서)" 접미 + 목록 "부서" 태그) — 다른 화면도 안 깨지게 점검.
+- **검증**: web `tsc --noEmit` EXIT 0. (FE 변경, 마이그레이션·BE 무관 → api 회귀 없음.)
+- **남은 일**: L10 VM 재확인 — 그룹 탭에서 "플랫폼" 배지가 DEPARTMENT("부서")로 표시 +
+  멤버 편집 컨트롤 비활성. (L10 본 사이클 VM 시나리오 ①에 흡수.)
+- **비고**: FE 만 변경 → 배포는 VM 풀빌드(마이그레이션 없음). 데이터/판정은 무변경이라
+  순수 표시 정합성 수정.

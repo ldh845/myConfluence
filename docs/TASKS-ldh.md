@@ -154,6 +154,9 @@
     공간 생성 applyDepartmentDefault(기본 true)로 생성자 부서 그룹 EDITOR 부여. L6 가드를
     DEPARTMENT 까지 확장(수동 편집 잠금). realm 시드에 department 매퍼+속성. api tsc·nest
     build EXIT 0, jest 321 passed(28 suites). 상세는 `docs/CYCLES-ldh.md` Cycle L10.
+  - **Cycle L10 followup (2026-06-08) ✅** — 관리자 그룹 탭 유형 배지의 DEPARTMENT 오표시
+    ("로컬"로 표시) 수정 — 배지 3종(로컬/Keycloak/부서) + DEPARTMENT 편집 잠금 FE 반영.
+    FE only, web tsc EXIT 0. 상세는 `docs/CYCLES-ldh.md` Cycle L10 followup.
 - **남은 일**:
   - L10 VM 검증 — 아래 시나리오 ①~④.
   - L9-2(접근 권한 조회 화면 FE) 구현.
