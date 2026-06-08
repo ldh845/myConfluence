@@ -80,7 +80,7 @@
 - **범위**: 기존 3계층 권한(전역 role(48) / 스페이스 멤버십·공개범위(74-A) /
   페이지 제한(83))의 enforcement 빈틈을 닫고, 개인 단위뿐인 권한 부여를
   그룹(부서/팀) 단위로 확장한다.
-- **상태**: 🟢 Active (L5·L5-2·L6·L7·L7-2 ✅ — 그룹이 스페이스+페이지 권한에 결합, 다음은 L8)
+- **상태**: 🟡 Maintenance (L5·L5-2·L6·L7·L7-2·L8 ✅ — Task L-AUTHZ 구현 완료, VM 검증만 잔여)
 - **하위 사이클**:
   - **L5** — 권한 가드 구멍 보강: 무인증 쓰기(🔴4) + 데이터 누수 읽기(🟠10) 폐쇄
     + `assertCanViewPage` 프리미티브. ✅ Done
@@ -94,7 +94,8 @@
   - **L7-2** — 페이지 단위 제한(83)에 그룹 적용. `PageRestrictionGroup` +
     `effectivePageRestrictionRole` max 결합(개인∪그룹, EDIT>VIEW, **deny 없음**) +
     제한 다이얼로그 '허용 그룹' 섹션. ✅ Done
-  - **L8** — Keycloak 그룹 동기화. 📝 Planned
+  - **L8** — Keycloak 그룹 동기화(OIDC 로그인 시 KEYCLOAK 멤버십 정렬, LOCAL 불가침,
+    best-effort). ✅ Done
 - **진척**:
   - **Cycle L5 (2026-06-05) ✅** — apps/api 전수 인벤토리(18 컨트롤러 ~70 라우트) 후
     보안 핵심 14곳 폐쇄: 무가드 쓰기(첨부 업로드/삭제, 다이어그램 수정/삭제) +
@@ -126,15 +127,32 @@
     제한 다이얼로그 '허용 그룹' 섹션(GET /groups 재사용). 기존 개인 제한 동작 불변(제한
     테스트 전부 통과). api/web tsc·nest build EXIT 0, jest 287 passed(26 suites). 상세는
     `docs/CYCLES-ldh.md` Cycle L7-2.
+  - **Cycle L8 (2026-06-08) ✅** — Keycloak 그룹 동기화. 마이그레이션 없음(기존 그룹
+    모델 재사용). realm 시드에 group-membership 매퍼 + dev-team1/dev-team2 + testuser2
+    영구화. oidc.service 가 `groups` claim 추출, auth.service.findOrCreateOidcUser 가
+    로그인 시 KEYCLOAK source 멤버십을 claim 집합과 정렬(undefined 스킵, [] 전부 제거,
+    그룹명 upsert, 동명 LOCAL 스킵, LOCAL 멤버십 불가침, 트랜잭션+best-effort). api tsc·
+    nest build EXIT 0, jest 294 passed(26 suites). 상세는 `docs/CYCLES-ldh.md` Cycle L8.
 - **남은 일**:
-  - L7-2 VM 검증 — 아래 시나리오 ①~④.
-  - L8(Keycloak 그룹 동기화) 설계·구현 — L6 의 KEYCLOAK 보호 가드 선반영 활용.
+  - L8 VM 검증 — 아래 시나리오 ①~④.
+  - (Task L-AUTHZ 구현 종료 — 이후는 유지보수.)
 - **L7-2 VM 검증 시나리오**:
   - ① "편집 제한" + 그룹(EDIT) → 그룹 멤버가 편집 가능, 비멤버는 보기만.
   - ② "보기+편집 제한" + 그룹(VIEW) → 그룹 멤버는 보기만, 그룹 밖은 페이지 403.
   - ③ 모드 변경 시 그룹 멤버십도 초기화(개인 멤버와 함께).
   - ④ 제한 없는·개인 제한만 쓰는 페이지는 변화 없음(회귀).
+- **L8 VM 검증 시나리오**:
+  - ① testuser2 SSO 로그인 → 그룹 탭에 dev-team1 이 KEYCLOAK 배지로 자동 생성 +
+    testuser2 멤버(편집 컨트롤 비활성).
+  - ② dev-team1 에 공간 편집자 부여 → testuser2 편집 가능.
+  - ③ LOCAL 그룹(개발1팀) 멤버십은 로그인 후에도 그대로(불가침).
+  - ④ 로컬 로그인(localtest)은 그룹 변화 없음.
 - **검증 완료(VM)**:
+  - **L7-2(2026-06-08)** — "편집 제한"+그룹(EDIT) 부여 → 그룹 멤버 편집 가능·비멤버
+    보기만, 모드 변경 시 그룹 멤버십 초기화, 제한 없는·개인 제한만 쓰는 페이지 변화
+    없음(회귀) — 전부 합격. ※ 검증 중 "제한이 안 걸린다" 혼선은 작성자/공간관리자/전역
+    ADMIN 우회 경로 때문이었고 일반 계정 테스트로 해소 — 이 우회는 Cycle 83 의 의도된
+    설계(관리 주체는 항상 접근). → L7-2 시나리오 ①~④ 종결.
   - **L7(2026-06-05~06)** — ① 비공개 공간에 그룹을 편집자로 부여 → 그룹 멤버(개인 권한
     없는 사용자) 편집 가능, ② 그룹/그룹권한 제거 → 접근 불가, ③ 개인 편집자+그룹 뷰어 →
     편집 유지(max, 그룹이 강등 못 함), ④ 개인 권한만 쓰던 공간 변화 없음(회귀) — 전부 합격.

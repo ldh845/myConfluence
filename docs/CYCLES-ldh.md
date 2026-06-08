@@ -578,3 +578,58 @@
 - **비고**: L7(공간) 과 동일하게 판정 결합을 단일 헬퍼(`effectivePageRestrictionRole`)에
   모아 회귀 표면 최소화. 개인 EDIT 면 그룹 조회 생략(쿼리 절약). 마이그레이션은 신규
   테이블 1(enum 재사용·기존 테이블 무변경) → 본 사이클 배포는 그룹 미연결 페이지에 영향 0.
+
+---
+
+## Cycle L8 — 2026-06-08 — ✅ Done (Keycloak 그룹 동기화)
+- **제목**: Task L-AUTHZ 최종 단계 — 로그인 시 Keycloak 그룹을 DocSpace 멤버십에 자동 동기화
+- **카테고리**: BE(인증/동기화) + infra(realm 시드) / 인가 (마이그레이션 없음)
+- **커밋**: `7d08aa4`(코드), 본 CYCLES-ldh.md
+- **배경**: L6(그룹 그릇)·L7/L7-2(그룹↔공간·페이지 권한) 완성됐으나 멤버십이 수동.
+  L8 은 Keycloak 그룹을 **OIDC 로그인 시점**(Cycle 48 realm role 동기화와 동일 패턴)에
+  자동 동기화. 로컬 로그인(localLogin)에는 무관.
+- **동기화 규칙(확정)**:
+  - **시점**: `findOrCreateOidcUser`(매 OIDC 로그인). claim `groups`(string[]) 기반.
+  - **undefined(claim 없음)** → 스킵(기존 멤버십 보존). **`[]`(빈 배열)** → 이 사용자의
+    KEYCLOAK source 멤버십 전부 제거.
+  - 그룹명 upsert — 없으면 `source=KEYCLOAK` 자동 생성. 단 **동명 LOCAL 그룹이 있으면
+    스킵 + 경고 로그**(LOCAL→KEYCLOAK 전환·멤버 주입 금지).
+  - 사용자의 **KEYCLOAK source 멤버십만** claim 집합과 정렬(추가/제거). **LOCAL 멤버십
+    불가침**(수동 관리 유지). Keycloak 에서 그룹이 사라져도 DocSpace 그룹은 잔존(관리자
+    수동 정리).
+  - 멤버십 추가/제거는 단일 트랜잭션. **best-effort** — 동기화 예외가 로그인을 막지 않게
+    try/catch 로 감싸 에러 로그만 남김.
+- **infra(realm 시드 `infra/keycloak/realm-docspace.json`)**:
+  - docspace-web `protocolMappers` 에 **group-membership 매퍼** 추가
+    (`oidc-group-membership-mapper`, `claim.name=groups`, `full.path=false`,
+    id/access/userinfo token claim 전부 true — L4 realm-role 매퍼 옆 동일 패턴).
+  - 테스트 그룹 시드: `dev-team1`, `dev-team2`. `testuser` → dev-team1 배정.
+  - **`testuser2` 사용자 시드 추가**(비번 `test1234`, temporary false, dev-team1) —
+    런타임 생성 계정은 recreate 마다 소실되므로 시드로 영구화.
+- **BE — claim 추출(`oidc.service`)**: `OidcClaims.groups?: string[]` 추가.
+  `tokenSet.claims().groups` 에서 추출하며 경로형(`/dev-team1`)으로 와도 선행 `/` 를
+  제거(full.path=false 라 보통 bare 이름). 미설정이면 undefined 유지 → 동기화 스킵.
+- **BE — 동기화(`auth.service`)**: `findOrCreateOidcUser` 를 단일 tail 로 정리(계정
+  해석 분기 후 한 곳에서 동기화·sanitize). 신규 private `syncKeycloakGroups(userId,
+  groupNames)` — 그룹명 해석(LOCAL 동명 스킵, 미존재 KEYCLOAK 생성, 동시 로그인 경쟁
+  시 재조회 복구) → 현재 KEYCLOAK 멤버십 조회(`group: { source: 'KEYCLOAK' }`) → 추가/
+  제거 집합 계산 → 트랜잭션. `Logger` 추가(경고/에러).
+- **테스트(+7, `auth.service.spec`)**: 신규 describe — undefined 스킵, 미존재 그룹
+  KEYCLOAK 자동 생성+멤버십 추가, 추가+제거 동시 정렬, `[]` 전부 제거, 동명 LOCAL 스킵
+  (생성·주입 안 함), 현재 멤버십 조회가 KEYCLOAK source 만(LOCAL 불가침), 동기화 예외에도
+  로그인 성공(best-effort).
+- **검증**: api `tsc` EXIT 0, `nest build` EXIT 0, jest **294 passed (26 suites)**
+  (L7-2 287 + L8 7). 마이그레이션 없음(스키마 무변경 — 기존 Group/GroupMember/GroupSource
+  재사용). realm JSON 은 node 파싱 + 매퍼/그룹/사용자 구조 확인 통과.
+- **남은 일**:
+  - L8 VM 검증: ① testuser2 SSO 로그인 → 그룹 탭에 dev-team1 이 KEYCLOAK 배지로 자동
+    생성 + testuser2 멤버(편집 컨트롤 비활성), ② dev-team1 에 공간 편집자 부여 → testuser2
+    편집 가능, ③ LOCAL 그룹(개발1팀) 멤버십은 로그인 후에도 그대로, ④ 로컬 로그인
+    (localtest)은 그룹 변화 없음.
+  - (Task L-AUTHZ 구현 종료 — 이후는 유지보수.)
+- **비고**: ⚠️ **배포 2단계** — (1) api 변경 → VM 풀빌드(`./deploy/redeploy.sh`),
+  (2) realm JSON 변경 → `sudo docker compose up -d --force-recreate keycloak`(일반
+  `up -d` 로는 재import 안 됨). force-recreate 는 **런타임 Keycloak 계정을 초기화**하므로
+  이번에 testuser2 를 시드로 영구화 — 이후 recreate 부터 안 사라짐. 기존 세션은 쿠키 삭제
+  후 재로그인. L6 의 KEYCLOAK source 보호 가드(수정·삭제·멤버 편집 403)가 L8 동기화 그룹을
+  관리자 오조작으로부터 보호 — 선반영이 그대로 적중.
