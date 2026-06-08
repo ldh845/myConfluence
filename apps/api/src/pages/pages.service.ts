@@ -1273,6 +1273,12 @@ export class PagesService {
       },
       orderBy: { createdAt: 'asc' },
     });
+    // Cycle L7-2 — 제한 멤버 그룹도 함께 반환(다이얼로그가 개인/그룹을 동시 편집).
+    const groups = await this.prisma.pageRestrictionGroup.findMany({
+      where: { pageId },
+      include: { group: { select: { id: true, name: true } } },
+      orderBy: { createdAt: 'asc' },
+    });
     const canManage = await this.perms.canManagePageRestriction(pageId, actor);
     return {
       mode: page.restrictionMode,
@@ -1283,6 +1289,11 @@ export class PagesService {
         name: m.user.name,
         department: m.user.department ?? null,
       })),
+      groups: groups.map((g) => ({
+        groupId: g.groupId,
+        role: g.role,
+        name: g.group.name,
+      })),
     };
   }
 
@@ -1291,6 +1302,7 @@ export class PagesService {
     mode: PageRestrictionMode,
     actor: Actor,
     members?: Array<{ userId: string; role: PageRestrictionRole }>,
+    groups?: Array<{ groupId: string; role: PageRestrictionRole }>,
   ) {
     await this.perms.assertCanManagePageRestriction(pageId, actor);
     const current = await this.prisma.page.findUnique({
@@ -1299,31 +1311,44 @@ export class PagesService {
     });
     if (!current) throw new NotFoundException({ error: 'page not found' });
 
-    if (members === undefined) {
-      // 모드만 변경. 모드가 바뀌면 멤버 자동 삭제 (followup 2).
+    if (members === undefined && groups === undefined) {
+      // 모드만 변경. 모드가 바뀌면 멤버+그룹 자동 삭제 (followup 2 / L7-2).
       await this.prisma.$transaction([
         this.prisma.page.update({
           where: { id: pageId },
           data: { restrictionMode: mode },
         }),
         ...(current.restrictionMode !== mode
-          ? [this.prisma.pageRestriction.deleteMany({ where: { pageId } })]
+          ? [
+              this.prisma.pageRestriction.deleteMany({ where: { pageId } }),
+              this.prisma.pageRestrictionGroup.deleteMany({ where: { pageId } }),
+            ]
           : []),
       ]);
       return { ok: true };
     }
 
-    // Cycle 83 followup 3 — '적용' 흐름: mode + members 원자적 교체.
-    // 정규화: NONE 모드는 멤버 비움, EDIT 모드는 role=EDIT 강제, 중복 userId 제거.
-    const seen = new Set<string>();
+    // Cycle 83 followup 3 / L7-2 — '적용' 흐름: mode + members + groups 원자적 교체.
+    // 정규화: NONE 모드는 전부 비움, EDIT 모드는 role=EDIT 강제, 중복 id 제거.
+    const seenU = new Set<string>();
     const normalized: Array<{ userId: string; role: PageRestrictionRole }> = [];
+    const seenG = new Set<string>();
+    const normGroups: Array<{ groupId: string; role: PageRestrictionRole }> = [];
     if (mode !== 'NONE') {
-      for (const m of members) {
-        if (!m?.userId || seen.has(m.userId)) continue;
-        seen.add(m.userId);
+      for (const m of members ?? []) {
+        if (!m?.userId || seenU.has(m.userId)) continue;
+        seenU.add(m.userId);
         normalized.push({
           userId: m.userId,
           role: mode === 'EDIT' ? 'EDIT' : m.role,
+        });
+      }
+      for (const g of groups ?? []) {
+        if (!g?.groupId || seenG.has(g.groupId)) continue;
+        seenG.add(g.groupId);
+        normGroups.push({
+          groupId: g.groupId,
+          role: mode === 'EDIT' ? 'EDIT' : g.role,
         });
       }
     }
@@ -1338,12 +1363,24 @@ export class PagesService {
         });
       }
     }
+    if (normGroups.length > 0) {
+      const existing = await this.prisma.group.findMany({
+        where: { id: { in: normGroups.map((g) => g.groupId) } },
+        select: { id: true },
+      });
+      if (existing.length !== normGroups.length) {
+        throw new BadRequestException({
+          error: 'one or more groups not found',
+        });
+      }
+    }
     await this.prisma.$transaction([
       this.prisma.page.update({
         where: { id: pageId },
         data: { restrictionMode: mode },
       }),
       this.prisma.pageRestriction.deleteMany({ where: { pageId } }),
+      this.prisma.pageRestrictionGroup.deleteMany({ where: { pageId } }),
       ...(normalized.length > 0
         ? [
             this.prisma.pageRestriction.createMany({
@@ -1351,6 +1388,17 @@ export class PagesService {
                 pageId,
                 userId: m.userId,
                 role: m.role,
+              })),
+            }),
+          ]
+        : []),
+      ...(normGroups.length > 0
+        ? [
+            this.prisma.pageRestrictionGroup.createMany({
+              data: normGroups.map((g) => ({
+                pageId,
+                groupId: g.groupId,
+                role: g.role,
               })),
             }),
           ]

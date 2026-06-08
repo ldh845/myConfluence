@@ -22,6 +22,8 @@ const permsMock = {
   canManage: () => true,
   // Cycle L5-2 — changeStatus 가 편집 권한 가드를 호출. 기본 통과, 테스트별 override.
   assertCanEditPage: jest.fn().mockResolvedValue(undefined),
+  // Cycle L7-2 — updateRestrictionMode 가 제한 관리 권한 가드를 호출. 기본 통과.
+  assertCanManagePageRestriction: jest.fn().mockResolvedValue(undefined),
 };
 
 // Cycle 51 — recent({ limit?, spaceId?, offset? }) 검증.
@@ -523,5 +525,118 @@ describe('PagesService — changeStatus (Cycle 70 / L5-2)', () => {
     await service.changeStatus('p-1', 'TODO', AUTHOR);
     expect(prismaMock.page.update).not.toHaveBeenCalled();
     expect(activitiesMock.log).not.toHaveBeenCalled();
+  });
+});
+
+// Cycle L7-2 (feature/ldh) — updateRestrictionMode 에 그룹 합류(원자적 교체).
+//   회귀 방어: 모드 변경 시 개인 멤버와 함께 그룹도 초기화, EDIT 모드는 그룹 role=EDIT 강제.
+describe('PagesService — updateRestrictionMode 그룹 (Cycle L7-2)', () => {
+  let service: PagesService;
+  let prismaMock: {
+    page: { findUnique: jest.Mock; update: jest.Mock };
+    pageRestriction: { deleteMany: jest.Mock; createMany: jest.Mock };
+    pageRestrictionGroup: { deleteMany: jest.Mock; createMany: jest.Mock };
+    user: { findMany: jest.Mock };
+    group: { findMany: jest.Mock };
+    $transaction: jest.Mock;
+  };
+
+  const ACTOR = { id: 'u-mgr', name: '관리자', role: 'DEVELOPER' };
+
+  beforeEach(async () => {
+    prismaMock = {
+      page: {
+        findUnique: jest
+          .fn()
+          .mockResolvedValue({ restrictionMode: 'NONE' }),
+        update: jest.fn(),
+      },
+      pageRestriction: { deleteMany: jest.fn(), createMany: jest.fn() },
+      pageRestrictionGroup: { deleteMany: jest.fn(), createMany: jest.fn() },
+      user: { findMany: jest.fn().mockResolvedValue([]) },
+      group: { findMany: jest.fn().mockResolvedValue([]) },
+      $transaction: jest.fn().mockResolvedValue([]),
+    };
+    permsMock.assertCanManagePageRestriction = jest
+      .fn()
+      .mockResolvedValue(undefined);
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        PagesService,
+        { provide: PrismaService, useValue: prismaMock },
+        { provide: AttachmentsService, useValue: {} },
+        { provide: ActivitiesService, useValue: { log: jest.fn() } },
+        {
+          provide: NotificationsService,
+          useValue: { notifyMentions: jest.fn() },
+        },
+        { provide: SpacePermissionService, useValue: permsMock },
+      ],
+    }).compile();
+    service = module.get<PagesService>(PagesService);
+  });
+
+  it('모드만 변경(members/groups 미지정) + 모드 바뀜 → 개인+그룹 제한 모두 삭제', async () => {
+    prismaMock.page.findUnique.mockResolvedValue({ restrictionMode: 'EDIT' });
+    await service.updateRestrictionMode('p-1', 'NONE', ACTOR);
+    // followup 2 / L7-2 — 모드 변경 시 개인·그룹 둘 다 deleteMany 가 트랜잭션에 포함.
+    expect(prismaMock.pageRestriction.deleteMany).toHaveBeenCalledWith({
+      where: { pageId: 'p-1' },
+    });
+    expect(prismaMock.pageRestrictionGroup.deleteMany).toHaveBeenCalledWith({
+      where: { pageId: 'p-1' },
+    });
+  });
+
+  it('groups 원자 교체 → 존재 검증 + createMany(VIEW 유지)', async () => {
+    prismaMock.group.findMany.mockResolvedValue([{ id: 'g1' }]);
+    await service.updateRestrictionMode(
+      'p-1',
+      'VIEW_EDIT',
+      ACTOR,
+      [],
+      [{ groupId: 'g1', role: 'VIEW' }],
+    );
+    expect(prismaMock.group.findMany).toHaveBeenCalledWith({
+      where: { id: { in: ['g1'] } },
+      select: { id: true },
+    });
+    expect(prismaMock.pageRestrictionGroup.createMany).toHaveBeenCalledWith({
+      data: [{ pageId: 'p-1', groupId: 'g1', role: 'VIEW' }],
+    });
+  });
+
+  it('존재하지 않는 그룹 → BadRequest, 트랜잭션 미실행', async () => {
+    prismaMock.group.findMany.mockResolvedValue([]); // g1 없음
+    await expect(
+      service.updateRestrictionMode('p-1', 'VIEW_EDIT', ACTOR, [], [
+        { groupId: 'g1', role: 'VIEW' },
+      ]),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('EDIT 모드 → 그룹 role=EDIT 강제(VIEW 보내도 EDIT 저장)', async () => {
+    prismaMock.group.findMany.mockResolvedValue([{ id: 'g1' }]);
+    await service.updateRestrictionMode(
+      'p-1',
+      'EDIT',
+      ACTOR,
+      [],
+      [{ groupId: 'g1', role: 'VIEW' }],
+    );
+    expect(prismaMock.pageRestrictionGroup.createMany).toHaveBeenCalledWith({
+      data: [{ pageId: 'p-1', groupId: 'g1', role: 'EDIT' }],
+    });
+  });
+
+  it('NONE 모드 → 그룹 정규화에서 전부 제외(createMany 미호출)', async () => {
+    await service.updateRestrictionMode('p-1', 'NONE', ACTOR, [], [
+      { groupId: 'g1', role: 'VIEW' },
+    ]);
+    expect(prismaMock.pageRestrictionGroup.createMany).not.toHaveBeenCalled();
+    expect(prismaMock.pageRestrictionGroup.deleteMany).toHaveBeenCalledWith({
+      where: { pageId: 'p-1' },
+    });
   });
 });

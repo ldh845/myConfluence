@@ -231,6 +231,7 @@ export class PagesController {
       dto.mode,
       userFromReq(req),
       dto.members,
+      dto.groups,
     );
   }
 

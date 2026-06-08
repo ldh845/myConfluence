@@ -242,6 +242,8 @@ model Page {
   // Cycle 83 — 페이지 단위 제한. NONE 이면 공간 권한 그대로, EDIT/VIEW_EDIT 면 restrictions 가 게이트.
   restrictionMode PageRestrictionMode @default(NONE)
   restrictions    PageRestriction[]   @relation("PageRestrictions")
+  // Cycle L7-2 (feature/ldh) — 페이지 제한의 그룹 멤버. 개인 restrictions 와 max 결합.
+  restrictionGroups PageRestrictionGroup[] @relation("PageRestrictionGroups")
   // Cycle 53 — '나중을 위해 저장' / '지켜보기' back-relation. 페이지 삭제 시 Cascade.
   savedBy      SavedPage[]   @relation("PageSaved")
   watchers     WatchList[]   @relation("PageWatching")
@@ -479,6 +481,24 @@ model PageRestriction {
   @@index([userId])
 }
 
+// Cycle L7-2 (feature/ldh) — 페이지 단위 제한의 그룹 멤버.
+//   개인 PageRestriction 과 별개이며 판정 시 둘을 max 결합(EDIT > VIEW, deny 없음).
+//   restrictionMode 가 NONE 이면 무시, EDIT/VIEW_EDIT 면 개인∪그룹 멤버십이 게이트.
+//   role 은 기존 PageRestrictionRole(EDIT/VIEW) 재사용. 양쪽 Cascade.
+model PageRestrictionGroup {
+  pageId    String
+  page      Page                @relation("PageRestrictionGroups", fields: [pageId], references: [id], onDelete: Cascade)
+  groupId   String
+  group     Group               @relation("GroupPageRestrictions", fields: [groupId], references: [id], onDelete: Cascade)
+  role      PageRestrictionRole
+  createdAt DateTime            @default(now())
+
+  @@id([pageId, groupId])
+  @@index([pageId])
+  @@index([groupId])
+  @@map("page_restriction_groups")
+}
+
 // Cycle L6 (feature/ldh) — 그룹(부서/팀)의 출처.
 //   LOCAL: DocSpace 에서 직접 생성·관리. KEYCLOAK: L8 동기화로 들어온 그룹(수정·멤버
 //   편집 금지 — source 보호 가드를 지금 선반영). 현재 전부 LOCAL.
@@ -500,6 +520,8 @@ model Group {
   members     GroupMember[]
   // Cycle L7 (feature/ldh) — 이 그룹이 권한을 부여받은 스페이스들.
   spaceGrants SpaceMemberGroup[] @relation("GroupSpaceGrants")
+  // Cycle L7-2 (feature/ldh) — 이 그룹이 제한 멤버로 등록된 페이지들.
+  pageRestrictions PageRestrictionGroup[] @relation("GroupPageRestrictions")
 
   @@map("groups")
 }

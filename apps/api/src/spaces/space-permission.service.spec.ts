@@ -161,6 +161,9 @@ describe('SpacePermissionService — assertCanViewPage (Cycle L5)', () => {
       pageRestriction: {
         findUnique: jest.fn().mockResolvedValue(opts.restriction ?? null),
       },
+      // Cycle L7-2 — assertCanViewPageRestriction 이 그룹 제한 멤버십도 조회.
+      //   기본 빈 배열 → 개인 제한만으로 판정(그룹 없으면 종전과 동일 = 회귀 방어).
+      pageRestrictionGroup: { findMany: jest.fn().mockResolvedValue([]) },
     };
     return new SpacePermissionService(prisma as never);
   };
@@ -307,5 +310,145 @@ describe('SpacePermissionService — 그룹 결합 유효 역할 (Cycle L7)', ()
     const a = (await s.loadAccess('s', 'u1'))!;
     expect(a.role).toBeNull();
     expect(s.canView(a, DEV)).toBe(false);
+  });
+});
+
+// Cycle L7-2 (feature/ldh) — 페이지 단위 제한에 그룹 결합.
+//   유효 제한 역할 = max(개인 PageRestriction, 소속 그룹 PageRestrictionGroup). EDIT > VIEW.
+//   회귀 방어: 작성자/공간관리자/전역 ADMIN 우회 불변, 그룹 없으면 개인 제한 그대로.
+describe('SpacePermissionService — 페이지 제한 그룹 결합 (Cycle L7-2)', () => {
+  // PUBLIC 공간 기본 → 공간 편집 가드는 항상 통과, 게이트는 오직 페이지 제한.
+  const buildEdit = (opts: {
+    restrictionMode: string;
+    authorId?: string | null;
+    personal?: string | null; // 개인 PageRestriction 역할
+    groupRoles?: string[]; // 소속 그룹 PageRestrictionGroup 역할들
+    visibility?: string;
+    memberRole?: string | null;
+  }) => {
+    const prisma = {
+      page: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'p',
+          spaceId: 's',
+          authorId: opts.authorId ?? 'other',
+          restrictionMode: opts.restrictionMode,
+        }),
+      },
+      space: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 's',
+          visibility: opts.visibility ?? 'PUBLIC',
+          ownerId: null,
+        }),
+      },
+      spaceMember: {
+        findUnique: jest
+          .fn()
+          .mockResolvedValue(opts.memberRole ? { role: opts.memberRole } : null),
+      },
+      spaceMemberGroup: { findMany: jest.fn().mockResolvedValue([]) },
+      pageRestriction: {
+        findUnique: jest
+          .fn()
+          .mockResolvedValue(opts.personal ? { role: opts.personal } : null),
+      },
+      pageRestrictionGroup: {
+        findMany: jest
+          .fn()
+          .mockResolvedValue((opts.groupRoles ?? []).map((role) => ({ role }))),
+      },
+    };
+    return new SpacePermissionService(prisma as never);
+  };
+
+  it('EDIT 모드 + 그룹 EDIT → 편집 통과(개인 제한 없어도)', async () => {
+    const s = buildEdit({ restrictionMode: 'EDIT', groupRoles: ['EDIT'] });
+    await expect(s.assertCanEditPage('p', DEV)).resolves.toBeUndefined();
+  });
+
+  it('EDIT 모드 + 개인X·그룹X → 403(비멤버 차단 유지)', async () => {
+    const s = buildEdit({ restrictionMode: 'EDIT' });
+    await expect(s.assertCanEditPage('p', DEV)).rejects.toThrow(
+      ForbiddenException,
+    );
+  });
+
+  it('그룹 VIEW 뿐 → 편집 403(VIEW 는 편집 못 함)', async () => {
+    const s = buildEdit({ restrictionMode: 'VIEW_EDIT', groupRoles: ['VIEW'] });
+    await expect(s.assertCanEditPage('p', DEV)).rejects.toThrow(
+      ForbiddenException,
+    );
+  });
+
+  it('개인 VIEW + 그룹 EDIT → max=EDIT → 편집 통과', async () => {
+    const s = buildEdit({
+      restrictionMode: 'VIEW_EDIT',
+      personal: 'VIEW',
+      groupRoles: ['EDIT'],
+    });
+    await expect(s.assertCanEditPage('p', DEV)).resolves.toBeUndefined();
+  });
+
+  it('전역 ADMIN 은 제한 멤버십 없어도 편집 우회(불변)', async () => {
+    const s = buildEdit({ restrictionMode: 'VIEW_EDIT' });
+    await expect(
+      s.assertCanEditPage('p', ADMIN_GLOBAL),
+    ).resolves.toBeUndefined();
+  });
+
+  it('작성자는 제한 멤버십 없어도 편집 우회(불변)', async () => {
+    const s = buildEdit({ restrictionMode: 'VIEW_EDIT', authorId: 'u1' });
+    await expect(s.assertCanEditPage('p', DEV)).resolves.toBeUndefined();
+  });
+
+  it('공간 관리자는 제한 멤버십 없어도 편집 우회(불변)', async () => {
+    const s = buildEdit({
+      restrictionMode: 'VIEW_EDIT',
+      visibility: 'PRIVATE',
+      memberRole: 'ADMIN',
+    });
+    await expect(s.assertCanEditPage('p', DEV)).resolves.toBeUndefined();
+  });
+
+  // assertCanViewPageRestriction — VIEW_EDIT 보기 게이트에 그룹 합류.
+  const viewSvc = (personal: string | null, groupRoles: string[]) => {
+    const prisma = {
+      pageRestriction: {
+        findUnique: jest
+          .fn()
+          .mockResolvedValue(personal ? { role: personal } : null),
+      },
+      pageRestrictionGroup: {
+        findMany: jest
+          .fn()
+          .mockResolvedValue(groupRoles.map((role) => ({ role }))),
+      },
+    };
+    return new SpacePermissionService(prisma as never);
+  };
+  const viewPage = {
+    id: 'p',
+    spaceId: 's',
+    authorId: 'other',
+    restrictionMode: 'VIEW_EDIT',
+  };
+  const viewAccess: SpaceAccess = {
+    space: { id: 's', visibility: 'PRIVATE', ownerId: null },
+    role: 'VIEWER',
+  };
+
+  it('VIEW_EDIT + 그룹 VIEW → 보기 통과(역할 무관 멤버)', async () => {
+    const s = viewSvc(null, ['VIEW']);
+    await expect(
+      s.assertCanViewPageRestriction(viewPage, DEV, viewAccess),
+    ).resolves.toBeUndefined();
+  });
+
+  it('VIEW_EDIT + 개인X·그룹X → 보기 403(회귀)', async () => {
+    const s = viewSvc(null, []);
+    await expect(
+      s.assertCanViewPageRestriction(viewPage, DEV, viewAccess),
+    ).rejects.toThrow(ForbiddenException);
   });
 });

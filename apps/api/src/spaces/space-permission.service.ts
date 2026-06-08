@@ -3,7 +3,12 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma, SpaceRole, SpaceVisibility } from '@prisma/client';
+import {
+  PageRestrictionRole,
+  Prisma,
+  SpaceRole,
+  SpaceVisibility,
+} from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 // Cycle 74-A — 스페이스 단위 권한 판정의 단일 출처.
@@ -151,13 +156,47 @@ export class SpacePermissionService {
     if (user && page.authorId === user.id) return;
     if (this.canManage(a, user)) return;
     if (!user) throw new ForbiddenException({ error: 'page restricted' });
-    const m = await this.prisma.pageRestriction.findUnique({
-      where: { pageId_userId: { pageId, userId: user.id } },
-      select: { role: true },
-    });
-    if (!m || m.role !== 'EDIT') {
+    // Cycle L7-2 (feature/ldh) — 개인 ∪ 소속 그룹 제한 멤버십의 max 역할. EDIT 만 통과.
+    const role = await this.effectivePageRestrictionRole(pageId, user.id);
+    if (role !== 'EDIT') {
       throw new ForbiddenException({ error: 'page restricted' });
     }
+  }
+
+  // Cycle L7-2 (feature/ldh) — 페이지 제한 유효 역할 = max(개인 PageRestriction,
+  //   소속 그룹 PageRestrictionGroup 들). deny 없음 — 그룹은 멤버십을 더하고 역할을
+  //   올리기만 한다. 둘 다 없으면 null(= 제한 멤버 아님). EDIT > VIEW.
+  //   개인이 이미 EDIT 면 그룹 조회를 생략(최댓값 확정). 그룹 조회는 사용자 소속 그룹을
+  //   통한 단일 findMany 로 N+1 없음 — L7 loadAccess 의 그룹 멤버십 패턴과 동일.
+  private async effectivePageRestrictionRole(
+    pageId: string,
+    userId: string,
+  ): Promise<PageRestrictionRole | null> {
+    const personal = await this.prisma.pageRestriction.findUnique({
+      where: { pageId_userId: { pageId, userId } },
+      select: { role: true },
+    });
+    let role: PageRestrictionRole | null = personal?.role ?? null;
+    if (role === 'EDIT') return role;
+    const groups = await this.prisma.pageRestrictionGroup.findMany({
+      where: { pageId, group: { members: { some: { userId } } } },
+      select: { role: true },
+    });
+    for (const g of groups) {
+      role = this.higherRestrictionRole(role, g.role);
+      if (role === 'EDIT') break;
+    }
+    return role;
+  }
+
+  // 두 제한 역할 중 더 높은 쪽(EDIT > VIEW > null). null 은 '멤버 아님'으로 최하위.
+  private higherRestrictionRole(
+    a: PageRestrictionRole | null,
+    b: PageRestrictionRole | null,
+  ): PageRestrictionRole | null {
+    const rank = (r: PageRestrictionRole | null): number =>
+      r === 'EDIT' ? 2 : r === 'VIEW' ? 1 : 0;
+    return rank(b) > rank(a) ? b : a;
   }
 
   // Cycle 83 — VIEW_EDIT 모드 페이지 보기 가드. (NONE/EDIT 은 공간 권한만)
@@ -171,11 +210,9 @@ export class SpacePermissionService {
     if (user && page.authorId === user.id) return;
     if (this.canManage(spaceAccess, user)) return;
     if (!user) throw new ForbiddenException({ error: 'page restricted' });
-    const m = await this.prisma.pageRestriction.findUnique({
-      where: { pageId_userId: { pageId: page.id, userId: user.id } },
-      select: { role: true },
-    });
-    if (!m) throw new ForbiddenException({ error: 'page restricted' });
+    // Cycle L7-2 (feature/ldh) — 개인 ∪ 소속 그룹 제한 멤버십. 역할 무관 멤버이면 보기 통과.
+    const role = await this.effectivePageRestrictionRole(page.id, user.id);
+    if (role === null) throw new ForbiddenException({ error: 'page restricted' });
   }
 
   // Cycle L5 (feature/ldh) — pageId 로부터 스페이스 + 페이지 제한을 묶어 읽기 권한 assert.
