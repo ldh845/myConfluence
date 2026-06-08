@@ -5,10 +5,13 @@ import { PassportModule } from '@nestjs/passport';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { JwtStrategy } from './jwt.strategy';
+import { DepartmentGroupModule } from '../department/department-group.module';
 
 @Module({
   imports: [
     PassportModule,
+    // Cycle L10 — 로그인 시 부서 그룹 자동 배정.
+    DepartmentGroupModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],

@@ -139,13 +139,16 @@ export class GroupsService {
     return group;
   }
 
-  // 그룹 로드 + LOCAL 강제(KEYCLOAK 이면 403). 수정·삭제·멤버 편집 진입점.
+  // 그룹 로드 + LOCAL 강제(자동 관리 그룹이면 403). 수정·삭제·멤버 편집 진입점.
+  //   Cycle L10 — KEYCLOAK(L8 동기화)에 더해 DEPARTMENT(부서 자동 배정)도 수동 편집 잠금.
+  //   둘 다 외부 출처가 멤버십을 관리하므로 DocSpace 에서 손대면 다음 로그인에 덮어쓰여진다.
   private async loadLocal(id: string) {
     const group = await this.loadGroup(id);
-    if (group.source === 'KEYCLOAK') {
+    if (group.source !== 'LOCAL') {
+      const origin = group.source === 'KEYCLOAK' ? 'Keycloak 에서 동기화된' : '부서 기준 자동';
       throw new ForbiddenException({
-        error: 'keycloak group is read-only',
-        message: 'Keycloak 에서 동기화된 그룹은 DocSpace 에서 수정할 수 없습니다.',
+        error: 'managed group is read-only',
+        message: `${origin} 그룹은 DocSpace 에서 수정할 수 없습니다.`,
       });
     }
     return group;

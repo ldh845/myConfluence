@@ -10,6 +10,7 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma/prisma.service';
+import { DepartmentGroupService } from '../department/department-group.service';
 import { assertPasswordPolicy } from './password-policy';
 import {
   LOCKOUT_DURATION_MS,
@@ -51,6 +52,8 @@ export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
+    // Cycle L10 (feature/ldh) — 로그인 시 부서 그룹 자동 배정.
+    private readonly deptGroups: DepartmentGroupService,
   ) {}
 
   private sanitize(user: {
@@ -157,6 +160,8 @@ export class AuthService {
         data: { failedLoginCount: 0, lockedUntil: null },
       });
     }
+    // Cycle L10 — 로컬 로그인도 부서 그룹 자동 배정(부서 있으면). best-effort.
+    await this.syncDepartmentGroupBestEffort(user.id, user.username, user.department);
     return { user: this.sanitize(user), token: this.signToken(user) };
   }
 
@@ -224,6 +229,7 @@ export class AuthService {
     name?: string;
     realmRoles?: string[];
     groups?: string[];
+    department?: string;
   }): Promise<AuthUser> {
     // Prisma Role enum 과 호환되도록 명시 narrow.
     const role: 'ADMIN' | 'DEVELOPER' = (claims.realmRoles ?? []).includes(
@@ -233,11 +239,13 @@ export class AuthService {
       : 'DEVELOPER';
 
     // 모든 분기에서 공통으로 갱신할 필드 (claim 캐시 + 권한 동기화).
+    // Cycle L10 — department claim 이 있으면 User.department 캐시도 갱신(없으면 보존).
     const syncData = {
       role,
       email: claims.email ?? null,
       emailVerified: claims.emailVerified ?? false,
       lastLoginAt: new Date(),
+      ...(claims.department !== undefined ? { department: claims.department } : {}),
     };
 
     // 계정 해석(sub 우선 → username 링크 → 신규 생성). 비활성이면 분기 안에서 throw.
@@ -271,7 +279,7 @@ export class AuthService {
             username: claims.username,
             keycloakId: claims.sub,
             name: claims.name ?? claims.username,
-            department: '',
+            department: claims.department ?? '',
             ...syncData,
           },
         });
@@ -291,7 +299,27 @@ export class AuthService {
       }
     }
 
+    // Cycle L10 — 부서 그룹 자동 배정(L8 그룹 claim 다음, 폴백). best-effort.
+    await this.syncDepartmentGroupBestEffort(user.id, user.username, user.department);
+
     return this.sanitize(user);
+  }
+
+  // Cycle L10 (feature/ldh) — 부서 그룹 자동 배정을 best-effort 로 감싼다.
+  //   동기화 실패가 로그인/세션 발급을 막지 않도록 에러만 로깅한다.
+  private async syncDepartmentGroupBestEffort(
+    userId: string,
+    username: string,
+    department: string | null | undefined,
+  ): Promise<void> {
+    try {
+      await this.deptGroups.syncUserDepartmentGroup(userId, department);
+    } catch (err) {
+      this.logger.error(
+        `부서 그룹 자동 배정 실패 (user=${username}) — 로그인은 계속`,
+        err instanceof Error ? err.stack : String(err),
+      );
+    }
   }
 
   // Cycle L8 (feature/ldh) — Keycloak 그룹 멤버십을 claim 집합으로 정렬한다.

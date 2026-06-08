@@ -28,6 +28,9 @@ export type OidcClaims = {
   //   매퍼의 `groups` claim 에서 추출. 매 로그인마다 KEYCLOAK source 그룹 멤버십을 이
   //   집합으로 정렬(추가/제거)한다. claim 자체가 없으면(undefined) 동기화 스킵.
   groups?: string[];
+  // Cycle L10 (feature/ldh) — 부서(department) 속성. user-attribute 매퍼의 `department`
+  //   claim 에서 추출. 로그인 시 User.department 캐시 갱신 + 부서 그룹 자동 배정에 사용.
+  department?: string;
 };
 
 @Injectable()
@@ -131,6 +134,8 @@ export class OidcService {
           .filter((g): g is string => typeof g === 'string')
           .map((g) => (g.startsWith('/') ? g.slice(1) : g))
       : undefined;
+    // Cycle L10 — department 속성 claim(문자열). 없으면 undefined → 부서 동기화 스킵.
+    const department = typeof c.department === 'string' ? c.department : undefined;
     return {
       claims: {
         sub: c.sub,
@@ -140,6 +145,7 @@ export class OidcService {
         name: c.name,
         realmRoles,
         groups,
+        department,
       },
       idToken: tokenSet.id_token,
     };

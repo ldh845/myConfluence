@@ -8,6 +8,14 @@ import { SpacesService } from './spaces.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ActivitiesService } from '../activities/activities.service';
 import { SpacePermissionService } from './space-permission.service';
+import { DepartmentGroupService } from '../department/department-group.service';
+
+// Cycle L10 — SpacesService 가 DepartmentGroupService 를 주입받는다(공간 생성 기본 정책).
+//   대부분 테스트는 create 를 안 거치므로 no-op 모킹으로 충분.
+const deptGroupsMock = {
+  resolveOrCreateDepartmentGroup: jest.fn().mockResolvedValue(null),
+  syncUserDepartmentGroup: jest.fn().mockResolvedValue(undefined),
+};
 
 // Cycle 74-C — 멤버 관리 + 마지막 Admin 보호 회귀 방지.
 describe('SpacesService — members (Cycle 74-C)', () => {
@@ -47,6 +55,7 @@ describe('SpacesService — members (Cycle 74-C)', () => {
         { provide: PrismaService, useValue: prismaMock },
         { provide: ActivitiesService, useValue: { log: jest.fn() } },
         { provide: SpacePermissionService, useValue: permsMock },
+        { provide: DepartmentGroupService, useValue: deptGroupsMock },
       ],
     }).compile();
     service = module.get<SpacesService>(SpacesService);
@@ -151,6 +160,7 @@ describe('SpacesService — shortcuts (Cycle 74-F)', () => {
         { provide: PrismaService, useValue: prismaMock },
         { provide: ActivitiesService, useValue: { log: jest.fn() } },
         { provide: SpacePermissionService, useValue: permsMock },
+        { provide: DepartmentGroupService, useValue: deptGroupsMock },
       ],
     }).compile();
     service = module.get<SpacesService>(SpacesService);
@@ -226,6 +236,7 @@ describe('SpacesService — setHomePage (Cycle L5-2)', () => {
         { provide: PrismaService, useValue: prismaMock },
         { provide: ActivitiesService, useValue: { log: jest.fn() } },
         { provide: SpacePermissionService, useValue: permsMock },
+        { provide: DepartmentGroupService, useValue: deptGroupsMock },
       ],
     }).compile();
     service = module.get<SpacesService>(SpacesService);
@@ -288,6 +299,7 @@ describe('SpacesService — member-groups (Cycle L7)', () => {
         { provide: PrismaService, useValue: prismaMock },
         { provide: ActivitiesService, useValue: { log: jest.fn() } },
         { provide: SpacePermissionService, useValue: permsMock },
+        { provide: DepartmentGroupService, useValue: deptGroupsMock },
       ],
     }).compile();
     service = module.get<SpacesService>(SpacesService);
@@ -349,6 +361,75 @@ describe('SpacesService — member-groups (Cycle L7)', () => {
         role: 'DEVELOPER',
       }),
     ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(prismaMock.spaceMemberGroup.upsert).not.toHaveBeenCalled();
+  });
+});
+
+// Cycle L10 (feature/ldh) — 공간 생성 기본 정책: 생성자 부서 그룹 EDITOR 자동 부여.
+describe('SpacesService — create 부서 기본 정책 (Cycle L10)', () => {
+  let service: SpacesService;
+  let prismaMock: {
+    space: { findFirst: jest.Mock };
+    user: { findUnique: jest.Mock };
+    spaceMemberGroup: { upsert: jest.Mock };
+    $transaction: jest.Mock;
+  };
+  let deptMock: { resolveOrCreateDepartmentGroup: jest.Mock };
+
+  const ACTOR = { id: 'creator', name: '생성자' };
+
+  beforeEach(async () => {
+    prismaMock = {
+      space: { findFirst: jest.fn() },
+      user: { findUnique: jest.fn() },
+      spaceMemberGroup: { upsert: jest.fn().mockResolvedValue({}) },
+      // create 의 트랜잭션은 통째로 모킹(콜백 미실행) — 부서 정책 분기만 검증.
+      $transaction: jest
+        .fn()
+        .mockResolvedValue({ space: { id: 'sp-new' }, homePage: { id: 'hp', title: 'Main Page' } }),
+    };
+    deptMock = {
+      resolveOrCreateDepartmentGroup: jest
+        .fn()
+        .mockResolvedValue({ id: 'g-dept', source: 'DEPARTMENT' }),
+    };
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        SpacesService,
+        { provide: PrismaService, useValue: prismaMock },
+        { provide: ActivitiesService, useValue: { log: jest.fn().mockResolvedValue(undefined) } },
+        {
+          provide: SpacePermissionService,
+          useValue: { assertCanManage: jest.fn() },
+        },
+        { provide: DepartmentGroupService, useValue: deptMock },
+      ],
+    }).compile();
+    service = module.get<SpacesService>(SpacesService);
+  });
+
+  it('기본(옵션 미지정) + 생성자 department 있음 → 부서 그룹 EDITOR 부여', async () => {
+    prismaMock.user.findUnique.mockResolvedValue({ department: '플랫폼' });
+    await service.create({ name: '새 공간' }, ACTOR);
+    expect(deptMock.resolveOrCreateDepartmentGroup).toHaveBeenCalledWith('플랫폼');
+    expect(prismaMock.spaceMemberGroup.upsert).toHaveBeenCalledWith({
+      where: { spaceId_groupId: { spaceId: 'sp-new', groupId: 'g-dept' } },
+      update: {},
+      create: { spaceId: 'sp-new', groupId: 'g-dept', role: 'EDITOR' },
+    });
+  });
+
+  it('applyDepartmentDefault:false → 부서 그룹 부여 안 함', async () => {
+    prismaMock.user.findUnique.mockResolvedValue({ department: '플랫폼' });
+    await service.create({ name: '새 공간', applyDepartmentDefault: false }, ACTOR);
+    expect(deptMock.resolveOrCreateDepartmentGroup).not.toHaveBeenCalled();
+    expect(prismaMock.spaceMemberGroup.upsert).not.toHaveBeenCalled();
+  });
+
+  it('생성자 department 없음 → 무동작', async () => {
+    prismaMock.user.findUnique.mockResolvedValue({ department: '' });
+    await service.create({ name: '새 공간' }, ACTOR);
+    expect(deptMock.resolveOrCreateDepartmentGroup).not.toHaveBeenCalled();
     expect(prismaMock.spaceMemberGroup.upsert).not.toHaveBeenCalled();
   });
 });

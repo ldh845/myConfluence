@@ -10,6 +10,14 @@ import {
 import * as bcrypt from 'bcrypt';
 import { AuthService } from './auth.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { DepartmentGroupService } from '../department/department-group.service';
+
+// Cycle L10 — AuthService 가 DepartmentGroupService 를 주입받는다(로그인 시 부서 그룹).
+//   로그인 분기 검증에서는 no-op 모킹(부서 동기화 로직은 별도 spec).
+const deptGroupsMock = {
+  syncUserDepartmentGroup: jest.fn().mockResolvedValue(undefined),
+  resolveOrCreateDepartmentGroup: jest.fn().mockResolvedValue(null),
+};
 
 // Cycle 49 — AuthService.updateMyPrefs 단위 검증.
 // Cycle L1 (feature/ldh) — localLogin 분기 검증 추가.
@@ -30,6 +38,7 @@ describe('AuthService', () => {
         AuthService,
         { provide: PrismaService, useValue: prismaMock },
         { provide: JwtService, useValue: jwtMock },
+        { provide: DepartmentGroupService, useValue: deptGroupsMock },
       ],
     }).compile();
     service = module.get<AuthService>(AuthService);
@@ -333,6 +342,7 @@ describe('AuthService — Keycloak 그룹 동기화 (Cycle L8)', () => {
         AuthService,
         { provide: PrismaService, useValue: prismaMock },
         { provide: JwtService, useValue: { sign: jest.fn() } },
+        { provide: DepartmentGroupService, useValue: deptGroupsMock },
       ],
     }).compile();
     service = module.get<AuthService>(AuthService);
@@ -428,5 +438,68 @@ describe('AuthService — Keycloak 그룹 동기화 (Cycle L8)', () => {
     const user = await call(['dev-team1']);
     expect(user.username).toBe('testuser2');
     expect(prismaMock.$transaction).not.toHaveBeenCalled();
+  });
+});
+
+// Cycle L10 (feature/ldh) — findOrCreateOidcUser 의 부서 연동:
+//   department claim → User.department 갱신 + deptGroups.syncUserDepartmentGroup 호출.
+describe('AuthService — 부서 그룹 자동 배정 연동 (Cycle L10)', () => {
+  let service: AuthService;
+  let prismaMock: { user: { findUnique: jest.Mock; update: jest.Mock } };
+  let deptMock: { syncUserDepartmentGroup: jest.Mock };
+
+  const ACTIVE = {
+    id: 'u1',
+    username: 'testuser2',
+    name: 'Test User2',
+    department: '',
+    role: 'DEVELOPER',
+    createdAt: new Date('2026-01-01'),
+    isActive: true,
+    passwordHash: null,
+    keycloakId: 'sub-2',
+    showPersonalSpaceInSidebar: false,
+  };
+
+  beforeEach(async () => {
+    prismaMock = {
+      user: {
+        findUnique: jest.fn().mockResolvedValue(ACTIVE), // bySub 히트
+        update: jest.fn().mockResolvedValue(ACTIVE),
+      },
+    };
+    deptMock = { syncUserDepartmentGroup: jest.fn().mockResolvedValue(undefined) };
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        AuthService,
+        { provide: PrismaService, useValue: prismaMock },
+        { provide: JwtService, useValue: { sign: jest.fn() } },
+        { provide: DepartmentGroupService, useValue: deptMock },
+      ],
+    }).compile();
+    service = module.get<AuthService>(AuthService);
+  });
+
+  it('department claim 있음 → User.department 갱신 + 부서 동기화 호출', async () => {
+    prismaMock.user.update.mockResolvedValue({ ...ACTIVE, department: '플랫폼' });
+    await service.findOrCreateOidcUser({
+      sub: 'sub-2',
+      username: 'testuser2',
+      department: '플랫폼',
+    });
+    expect(prismaMock.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ department: '플랫폼' }),
+      }),
+    );
+    expect(deptMock.syncUserDepartmentGroup).toHaveBeenCalledWith('u1', '플랫폼');
+  });
+
+  it('department claim 없음 → update 에 department 키 없음(기존 보존)', async () => {
+    await service.findOrCreateOidcUser({ sub: 'sub-2', username: 'testuser2' });
+    const data = prismaMock.user.update.mock.calls[0][0].data;
+    expect(data).not.toHaveProperty('department');
+    // 기존 department('')로 동기화 호출(서비스가 빈값이면 내부에서 스킵).
+    expect(deptMock.syncUserDepartmentGroup).toHaveBeenCalledWith('u1', '');
   });
 });

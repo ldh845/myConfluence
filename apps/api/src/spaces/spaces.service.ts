@@ -10,6 +10,7 @@ import {
   SpacePermissionService,
   type Actor,
 } from './space-permission.service';
+import { DepartmentGroupService } from '../department/department-group.service';
 import { CreateSpaceDto } from './dto/create-space.dto';
 
 // 사이드바/디렉터리에서 공통으로 쓰는 pages select.
@@ -49,6 +50,8 @@ export class SpacesService {
     private readonly prisma: PrismaService,
     private readonly activities: ActivitiesService,
     private readonly perms: SpacePermissionService,
+    // Cycle L10 (feature/ldh) — 공간 생성 기본 정책(생성자 부서 그룹 EDITOR 부여).
+    private readonly deptGroups: DepartmentGroupService,
   ) {}
 
   // Cycle 32 — SITE 전체 + (인증 시) 본인 PERSONAL 공간만. 남의 개인 공간은 숨김.
@@ -451,7 +454,38 @@ export class SpacesService {
       payload: { title: result.homePage.title },
     });
 
+    // Cycle L10 — 공간 생성 기본 정책: 생성자 부서 그룹을 EDITOR 로 자동 부여.
+    //   기본 true. best-effort(부서 그룹 부여 실패가 공간 생성을 무효화하지 않게).
+    if (dto.applyDepartmentDefault !== false && actor?.id) {
+      await this.applyDepartmentDefaultGrant(result.space.id, actor.id);
+    }
+
     return result.space;
+  }
+
+  // Cycle L10 (feature/ldh) — 생성자의 부서 그룹을 공간에 EDITOR 로 부여(idempotent).
+  //   생성자 department 가 없으면 무동작. 생성자는 별도로 이미 공간 ADMIN 멤버.
+  private async applyDepartmentDefaultGrant(
+    spaceId: string,
+    creatorId: string,
+  ): Promise<void> {
+    try {
+      const creator = await this.prisma.user.findUnique({
+        where: { id: creatorId },
+        select: { department: true },
+      });
+      const department = creator?.department?.trim();
+      if (!department) return;
+      const group = await this.deptGroups.resolveOrCreateDepartmentGroup(department);
+      if (!group) return;
+      await this.prisma.spaceMemberGroup.upsert({
+        where: { spaceId_groupId: { spaceId, groupId: group.id } },
+        update: {},
+        create: { spaceId, groupId: group.id, role: 'EDITOR' },
+      });
+    } catch {
+      // best-effort — 공간은 이미 생성됨. 부서 그룹 부여 실패는 무시(수동 부여 가능).
+    }
   }
 
   // Cycle 33 — 공간의 홈 페이지 지정. homePageId 페이지가 그 공간 소속이어야 함.

@@ -505,6 +505,9 @@ model PageRestrictionGroup {
 enum GroupSource {
   LOCAL
   KEYCLOAK
+  // Cycle L10 (feature/ldh) — 부서(User.department) 기준 자동 생성·관리 그룹.
+  //   KEYCLOAK 와 마찬가지로 DocSpace 에서 수동 편집 잠금(loadLocal 가드).
+  DEPARTMENT
 }
 
 // Cycle L6 (feature/ldh) — 그룹 모델(그릇만). 권한 판정에는 아직 영향 없음.
@@ -522,8 +525,23 @@ model Group {
   spaceGrants SpaceMemberGroup[] @relation("GroupSpaceGrants")
   // Cycle L7-2 (feature/ldh) — 이 그룹이 제한 멤버로 등록된 페이지들.
   pageRestrictions PageRestrictionGroup[] @relation("GroupPageRestrictions")
+  // Cycle L10 (feature/ldh) — 이 그룹에 매핑된 부서명들(부서명↔그룹 표기 차이 등록).
+  departmentMappings DepartmentGroupMapping[] @relation("DepartmentGroupMappings")
 
   @@map("groups")
+}
+
+// Cycle L10 (feature/ldh) — 부서명 → 그룹 매핑(옵션). 부서명과 그룹 표기가 다를 때
+//   (예: "플랫폼개발팀" → 그룹 "platform") 명시적으로 연결. 매핑이 없으면 동명 그룹을
+//   자동 처리(없으면 source=DEPARTMENT 로 생성). department 가 PK(부서당 1개 그룹).
+model DepartmentGroupMapping {
+  department String   @id
+  groupId    String
+  group      Group    @relation("DepartmentGroupMappings", fields: [groupId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@index([groupId])
+  @@map("department_group_mappings")
 }
 
 // Cycle L6 (feature/ldh) — 그룹 멤버십(그룹 ↔ 사용자). 복합 PK, 양쪽 Cascade.
