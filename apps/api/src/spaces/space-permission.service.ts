@@ -85,6 +85,12 @@ export class SpacePermissionService {
     return this.roleRank(b) > this.roleRank(a) ? b : a;
   }
 
+  // Cycle L9 (feature/ldh) — 접근 권한 역산(effective-access)에서 개인·그룹 역할을 사용자
+  //   단위로 합칠 때 동일한 max 규칙을 쓰도록 공개. 판정과 한 곳의 로직을 공유.
+  maxSpaceRole(a: SpaceRole | null, b: SpaceRole | null): SpaceRole | null {
+    return this.higherRole(a, b);
+  }
+
   canView(access: SpaceAccess, user: Actor): boolean {
     if (this.isGlobalAdmin(user)) return true;
     switch (access.space.visibility) {

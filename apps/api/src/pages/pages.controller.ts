@@ -17,6 +17,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { OptionalJwtAuthGuard } from '../auth/optional-jwt-auth.guard';
 import { PagesService } from './pages.service';
 import { SpacePermissionService } from '../spaces/space-permission.service';
+import { EffectiveAccessService } from '../spaces/effective-access.service';
 import { CreatePageDto } from './dto/create-page.dto';
 import { UpdatePageDto } from './dto/update-page.dto';
 import { UpdateDraftDto } from './dto/update-draft.dto';
@@ -62,12 +63,31 @@ export class PagesController {
     private readonly pages: PagesService,
     // Cycle 74-A — 스페이스 권한 판정(읽기/쓰기 가드).
     private readonly perms: SpacePermissionService,
+    // Cycle L9 — 페이지 접근 권한 역산.
+    private readonly effectiveAccess: EffectiveAccessService,
   ) {}
 
   @Get()
   @UseGuards(OptionalJwtAuthGuard)
   findAll(@Req() req: Request) {
     return this.pages.findAll(userFromReq(req));
+  }
+
+  // Cycle L9 (feature/ldh) — 접근 권한 역산: 이 페이지를 볼 수 있는 사용자 전부와 경로.
+  //   NONE → 공간 결과와 동일, EDIT/VIEW_EDIT → 제한 통과자로 좁힘(L7-2 그룹 포함).
+  //   조회 권한은 공간 canManage(또는 전역 ADMIN) — service 가 게이트.
+  @Get(':id/effective-access')
+  @UseGuards(JwtAuthGuard)
+  effectiveAccessForPage(
+    @Param('id') id: string,
+    @Req() req: Request,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.effectiveAccess.pageEffectiveAccess(id, userFromReq(req), {
+      limit: limit ? Number(limit) : undefined,
+      offset: offset ? Number(offset) : undefined,
+    });
   }
 
   @Post()

@@ -6,6 +6,7 @@ import { ActivitiesModule } from '../activities/activities.module';
 import { AuthModule } from '../auth/auth.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { SpacePermissionModule } from '../spaces/space-permission.module';
+import { EffectiveAccessModule } from '../spaces/effective-access.module';
 
 @Module({
   // FR-080 — PagesService.remove가 첨부 디스크 정리 시 AttachmentsService를
@@ -20,6 +21,8 @@ import { SpacePermissionModule } from '../spaces/space-permission.module';
     NotificationsModule,
     // Cycle 74-A — 페이지 read/edit 시 스페이스 권한 판정.
     SpacePermissionModule,
+    // Cycle L9 — 페이지 접근 권한 역산(effective-access).
+    EffectiveAccessModule,
   ],
   controllers: [PagesController],
   providers: [PagesService],

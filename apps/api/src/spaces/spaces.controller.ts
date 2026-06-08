@@ -14,6 +14,7 @@ import type { Request } from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { OptionalJwtAuthGuard } from '../auth/optional-jwt-auth.guard';
 import { SpacesService } from './spaces.service';
+import { EffectiveAccessService } from './effective-access.service';
 import { CreateSpaceDto } from './dto/create-space.dto';
 import { SetHomePageDto } from './dto/set-home-page.dto';
 import { UpdateSpaceSettingsDto } from './dto/update-space-settings.dto';
@@ -38,7 +39,26 @@ function userFromReq(
 
 @Controller('spaces')
 export class SpacesController {
-  constructor(private readonly spaces: SpacesService) {}
+  constructor(
+    private readonly spaces: SpacesService,
+    private readonly effectiveAccess: EffectiveAccessService,
+  ) {}
+
+  // Cycle L9 (feature/ldh) — 접근 권한 역산: 이 공간을 볼 수 있는 사용자 전부와 경로.
+  //   조회 권한은 공간 canManage(또는 전역 ADMIN) — service 가 게이트. limit/offset 옵션.
+  @Get(':id/effective-access')
+  @UseGuards(JwtAuthGuard)
+  effectiveAccessForSpace(
+    @Param('id') id: string,
+    @Req() req: Request,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.effectiveAccess.spaceEffectiveAccess(id, userFromReq(req), {
+      limit: limit ? Number(limit) : undefined,
+      offset: offset ? Number(offset) : undefined,
+    });
+  }
 
   // Cycle 32 — 인증 시 본인 개인 공간도 포함, 비인증이면 SITE만.
   @Get()
