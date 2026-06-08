@@ -132,6 +132,34 @@ model User {
   notificationsCreated       Notification[] @relation("NotificationActor")
   // Cycle L6 (feature/ldh) — 그룹(부서/팀) 멤버십. user 삭제 시 Cascade.
   groupMemberships           GroupMember[] @relation("UserGroupMember")
+  // Cycle L-API-1 (feature/ldh) — 프로그램 접근용 API 토큰. user 삭제 시 Cascade.
+  apiTokens                  ApiToken[]    @relation("UserApiTokens")
+}
+
+// Cycle L-API-1 (feature/ldh) — 프로그램/외부 시스템/MCP 서버 접근용 장수명 API 토큰.
+//   평문 토큰은 발급 응답에만 1회 노출. 저장은 sha256 해시(tokenHash, unique)만.
+//   tokenPrefix 는 표시용 앞부분(평문 아님). expiresAt=null 이면 무기한.
+//   인증은 Bearer 헤더 → 해시 조회 → revokedAt null + 미만료 → 발급자(userId) 권한 승계.
+//   권한 자체는 토큰 주인의 것을 그대로 쓴다(별도 스코프 없음 — 후속 사이클).
+model ApiToken {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation("UserApiTokens", fields: [userId], references: [id], onDelete: Cascade)
+  // 사람이 식별할 토큰 이름(예: "CI 배포 봇").
+  name        String
+  // sha256(평문) 해시. 평문은 절대 저장하지 않는다. 조회/비교는 이 해시로만.
+  tokenHash   String    @unique
+  // 목록 표시용 앞부분(예: "dsp_AbCd1234"). 평문 전체가 아니므로 노출 안전.
+  tokenPrefix String
+  // null 이면 무기한. 값이 있으면 그 시각 이후 인증 거부(만료).
+  expiresAt   DateTime?
+  // 마지막 사용 시각. 매 요청 부담을 줄이려 분 단위 throttle 로 갱신.
+  lastUsedAt  DateTime?
+  // 폐기 시각. null 이면 유효, 값이 있으면 즉시 무효(인증 거부).
+  revokedAt   DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([userId])
 }
 
 model Space {
