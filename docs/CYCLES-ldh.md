@@ -514,3 +514,67 @@
 - **비고**: 판정 결합을 `loadAccess` 단일 지점에 둔 게 핵심 — 분기마다 손대지 않아 회귀
   표면 최소. 그룹 부여는 KEYCLOAK 그룹도 가능(공간측 부여이지 그룹 수정이 아님). 페이지
   단위 제한(83) 그룹 적용은 범위 분리(L7-2).
+
+---
+
+## Cycle L7-2 — 2026-06-08 — ✅ Done (페이지 단위 제한에 그룹 적용)
+- **제목**: Task L-AUTHZ 4단계 — 페이지 제한(83)↔그룹 결합(개인∪그룹 max)
+- **카테고리**: BE(판정 로직) + FE + DB / 인가 (마이그레이션 1건) ⚠️ 회귀 민감
+- **커밋**: `5dad659`(코드), 본 CYCLES-ldh.md
+- **배경**: Cycle 83 페이지 단위 제한(restrictionMode NONE/EDIT/VIEW_EDIT +
+  PageRestriction 사용자별 VIEW/EDIT)이 개인 단위뿐 → L7(공간) 과 같은 패턴으로 그룹을
+  제한 멤버로 추가 가능하게 확장. 판정부를 건드리므로 **개인 제한 동작 불변**이 최우선.
+- **결합 규칙(확정)**: 페이지 제한 유효 역할 = **max(개인 PageRestriction, 소속 그룹들의
+  PageRestrictionGroup)**. EDIT > VIEW, **deny 없음**(그룹은 멤버십을 더하고 역할을
+  올리기만). 둘 다 없으면 '제한 멤버 아님'. 작성자/공간 관리자/전역 ADMIN 우회 그대로.
+- **DB(마이그레이션 1건 `20260606000000_page_restriction_group`)**:
+  - `PageRestrictionGroup`(@@map `page_restriction_groups`): pageId+groupId 복합 PK,
+    role(기존 `PageRestrictionRole` enum 재사용), 양쪽 FK Cascade(Page, groups).
+    `Page.restrictionGroups`/`Group.pageRestrictions` 역관계 추가. 기존
+    `PageRestriction` 무변경(개인 제한 유지).
+- **BE 판정 로직(변경점 최소화)**:
+  - 신규 헬퍼 `effectivePageRestrictionRole(pageId, userId)` — 개인 `pageRestriction.
+    findUnique` 후 EDIT 이면 즉시 반환(최댓값 확정), 아니면 `pageRestrictionGroup.
+    findMany({ where: { pageId, group: { members: { some: { userId } } } } })`(단일 쿼리,
+    N+1 없음)로 소속 그룹 제한 역할을 모아 `higherRestrictionRole` 로 max 결합.
+  - `assertCanEditPage`: 기존 개인 `pageRestriction` 직접 조회 → `effective...Role` 호출,
+    `EDIT` 만 통과(종전과 동일 조건, 그룹만 합류).
+  - `assertCanViewPageRestriction`: 기존 개인 조회 → `effective...Role`, `null` 이면 403
+    (역할 무관 멤버이면 보기 통과 — 종전과 동일).
+- **보존한 기존 분기(약화 없음 명시)**: NONE 모드 통과 / 전역 ADMIN override / 작성자
+  통과 / 공간 관리자(canManage) 통과 — 전부 그대로. 그룹이 비면 effective 결과가 개인
+  제한만으로 결정 = 종전과 동일(개인 제한 불변).
+- **BE 제한 관리 API(83 followup 3 원자 PATCH 구조 유지)**:
+  - `GET /pages/:id/restriction` 응답에 `groups: [{groupId, name, role}]` 추가.
+  - `PATCH /pages/:id/restriction` body 에 `groups` 배열 합류 — mode+members+groups
+    원자 교체(트랜잭션에 `pageRestrictionGroup` deleteMany+createMany 추가). 모드만
+    변경(members/groups 미지정) + 모드 변경 시 개인·그룹 둘 다 초기화. NONE 모드는 전부
+    비움, EDIT 모드는 그룹 role=EDIT 강제. 그룹 존재 검증(없으면 400).
+  - 그룹 선택은 L7 의 `GET /groups`(인증 디렉터리) 재사용 — 신규 엔드포인트 없음.
+- **FE(`RestrictButton`)**: 제한 다이얼로그 EDIT/VIEW_EDIT 영역에 '허용 그룹' 섹션 추가
+  (그룹 선택 드롭다운=`GET /api/groups`, 이미 추가된 그룹 제외, VIEW_EDIT 는 역할 선택,
+  '그룹' 배지·역할 표시·× 제거). 기존 draft→'적용' 원자 흐름에 `draftGroups` 합류,
+  isDirty/모드전환 초기화에 그룹 포함. `types.ts` 에 `PageRestrictionGroup` +
+  `PageRestrictionState.groups` 추가.
+- **테스트(+14, 회귀 방어)**:
+  - `space-permission.service.spec.ts` — assertCanViewPage `build()` 에
+    `pageRestrictionGroup.findMany` 빈 배열 모킹(**기존 VIEW_EDIT 제한 테스트 전부 통과
+    = 개인 제한 불변**) + L7-2 결합 9분기(그룹 EDIT→편집 OK, 비멤버 403, 그룹 VIEW만→
+    편집 403, 개인 VIEW+그룹 EDIT→max=EDIT, 작성자·공간관리자·전역 ADMIN 우회 불변 3건,
+    VIEW_EDIT 그룹 VIEW→보기 OK, 비멤버 보기 403).
+  - `pages.service.spec.ts` — `updateRestrictionMode` 그룹 5분기(모드 변경 시 개인+그룹
+    초기화, 그룹 원자 교체+존재검증, 그룹 404→400, EDIT 모드 role=EDIT 강제, NONE 모드
+    그룹 제외).
+- **검증**: api `tsc` EXIT 0, web `tsc` EXIT 0, `nest build` EXIT 0, jest **287 passed
+  (26 suites)**(L7 273 + 제한그룹 결합 9 + updateRestrictionMode 5). 마이그레이션은
+  `prisma generate` + `prisma validate` 통과 + SQL 정적 검증(로컬 Postgres 미가동 →
+  `migrate deploy` 미수행, VM 배포 시 자동 적용).
+- **남은 일**:
+  - L7-2 VM 검증: ① '편집 제한'+그룹(EDIT) → 그룹 멤버 편집 가능·비멤버 보기만,
+    ② '보기+편집 제한'+그룹(VIEW) → 그룹 멤버 보기만·그룹 밖 페이지 403, ③ 모드 변경 시
+    그룹 멤버십 초기화, ④ 제한 없는·개인 제한만 쓰는 페이지 변화 없음(회귀).
+  - L8(Keycloak 그룹 동기화) — L6 에서 `source=KEYCLOAK` 보호 가드 선반영 완료 → 동기화
+    로직만 추가.
+- **비고**: L7(공간) 과 동일하게 판정 결합을 단일 헬퍼(`effectivePageRestrictionRole`)에
+  모아 회귀 표면 최소화. 개인 EDIT 면 그룹 조회 생략(쿼리 절약). 마이그레이션은 신규
+  테이블 1(enum 재사용·기존 테이블 무변경) → 본 사이클 배포는 그룹 미연결 페이지에 영향 0.

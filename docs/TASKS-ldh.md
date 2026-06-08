@@ -80,7 +80,7 @@
 - **범위**: 기존 3계층 권한(전역 role(48) / 스페이스 멤버십·공개범위(74-A) /
   페이지 제한(83))의 enforcement 빈틈을 닫고, 개인 단위뿐인 권한 부여를
   그룹(부서/팀) 단위로 확장한다.
-- **상태**: 🟢 Active (L5·L5-2·L6·L7 ✅ — 그룹이 스페이스 권한에 결합, 다음은 L7-2/L8)
+- **상태**: 🟢 Active (L5·L5-2·L6·L7·L7-2 ✅ — 그룹이 스페이스+페이지 권한에 결합, 다음은 L8)
 - **하위 사이클**:
   - **L5** — 권한 가드 구멍 보강: 무인증 쓰기(🔴4) + 데이터 누수 읽기(🟠10) 폐쇄
     + `assertCanViewPage` 프리미티브. ✅ Done
@@ -91,7 +91,9 @@
     (CRUD·멤버, KEYCLOAK 보호 가드). 권한 판정 영향 없음(그릇만). ✅ Done
   - **L7** — 스페이스 권한에 그룹 적용. `SpaceMemberGroup` + `loadAccess` max 결합
     (개인∪그룹, 높은 쪽 승리, **deny 없음**) + 공간 권한 탭 그룹 섹션. ✅ Done
-  - **L7-2** — 페이지 단위 제한(83)에 그룹 적용(PageRestriction 그룹 버전). 📝 Planned
+  - **L7-2** — 페이지 단위 제한(83)에 그룹 적용. `PageRestrictionGroup` +
+    `effectivePageRestrictionRole` max 결합(개인∪그룹, EDIT>VIEW, **deny 없음**) +
+    제한 다이얼로그 '허용 그룹' 섹션. ✅ Done
   - **L8** — Keycloak 그룹 동기화. 📝 Planned
 - **진척**:
   - **Cycle L5 (2026-06-05) ✅** — apps/api 전수 인벤토리(18 컨트롤러 ~70 라우트) 후
@@ -116,15 +118,27 @@
     PRIVATE 가지 추가. 그룹 권한 부여 API(공간 manage) + `GET /groups` 디렉터리 + 공간
     권한 탭 '그룹' 섹션. 기존 개인 권한 동작 불변(canX 회귀 테스트 전부 통과). api/web
     tsc·nest build EXIT 0, jest 273 passed(26 suites). 상세는 `docs/CYCLES-ldh.md` Cycle L7.
+  - **Cycle L7-2 (2026-06-08) ✅** — 페이지 단위 제한↔그룹 결합. 마이그레이션 1건
+    (page_restriction_groups, enum 재사용). 판정 단일 헬퍼 `effectivePageRestrictionRole`
+    = max(개인 PageRestriction, 소속 그룹 PageRestrictionGroup) → assertCanEditPage/
+    assertCanViewPageRestriction 가 호출. 작성자/공간관리자/전역 ADMIN 우회 불변. 제한
+    PATCH 에 groups 원자 합류(모드 변경 시 초기화, EDIT=role EDIT 강제) + GET 응답 groups.
+    제한 다이얼로그 '허용 그룹' 섹션(GET /groups 재사용). 기존 개인 제한 동작 불변(제한
+    테스트 전부 통과). api/web tsc·nest build EXIT 0, jest 287 passed(26 suites). 상세는
+    `docs/CYCLES-ldh.md` Cycle L7-2.
 - **남은 일**:
-  - L7 VM 검증 — 아래 시나리오 ①~④.
-  - L7-2(페이지 제한 그룹 적용) 구현, L8(Keycloak 동기화) 설계.
-- **L7 VM 검증 시나리오**:
-  - ① 비공개 공간에 "개발1팀"을 편집자로 부여 → 그 그룹 멤버(개인 권한 없는 사용자)가 편집 가능.
-  - ② 그룹에서 그 사용자를 빼거나 공간에서 그룹 권한 제거 → 접근 불가.
-  - ③ 개인 편집자를 그룹 뷰어로도 묶어도 편집 유지(max — 그룹이 강등 못 함).
-  - ④ 개인 권한만으로 운영되던 공간은 변화 없음(회귀).
+  - L7-2 VM 검증 — 아래 시나리오 ①~④.
+  - L8(Keycloak 그룹 동기화) 설계·구현 — L6 의 KEYCLOAK 보호 가드 선반영 활용.
+- **L7-2 VM 검증 시나리오**:
+  - ① "편집 제한" + 그룹(EDIT) → 그룹 멤버가 편집 가능, 비멤버는 보기만.
+  - ② "보기+편집 제한" + 그룹(VIEW) → 그룹 멤버는 보기만, 그룹 밖은 페이지 403.
+  - ③ 모드 변경 시 그룹 멤버십도 초기화(개인 멤버와 함께).
+  - ④ 제한 없는·개인 제한만 쓰는 페이지는 변화 없음(회귀).
 - **검증 완료(VM)**:
+  - **L7(2026-06-05~06)** — ① 비공개 공간에 그룹을 편집자로 부여 → 그룹 멤버(개인 권한
+    없는 사용자) 편집 가능, ② 그룹/그룹권한 제거 → 접근 불가, ③ 개인 편집자+그룹 뷰어 →
+    편집 유지(max, 그룹이 강등 못 함), ④ 개인 권한만 쓰던 공간 변화 없음(회귀) — 전부 합격.
+    → L7 시나리오 ①~④ 종결.
   - **L6(2026-06-05)** — admin 그룹 탭에서 그룹 생성·멤버 추가/제거·삭제 확인,
     localtest(DEVELOPER)의 /admin 접근 차단 유지, 기존 기능 무영향 확인. → L6 시나리오 종결.
   - **L5(2026-06-05)** — ④⑥ UI 확인(비멤버의 활동 피드·휴지통에 비공개 항목 미노출 +
