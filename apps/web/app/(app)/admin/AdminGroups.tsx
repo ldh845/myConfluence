@@ -6,16 +6,28 @@ import UserSearchCombobox from "@/components/UserSearchCombobox";
 
 // Cycle L6 (feature/ldh) — 관리자 '그룹' 탭. AdminUsers 패턴 재사용.
 //   그룹 CRUD + 멤버 추가/제거. 권한 판정 연결은 L7 예고(여기선 '그릇'만).
-//   source=KEYCLOAK 그룹은 수정·멤버 편집 비활성(서버도 403). 현재는 전부 로컬.
+//   Cycle L10 followup — 자동 관리 그룹(KEYCLOAK·DEPARTMENT)은 수정·멤버 편집 비활성
+//   (서버도 403). LOCAL 만 편집 가능. 유형 배지로 3종 구분.
+
+type GroupSource = "LOCAL" | "KEYCLOAK" | "DEPARTMENT";
 
 type Group = {
   id: string;
   name: string;
   description: string | null;
-  source: "LOCAL" | "KEYCLOAK";
+  source: GroupSource;
   memberCount: number;
   createdAt: string;
 };
+
+// Cycle L10 followup — 외부가 멤버십을 관리하는 그룹(LOCAL 아님)은 DocSpace 에서 잠금.
+function managedNote(source: GroupSource): string | null {
+  if (source === "KEYCLOAK")
+    return "Keycloak 에서 동기화된 그룹입니다. 멤버는 Keycloak 에서 관리됩니다.";
+  if (source === "DEPARTMENT")
+    return "부서(department) 기준으로 자동 관리되는 그룹입니다. 멤버는 로그인 시 부서 정보로 자동 배정됩니다.";
+  return null;
+}
 
 type GroupMember = {
   id: string;
@@ -77,7 +89,7 @@ export default function AdminGroups() {
         <p className="font-semibold mb-1">그룹(부서/팀) 관리</p>
         <p className="text-[#42526e]">
           사용자를 그룹으로 묶어 둡니다. 그룹을 공간 권한·페이지 제한에 부여하는
-          기능은 다음 단계에서 제공됩니다. Keycloak 에서 동기화된 그룹은 여기서
+          기능은 다음 단계에서 제공됩니다. Keycloak·부서 자동 그룹은 여기서
           수정할 수 없습니다.
         </p>
       </div>
@@ -116,7 +128,8 @@ export default function AdminGroups() {
             </thead>
             <tbody>
               {data.map((g) => {
-                const isKc = g.source === "KEYCLOAK";
+                const note = managedNote(g.source); // LOCAL 이면 null
+                const isManaged = note !== null;
                 return (
                   <tr key={g.id} className="border-t border-[#dfe1e6]">
                     <td className="px-3 py-2 text-[#172b4d]">
@@ -143,10 +156,10 @@ export default function AdminGroups() {
                         <button
                           type="button"
                           onClick={() => onDelete(g)}
-                          disabled={isKc || remove.isPending}
+                          disabled={isManaged || remove.isPending}
                           title={
-                            isKc
-                              ? "Keycloak 동기화 그룹은 삭제할 수 없습니다"
+                            isManaged
+                              ? "자동 관리 그룹은 삭제할 수 없습니다"
                               : undefined
                           }
                           className="px-2 py-1 text-[12px] rounded border border-[#ffbdad] text-[#bf2600] hover:bg-[#ffebe6] disabled:opacity-40 disabled:cursor-not-allowed"
@@ -184,17 +197,15 @@ export default function AdminGroups() {
   );
 }
 
-function SourceBadge({ source }: { source: "LOCAL" | "KEYCLOAK" }) {
-  const isKc = source === "KEYCLOAK";
-  return (
-    <span
-      className={`px-2 py-0.5 rounded text-[11px] ${
-        isKc ? "bg-[#deebff] text-[#0747a6]" : "bg-[#e3fcef] text-[#006644]"
-      }`}
-    >
-      {isKc ? "Keycloak" : "로컬"}
-    </span>
-  );
+// Cycle L10 followup — 유형 배지 3종. DEPARTMENT 가 "로컬" 로 오표시되던 버그 수정.
+function SourceBadge({ source }: { source: GroupSource }) {
+  const meta: Record<GroupSource, { label: string; cls: string }> = {
+    LOCAL: { label: "로컬", cls: "bg-[#e3fcef] text-[#006644]" },
+    KEYCLOAK: { label: "Keycloak", cls: "bg-[#deebff] text-[#0747a6]" },
+    DEPARTMENT: { label: "부서", cls: "bg-[#eae6ff] text-[#5243aa]" },
+  };
+  const { label, cls } = meta[source];
+  return <span className={`px-2 py-0.5 rounded text-[11px] ${cls}`}>{label}</span>;
 }
 
 function GroupMembersPanel({
@@ -207,7 +218,9 @@ function GroupMembersPanel({
   onChanged: () => void;
 }) {
   const queryClient = useQueryClient();
-  const isKc = group.source === "KEYCLOAK";
+  // Cycle L10 followup — 자동 관리 그룹(KEYCLOAK·DEPARTMENT)은 멤버 편집 잠금.
+  const note = managedNote(group.source);
+  const isManaged = note !== null;
   const [showAdd, setShowAdd] = useState(false);
 
   const { data, isLoading } = useQuery<GroupMember[]>({
@@ -277,13 +290,13 @@ function GroupMembersPanel({
         </button>
       </div>
 
-      {isKc && (
+      {note && (
         <p className="text-[12px] text-[#974f0c] bg-[#fffae6] border border-[#ffe380] rounded px-3 py-2">
-          Keycloak 에서 동기화된 그룹입니다. 멤버는 Keycloak 에서 관리됩니다.
+          {note}
         </p>
       )}
 
-      {!isKc && (
+      {!isManaged && (
         <div className="relative inline-block">
           <button
             type="button"
@@ -332,7 +345,7 @@ function GroupMembersPanel({
                     </span>
                   )}
                 </span>
-                {!isKc && (
+                {!isManaged && (
                   <button
                     type="button"
                     onClick={() => removeMember.mutate(m.id)}

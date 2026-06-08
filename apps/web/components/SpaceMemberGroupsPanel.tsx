@@ -13,7 +13,7 @@ type GroupGrant = {
   group: {
     id: string;
     name: string;
-    source: "LOCAL" | "KEYCLOAK";
+    source: "LOCAL" | "KEYCLOAK" | "DEPARTMENT";
     _count: { members: number };
   };
 };
@@ -21,7 +21,7 @@ type GroupGrant = {
 type GroupOption = {
   id: string;
   name: string;
-  source: "LOCAL" | "KEYCLOAK";
+  source: "LOCAL" | "KEYCLOAK" | "DEPARTMENT";
 };
 
 const ROLES: SpaceRole[] = ["ADMIN", "EDITOR", "VIEWER"];
@@ -126,7 +126,11 @@ export default function SpaceMemberGroupsPanel({
           {options.map((g) => (
             <option key={g.id} value={g.id}>
               {g.name}
-              {g.source === "KEYCLOAK" ? " (Keycloak)" : ""}
+              {g.source === "KEYCLOAK"
+                ? " (Keycloak)"
+                : g.source === "DEPARTMENT"
+                  ? " (부서)"
+                  : ""}
             </option>
           ))}
         </select>
@@ -176,6 +180,9 @@ export default function SpaceMemberGroupsPanel({
                     <span className="text-[11px] text-[#0747a6] ml-2">
                       Keycloak
                     </span>
+                  )}
+                  {g.group.source === "DEPARTMENT" && (
+                    <span className="text-[11px] text-[#5243aa] ml-2">부서</span>
                   )}
                 </td>
                 <td className="text-[#6b778c]">{g.group._count.members}</td>
