@@ -4,6 +4,7 @@ import {
   HttpException,
   HttpStatus,
   Injectable,
+  Logger,
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
@@ -45,6 +46,8 @@ export type AuthUser = {
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
@@ -212,6 +215,7 @@ export class AuthService {
   // Cycle L2 (feature/ldh) — 기존 사용자가 비활성(isActive=false)이면 로그인 거부
   //   (ForbiddenException). 신규 생성 사용자는 default 활성이므로 통과.
   //   컨트롤러(OidcController.callback)가 이를 잡아 /login?error=account_disabled 로 redirect.
+  // Cycle L8 (feature/ldh) — claims.groups 로 Keycloak 그룹 멤버십도 매 로그인 동기화.
   async findOrCreateOidcUser(claims: {
     sub: string;
     username: string;
@@ -219,6 +223,7 @@ export class AuthService {
     emailVerified?: boolean;
     name?: string;
     realmRoles?: string[];
+    groups?: string[];
   }): Promise<AuthUser> {
     // Prisma Role enum 과 호환되도록 명시 narrow.
     const role: 'ADMIN' | 'DEVELOPER' = (claims.realmRoles ?? []).includes(
@@ -235,6 +240,8 @@ export class AuthService {
       lastLoginAt: new Date(),
     };
 
+    // 계정 해석(sub 우선 → username 링크 → 신규 생성). 비활성이면 분기 안에서 throw.
+    let user: Parameters<AuthService['sanitize']>[0];
     const bySub = await this.prisma.user.findUnique({
       where: { keycloakId: claims.sub },
     });
@@ -242,37 +249,122 @@ export class AuthService {
       if (!bySub.isActive) {
         throw new ForbiddenException({ error: 'account disabled' });
       }
-      const updated = await this.prisma.user.update({
+      user = await this.prisma.user.update({
         where: { id: bySub.id },
         data: syncData,
       });
-      return this.sanitize(updated);
-    }
-
-    const byUsername = await this.prisma.user.findUnique({
-      where: { username: claims.username },
-    });
-    if (byUsername) {
-      if (!byUsername.isActive) {
-        throw new ForbiddenException({ error: 'account disabled' });
-      }
-      const linked = await this.prisma.user.update({
-        where: { id: byUsername.id },
-        data: { keycloakId: claims.sub, ...syncData },
+    } else {
+      const byUsername = await this.prisma.user.findUnique({
+        where: { username: claims.username },
       });
-      return this.sanitize(linked);
+      if (byUsername) {
+        if (!byUsername.isActive) {
+          throw new ForbiddenException({ error: 'account disabled' });
+        }
+        user = await this.prisma.user.update({
+          where: { id: byUsername.id },
+          data: { keycloakId: claims.sub, ...syncData },
+        });
+      } else {
+        user = await this.prisma.user.create({
+          data: {
+            username: claims.username,
+            keycloakId: claims.sub,
+            name: claims.name ?? claims.username,
+            department: '',
+            ...syncData,
+          },
+        });
+      }
     }
 
-    const created = await this.prisma.user.create({
-      data: {
-        username: claims.username,
-        keycloakId: claims.sub,
-        name: claims.name ?? claims.username,
-        department: '',
-        ...syncData,
-      },
+    // Cycle L8 — 그룹 동기화. best-effort: 실패가 로그인을 막지 않게 에러만 로깅.
+    //   claim 미설정(undefined)이면 스킵 → 기존 멤버십 보존.
+    if (claims.groups !== undefined) {
+      try {
+        await this.syncKeycloakGroups(user.id, claims.groups);
+      } catch (err) {
+        this.logger.error(
+          `Keycloak 그룹 동기화 실패 (user=${user.username}) — 로그인은 계속`,
+          err instanceof Error ? err.stack : String(err),
+        );
+      }
+    }
+
+    return this.sanitize(user);
+  }
+
+  // Cycle L8 (feature/ldh) — Keycloak 그룹 멤버십을 claim 집합으로 정렬한다.
+  //   규칙:
+  //   - 그룹명 upsert: 없으면 source=KEYCLOAK 로 생성. 단 **동명 LOCAL 그룹이 있으면
+  //     스킵 + 경고**(LOCAL 그룹을 KEYCLOAK 으로 전환하거나 멤버를 주입하지 않는다).
+  //   - 사용자의 **KEYCLOAK source 멤버십만** claim 집합과 일치하도록 추가/제거.
+  //     LOCAL 멤버십은 절대 건드리지 않는다(수동 관리 불가침).
+  //   - 멤버십 추가/제거는 단일 트랜잭션. 빈 배열이면 KEYCLOAK 멤버십 전부 제거.
+  private async syncKeycloakGroups(
+    userId: string,
+    groupNames: string[],
+  ): Promise<void> {
+    // 정규화: trim + 빈 문자열 제거 + 중복 제거.
+    const desiredNames = [
+      ...new Set(groupNames.map((n) => n.trim()).filter((n) => n.length > 0)),
+    ];
+
+    // 그룹명 → KEYCLOAK 그룹 id 해석(LOCAL 동명은 스킵).
+    const desiredGroupIds: string[] = [];
+    for (const name of desiredNames) {
+      const existing = await this.prisma.group.findUnique({ where: { name } });
+      if (existing) {
+        if (existing.source === 'LOCAL') {
+          this.logger.warn(
+            `Keycloak 그룹 '${name}' 동기화 스킵 — 동명 LOCAL 그룹 존재(보호).`,
+          );
+          continue;
+        }
+        desiredGroupIds.push(existing.id);
+      } else {
+        // 동시 로그인 경쟁으로 unique 충돌 시: 재조회로 복구(best-effort).
+        try {
+          const created = await this.prisma.group.create({
+            data: { name, source: 'KEYCLOAK' },
+          });
+          desiredGroupIds.push(created.id);
+        } catch {
+          const again = await this.prisma.group.findUnique({ where: { name } });
+          if (again && again.source === 'KEYCLOAK') desiredGroupIds.push(again.id);
+        }
+      }
+    }
+
+    // 현재 사용자의 KEYCLOAK source 멤버십만 조회(LOCAL 은 제외 → 불가침).
+    const currentKc = await this.prisma.groupMember.findMany({
+      where: { userId, group: { source: 'KEYCLOAK' } },
+      select: { groupId: true },
     });
-    return this.sanitize(created);
+    const currentIds = new Set(currentKc.map((m) => m.groupId));
+    const desiredIds = new Set(desiredGroupIds);
+
+    const toAdd = [...desiredIds].filter((id) => !currentIds.has(id));
+    const toRemove = [...currentIds].filter((id) => !desiredIds.has(id));
+
+    if (toAdd.length === 0 && toRemove.length === 0) return;
+
+    await this.prisma.$transaction([
+      ...(toRemove.length > 0
+        ? [
+            this.prisma.groupMember.deleteMany({
+              where: { userId, groupId: { in: toRemove } },
+            }),
+          ]
+        : []),
+      ...(toAdd.length > 0
+        ? [
+            this.prisma.groupMember.createMany({
+              data: toAdd.map((groupId) => ({ groupId, userId })),
+            }),
+          ]
+        : []),
+    ]);
   }
 
   // Cycle 43 — OIDC callback 에서 자체 JWT(docspace_session) 발급에 재사용.

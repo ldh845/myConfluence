@@ -24,6 +24,10 @@ export type OidcClaims = {
   // `realm_access.roles` 에서 추출. ADMIN 권한의 source of truth — 매 로그인마다
   // findOrCreateOidcUser 가 DocSpace User.role 을 이 값으로 동기화한다.
   realmRoles?: string[];
+  // Cycle L8 (feature/ldh) — Keycloak 그룹 멤버십(예: ["dev-team1"]). group-membership
+  //   매퍼의 `groups` claim 에서 추출. 매 로그인마다 KEYCLOAK source 그룹 멤버십을 이
+  //   집합으로 정렬(추가/제거)한다. claim 자체가 없으면(undefined) 동기화 스킵.
+  groups?: string[];
 };
 
 @Injectable()
@@ -118,6 +122,15 @@ export class OidcService {
     const realmRoles = Array.isArray(realmAccess?.roles)
       ? (realmAccess.roles as string[])
       : undefined;
+    // Cycle L8 — `groups` claim(group-membership 매퍼). full.path=false 라 보통 bare
+    //   이름이지만, 경로형("/dev-team1")으로 와도 안전하게 선행 "/" 를 제거한다.
+    //   claim 미설정이면 undefined 유지 → 동기화 스킵(기존 멤버십 보존).
+    const rawGroups = c.groups as unknown;
+    const groups = Array.isArray(rawGroups)
+      ? rawGroups
+          .filter((g): g is string => typeof g === 'string')
+          .map((g) => (g.startsWith('/') ? g.slice(1) : g))
+      : undefined;
     return {
       claims: {
         sub: c.sub,
@@ -126,6 +139,7 @@ export class OidcService {
         emailVerified: c.email_verified as boolean | undefined,
         name: c.name,
         realmRoles,
+        groups,
       },
       idToken: tokenSet.id_token,
     };

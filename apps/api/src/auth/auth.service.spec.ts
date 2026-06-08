@@ -4,6 +4,7 @@ import {
   BadRequestException,
   HttpException,
   HttpStatus,
+  Logger,
   UnauthorizedException,
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
@@ -279,5 +280,153 @@ describe('AuthService', () => {
       ).rejects.toThrow(BadRequestException);
       expect(prismaMock.user.update).not.toHaveBeenCalled();
     });
+  });
+});
+
+// Cycle L8 (feature/ldh) — findOrCreateOidcUser 의 Keycloak 그룹 동기화.
+//   규칙: undefined→스킵 / []→KEYCLOAK 멤버십 전부 제거 / 그룹명 upsert(KEYCLOAK) /
+//   동명 LOCAL 스킵 / LOCAL 멤버십 불가침 / 동기화 실패해도 로그인 성공(best-effort).
+describe('AuthService — Keycloak 그룹 동기화 (Cycle L8)', () => {
+  let service: AuthService;
+  let prismaMock: {
+    user: { findUnique: jest.Mock; update: jest.Mock; create: jest.Mock };
+    group: { findUnique: jest.Mock; create: jest.Mock };
+    groupMember: {
+      findMany: jest.Mock;
+      createMany: jest.Mock;
+      deleteMany: jest.Mock;
+    };
+    $transaction: jest.Mock;
+  };
+
+  // sanitize 가 요구하는 전체 필드를 갖춘 활성 사용자(매핑은 bySub 경로로 진입).
+  const ACTIVE = {
+    id: 'u1',
+    username: 'testuser2',
+    name: 'Test User2',
+    department: '',
+    role: 'DEVELOPER',
+    createdAt: new Date('2026-01-01'),
+    isActive: true,
+    passwordHash: null,
+    keycloakId: 'sub-2',
+    showPersonalSpaceInSidebar: false,
+  };
+
+  beforeEach(async () => {
+    prismaMock = {
+      user: {
+        findUnique: jest.fn().mockResolvedValue(ACTIVE), // bySub 히트
+        update: jest.fn().mockResolvedValue(ACTIVE),
+        create: jest.fn(),
+      },
+      group: { findUnique: jest.fn(), create: jest.fn() },
+      groupMember: {
+        findMany: jest.fn().mockResolvedValue([]),
+        createMany: jest.fn(),
+        deleteMany: jest.fn(),
+      },
+      $transaction: jest.fn().mockResolvedValue([]),
+    };
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        AuthService,
+        { provide: PrismaService, useValue: prismaMock },
+        { provide: JwtService, useValue: { sign: jest.fn() } },
+      ],
+    }).compile();
+    service = module.get<AuthService>(AuthService);
+    // 로그 노이즈 억제(경고/에러는 동작 검증으로 대체).
+    jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+  });
+
+  const call = (groups?: string[]) =>
+    service.findOrCreateOidcUser({ sub: 'sub-2', username: 'testuser2', groups });
+
+  it('claim 그룹이 없으면(undefined) 동기화 스킵 — 멤버십 보존', async () => {
+    await call(undefined);
+    expect(prismaMock.group.findUnique).not.toHaveBeenCalled();
+    expect(prismaMock.groupMember.findMany).not.toHaveBeenCalled();
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('미존재 그룹은 source=KEYCLOAK 로 자동 생성 + 멤버십 추가', async () => {
+    prismaMock.group.findUnique.mockResolvedValue(null);
+    prismaMock.group.create.mockResolvedValue({
+      id: 'g1',
+      name: 'dev-team1',
+      source: 'KEYCLOAK',
+    });
+    await call(['dev-team1']);
+    expect(prismaMock.group.create).toHaveBeenCalledWith({
+      data: { name: 'dev-team1', source: 'KEYCLOAK' },
+    });
+    expect(prismaMock.groupMember.createMany).toHaveBeenCalledWith({
+      data: [{ groupId: 'g1', userId: 'u1' }],
+    });
+  });
+
+  it('KEYCLOAK 멤버십을 claim 집합과 정렬(추가+제거 동시)', async () => {
+    // 기존 KEYCLOAK 멤버십 g-old, claim 은 dev-team1(=g1, 기존 KEYCLOAK 그룹).
+    prismaMock.groupMember.findMany.mockResolvedValue([{ groupId: 'g-old' }]);
+    prismaMock.group.findUnique.mockResolvedValue({
+      id: 'g1',
+      name: 'dev-team1',
+      source: 'KEYCLOAK',
+    });
+    await call(['dev-team1']);
+    expect(prismaMock.group.create).not.toHaveBeenCalled();
+    expect(prismaMock.groupMember.deleteMany).toHaveBeenCalledWith({
+      where: { userId: 'u1', groupId: { in: ['g-old'] } },
+    });
+    expect(prismaMock.groupMember.createMany).toHaveBeenCalledWith({
+      data: [{ groupId: 'g1', userId: 'u1' }],
+    });
+  });
+
+  it('빈 배열([]) → KEYCLOAK 멤버십 전부 제거', async () => {
+    prismaMock.groupMember.findMany.mockResolvedValue([
+      { groupId: 'g-a' },
+      { groupId: 'g-b' },
+    ]);
+    await call([]);
+    expect(prismaMock.groupMember.deleteMany).toHaveBeenCalledWith({
+      where: { userId: 'u1', groupId: { in: ['g-a', 'g-b'] } },
+    });
+    expect(prismaMock.groupMember.createMany).not.toHaveBeenCalled();
+  });
+
+  it('동명 LOCAL 그룹은 스킵 — 생성·멤버 주입 안 함', async () => {
+    prismaMock.group.findUnique.mockResolvedValue({
+      id: 'gL',
+      name: '개발1팀',
+      source: 'LOCAL',
+    });
+    await call(['개발1팀']);
+    expect(prismaMock.group.create).not.toHaveBeenCalled();
+    expect(prismaMock.groupMember.createMany).not.toHaveBeenCalled();
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('현재 멤버십 조회는 KEYCLOAK source 만(LOCAL 불가침)', async () => {
+    prismaMock.group.findUnique.mockResolvedValue(null);
+    prismaMock.group.create.mockResolvedValue({
+      id: 'g1',
+      name: 'dev-team1',
+      source: 'KEYCLOAK',
+    });
+    await call(['dev-team1']);
+    expect(prismaMock.groupMember.findMany).toHaveBeenCalledWith({
+      where: { userId: 'u1', group: { source: 'KEYCLOAK' } },
+      select: { groupId: true },
+    });
+  });
+
+  it('동기화가 실패해도 로그인은 성공(best-effort)', async () => {
+    prismaMock.group.findUnique.mockRejectedValue(new Error('db down'));
+    const user = await call(['dev-team1']);
+    expect(user.username).toBe('testuser2');
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
   });
 });
