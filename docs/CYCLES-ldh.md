@@ -633,3 +633,64 @@
   이번에 testuser2 를 시드로 영구화 — 이후 recreate 부터 안 사라짐. 기존 세션은 쿠키 삭제
   후 재로그인. L6 의 KEYCLOAK source 보호 가드(수정·삭제·멤버 편집 403)가 L8 동기화 그룹을
   관리자 오조작으로부터 보호 — 선반영이 그대로 적중.
+
+---
+
+## Cycle L9 — 2026-06-08 — ✅ Done (접근 권한 역산 API · effective-access)
+- **제목**: Task L-AUTHZ 후속 — "이 공간/페이지 누가 볼 수 있지?" 역방향 조회 API
+- **카테고리**: BE only / 인가 (마이그레이션 없음). 조회 화면 FE 는 L9-2 로 분리.
+- **커밋**: `5e677b2`(코드), 본 CYCLES-ldh.md
+- **배경**: 기존 권한은 "이 사용자가 이 자원에 접근되나?"(사용자→예/아니오) 방향뿐
+  (canView/canEdit/loadAccess). 역방향 — "이 자원에 접근 가능한 사람 전부와 경로" — 가
+  없어 관리자가 권한 감사("누가 볼 수 있지")를 할 수 없었다. L9 가 그 역산을 만든다.
+- **엔드포인트(2)**:
+  - `GET /spaces/:id/effective-access` — 공간 접근자 목록.
+  - `GET /pages/:id/effective-access` — 페이지 접근자 목록(제한 반영).
+  - 둘 다 게이트 = 공간 `canManage`(공간 ADMIN) 또는 전역 ADMIN. 그 외 403, 없는 자원 404.
+  - limit/offset 페이지네이션(기본 50, 최대 200).
+- **공간 역산 규칙**:
+  - 개인 `SpaceMember` ∪ 공간 부여 그룹(`SpaceMemberGroup`) 멤버를 **사용자 단위로 합침**.
+    같은 사용자가 개인+그룹이면 `via` 둘 다, `role` 은 max(판정과 동일 규칙).
+  - 소유자(PERSONAL)는 `via: ['owner']`. 전역 ADMIN 은 개별 나열 대신 `globalAdmins:{count}`.
+  - **PUBLIC 공간**은 전체 사용자 덤프를 피해 `{ everyone: true }` 플래그.
+- **페이지 역산 규칙**:
+  - `NONE`/`EDIT` → 보기 무제한이라 공간 결과와 동일(PUBLIC 은 everyone). 각 사용자에
+    `pageRole`(EDIT/VIEW) 부여 — EDIT 모드는 작성자/공간관리자/제한 EDIT 멤버만 편집.
+  - `VIEW_EDIT` → **공간 접근자 ∩ 제한 통과자**(개인 `PageRestriction` ∪ 그룹
+    `PageRestrictionGroup`(L7-2) ∪ 작성자/공간관리자 우회). 항상 좁혀짐(everyone 불가).
+    우회 경로는 `restrictionVia`(author/space-manager/personal/group)로 표기.
+- **성능**: 그룹 멤버 **N+1 금지** — 관련 그룹 id 를 모아 `groupMember.findMany({groupId:{in}})`
+  단일 조회 후 메모리 병합. 제한 그룹도 동일.
+- **일관성**: `SpacePermissionService.maxSpaceRole` 공개해 판정과 같은 max 규칙 공유.
+  effective-access 가 "접근됨"이라 목록의 사용자로 실제 `canView` 를 호출해도 참(단위
+  테스트로 회귀 고정).
+- **응답 스키마(예시)**:
+  ```json
+  // GET /spaces/:id/effective-access (PRIVATE)
+  {
+    "everyone": false,
+    "users": [
+      { "userId": "u1", "username": "kim", "name": "김개발", "department": "플랫폼",
+        "role": "EDITOR",
+        "via": ["personal", { "group": { "id": "g1", "name": "dev-team1" } }] }
+    ],
+    "total": 1, "limit": 50, "offset": 0,
+    "globalAdmins": { "count": 2 }
+  }
+  // PUBLIC 공간: { "everyone": true, "globalAdmins": { "count": 2 } }
+  // GET /pages/:id/effective-access (VIEW_EDIT) — users[] 항목에 추가:
+  //   "pageRole": "VIEW", "restrictionVia": ["personal"]
+  ```
+- **테스트(+12, `effective-access.service.spec.ts`)**: 개인만 / 그룹만 / 개인+그룹 겹침
+  (via 둘·max) / PERSONAL 소유자 / PUBLIC everyone / 비관리자 403 / 전역 ADMIN 별도 /
+  NONE 동일 / 404 / VIEW_EDIT 좁힘(uOther 제외·작성자 우회·VIEW 멤버 보기만) / 그룹 제한
+  멤버 포함(L7-2) / 일관성(목록 사용자 canView 참).
+- **검증**: api `tsc` EXIT 0, `nest build` EXIT 0, jest **306 passed (27 suites)**
+  (L8 294 + effective-access 12). 마이그레이션 없음(기존 스키마 재사용).
+- **남은 일**:
+  - L9 VM 검증(콘솔 fetch): admin 콘솔에서 비공개 공간 effective-access → 개인+그룹
+    멤버가 via 와 함께, 페이지 제한(VIEW_EDIT) 건 페이지는 좁혀지는지, localtest 호출 시 403.
+  - L9-2(접근 권한 조회 화면 FE) 구현.
+- **비고**: BE 단독 사이클(FE L9-2 분리). 조회 전용 — 어떤 쓰기/판정도 바꾸지 않아
+  기존 동작 영향 0. `EffectiveAccessService`/`EffectiveAccessModule`(spaces) 신설,
+  spaces·pages 컨트롤러가 주입해 각자의 `:id/effective-access` 라우트 제공.

@@ -12,7 +12,7 @@
   직접 수행한다. 별도 테이블 없이 기존 `User.passwordHash`(nullable)·
   `keycloakId`(nullable)·`role` 을 재활용한다. 로컬 로그인은 환경변수 플래그
   `LOCAL_LOGIN_ENABLED` 로 on/off.
-- **상태**: 🟡 Maintenance (L1·L2·L3 검증 완료, L4 코드 완료 — L4 VM 검증만 대기)
+- **상태**: 🟡 Maintenance (L1~L4 + L4 followup 구현·VM 검증 완료 — 2026-06-05)
 - **하위 사이클**:
   - **L1** — 로컬 로그인 BE(`POST /auth/login`, bcrypt → 기존 `issueToken`/
     `docspace_session` 재사용) + 로그인 화면 ID/PW 폼 + 관리자 '로컬 비번
@@ -60,12 +60,12 @@
     전역 미들웨어로 `Cache-Control: no-store` 부착(파일 다운로드 2경로 제외). api만 변경,
     마이그레이션 없음. api tsc·nest build EXIT 0, jest 201 passed(19 suites).
     상세는 `docs/CYCLES-ldh.md` Cycle L4 followup.
-- **남은 일**: L4 followup VM 검증만 —
-  - ⑩ 역할 변경이 재로그인 없이 **최초부터** 즉시 반영되는지,
-  - ⑪ `/api/auth/me` 응답 헤더 `Cache-Control: no-store` 확인,
-  - ⑫ 본문 이미지 페이지 새로고침 시 이미지 캐시 로드(성능 저하 없음) 확인.
+- **남은 일**: 없음 — Task L-AUTH 종료.
   - (L4 감사 로그(역할 변경 이력)는 ActivityLog 페이지/공간 중심 한계로 deferred.)
 - **검증 완료(VM)**:
+  - L4 followup(2026-06-05) — ⑩ 역할 변경이 재로그인 없이 최초부터 즉시 반영 / ⑪
+    `/api/auth/me` 응답 `Cache-Control: no-store` / ⑫ 본문 이미지 새로고침 캐시 로드(성능
+    저하 없음) 전부 확인. → L4 followup 시나리오 ⑩~⑫ 종결.
   - L1·L2(2026-06-04)·L3(2026-06-04~05) — 약한 비번 거부 / 5회 오답 잠김 / admin 잠금
     해제 / 셀프 비번 변경 / 순수 SSO 계정(admin·testuser2) 변경 메뉴 미노출 + 계정 유형
     3종(로컬·혼합·SSO) 메뉴 노출 매트릭스까지 전부 확인.
@@ -80,7 +80,7 @@
 - **범위**: 기존 3계층 권한(전역 role(48) / 스페이스 멤버십·공개범위(74-A) /
   페이지 제한(83))의 enforcement 빈틈을 닫고, 개인 단위뿐인 권한 부여를
   그룹(부서/팀) 단위로 확장한다.
-- **상태**: 🟡 Maintenance (L5·L5-2·L6·L7·L7-2·L8 ✅ — Task L-AUTHZ 구현 완료, VM 검증만 잔여)
+- **상태**: 🟡 Maintenance (L5~L8 ✅ 구현 완료 + L9(접근 권한 역산 API) ✅ — L9-2 조회 화면만 남음)
 - **하위 사이클**:
   - **L5** — 권한 가드 구멍 보강: 무인증 쓰기(🔴4) + 데이터 누수 읽기(🟠10) 폐쇄
     + `assertCanViewPage` 프리미티브. ✅ Done
@@ -96,6 +96,9 @@
     제한 다이얼로그 '허용 그룹' 섹션. ✅ Done
   - **L8** — Keycloak 그룹 동기화(OIDC 로그인 시 KEYCLOAK 멤버십 정렬, LOCAL 불가침,
     best-effort). ✅ Done
+  - **L9** — 접근 권한 역산 API(effective-access): 공간/페이지를 볼 수 있는 사용자
+    전부+경로(via)·유효 역할. 개인∪그룹 합침, PUBLIC everyone, 전역 ADMIN 별도. BE only. ✅ Done
+  - **L9-2** — 접근 권한 조회 화면(FE). 📝 Planned
 - **진척**:
   - **Cycle L5 (2026-06-05) ✅** — apps/api 전수 인벤토리(18 컨트롤러 ~70 라우트) 후
     보안 핵심 14곳 폐쇄: 무가드 쓰기(첨부 업로드/삭제, 다이어그램 수정/삭제) +
@@ -133,9 +136,16 @@
     로그인 시 KEYCLOAK source 멤버십을 claim 집합과 정렬(undefined 스킵, [] 전부 제거,
     그룹명 upsert, 동명 LOCAL 스킵, LOCAL 멤버십 불가침, 트랜잭션+best-effort). api tsc·
     nest build EXIT 0, jest 294 passed(26 suites). 상세는 `docs/CYCLES-ldh.md` Cycle L8.
+  - **Cycle L9 (2026-06-08) ✅** — 접근 권한 역산 API(BE only). GET /spaces|pages/:id/
+    effective-access — 개인 SpaceMember ∪ 그룹 SpaceMemberGroup(공간) / PageRestriction ∪
+    PageRestrictionGroup(페이지, VIEW_EDIT 좁힘)을 사용자 단위 합침(via·role max). PUBLIC
+    everyone, 전역 ADMIN globalAdmins:{count}, 작성자/공간관리자 우회 via 표기. 게이트=공간
+    canManage/전역 ADMIN. N+1 없음, 마이그레이션 없음. 판정과 동일 max 규칙 공유(일관성
+    테스트). api tsc·nest build EXIT 0, jest 306 passed(27 suites). 상세는
+    `docs/CYCLES-ldh.md` Cycle L9.
 - **남은 일**:
-  - L8 VM 검증 — 아래 시나리오 ①~④.
-  - (Task L-AUTHZ 구현 종료 — 이후는 유지보수.)
+  - L9 VM 검증(콘솔 fetch) — 아래 시나리오 ①~③.
+  - L9-2(접근 권한 조회 화면 FE) 구현.
 - **L7-2 VM 검증 시나리오**:
   - ① "편집 제한" + 그룹(EDIT) → 그룹 멤버가 편집 가능, 비멤버는 보기만.
   - ② "보기+편집 제한" + 그룹(VIEW) → 그룹 멤버는 보기만, 그룹 밖은 페이지 403.
@@ -147,7 +157,18 @@
   - ② dev-team1 에 공간 편집자 부여 → testuser2 편집 가능.
   - ③ LOCAL 그룹(개발1팀) 멤버십은 로그인 후에도 그대로(불가침).
   - ④ 로컬 로그인(localtest)은 그룹 변화 없음.
+- **L9 VM 검증 시나리오(콘솔 fetch)**:
+  - ① admin 콘솔에서 비공개 공간 `GET /api/spaces/:id/effective-access` → 개인+그룹 멤버가
+    via 와 함께(겹치면 via 둘·role max), 전역 ADMIN 은 globalAdmins.count 로.
+  - ② 제한(VIEW_EDIT) 건 페이지 `GET /api/pages/:id/effective-access` → 공간 접근자보다
+    좁혀지고 제한 멤버/작성자/공간관리자만 남는지.
+  - ③ localtest(비관리자)로 호출 시 403.
 - **검증 완료(VM)**:
+  - **L8(2026-06-08)** — ① testuser2 SSO 로그인 시 dev-team1 이 KEYCLOAK 배지로 자동 생성
+    + testuser2 멤버(편집 컨트롤 비활성), ② dev-team1 에 공간 편집자 부여 → testuser2 편집
+    가능(PRIVATE 공간 확인), ③ LOCAL 그룹 멤버십 로그인 후에도 그대로, ④ 로컬 로그인 그룹
+    변화 없음 — 전부 합격. ※ 검증 중 "뷰어인데 편집됨" 혼선은 PUBLIC 공간이 로그인 사용자
+    누구나 편집 가능한 설계 때문이었고 PRIVATE 공간으로 재확인해 해소. → L8 시나리오 ①~④ 종결.
   - **L7-2(2026-06-08)** — "편집 제한"+그룹(EDIT) 부여 → 그룹 멤버 편집 가능·비멤버
     보기만, 모드 변경 시 그룹 멤버십 초기화, 제한 없는·개인 제한만 쓰는 페이지 변화
     없음(회귀) — 전부 합격. ※ 검증 중 "제한이 안 걸린다" 혼선은 작성자/공간관리자/전역
