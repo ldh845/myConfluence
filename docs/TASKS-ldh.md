@@ -80,7 +80,7 @@
 - **범위**: 기존 3계층 권한(전역 role(48) / 스페이스 멤버십·공개범위(74-A) /
   페이지 제한(83))의 enforcement 빈틈을 닫고, 개인 단위뿐인 권한 부여를
   그룹(부서/팀) 단위로 확장한다.
-- **상태**: 🟡 Maintenance (L5~L8 ✅ 구현 완료 + L9(접근 권한 역산 API) ✅ — L9-2 조회 화면만 남음)
+- **상태**: 🟡 Maintenance (L5~L10 ✅ 구현 완료 — FE 화면(L9-2 조회 / L10-2 매핑)만 남음)
 - **하위 사이클**:
   - **L5** — 권한 가드 구멍 보강: 무인증 쓰기(🔴4) + 데이터 누수 읽기(🟠10) 폐쇄
     + `assertCanViewPage` 프리미티브. ✅ Done
@@ -99,6 +99,9 @@
   - **L9** — 접근 권한 역산 API(effective-access): 공간/페이지를 볼 수 있는 사용자
     전부+경로(via)·유효 역할. 개인∪그룹 합침, PUBLIC everyone, 전역 ADMIN 별도. BE only. ✅ Done
   - **L9-2** — 접근 권한 조회 화면(FE). 📝 Planned
+  - **L10** — 부서 자동 권한: department(User.department) → 그룹 자동 배정(로그인 시,
+    source=DEPARTMENT) + 공간 생성 기본 정책(생성자 부서 그룹 EDITOR 자동 부여). BE only. ✅ Done
+  - **L10-2** — 부서↔그룹 매핑 관리 + 일괄 매핑 화면(FE). 📝 Planned
 - **진척**:
   - **Cycle L5 (2026-06-05) ✅** — apps/api 전수 인벤토리(18 컨트롤러 ~70 라우트) 후
     보안 핵심 14곳 폐쇄: 무가드 쓰기(첨부 업로드/삭제, 다이어그램 수정/삭제) +
@@ -143,9 +146,18 @@
     canManage/전역 ADMIN. N+1 없음, 마이그레이션 없음. 판정과 동일 max 규칙 공유(일관성
     테스트). api tsc·nest build EXIT 0, jest 306 passed(27 suites). 상세는
     `docs/CYCLES-ldh.md` Cycle L9.
+  - **Cycle L10 (2026-06-08) ✅** — 부서 자동 권한(BE only). 마이그레이션 1건
+    (GroupSource.DEPARTMENT + department_group_mappings). DepartmentGroupService 신설:
+    부서명→그룹 해석(매핑 우선→동명→DEPARTMENT 생성) + 로그인 시 DEPARTMENT 멤버십을 현
+    부서로 정렬(LOCAL 불가침, 동명 KEYCLOAK 은 L8 폴백 스킵). oidc/auth 가 department claim
+    추출→User.department 갱신→부서 그룹 동기화(L8 다음, best-effort), localLogin 도 동일.
+    공간 생성 applyDepartmentDefault(기본 true)로 생성자 부서 그룹 EDITOR 부여. L6 가드를
+    DEPARTMENT 까지 확장(수동 편집 잠금). realm 시드에 department 매퍼+속성. api tsc·nest
+    build EXIT 0, jest 321 passed(28 suites). 상세는 `docs/CYCLES-ldh.md` Cycle L10.
 - **남은 일**:
-  - L9 VM 검증(콘솔 fetch) — 아래 시나리오 ①~③.
+  - L10 VM 검증 — 아래 시나리오 ①~④.
   - L9-2(접근 권한 조회 화면 FE) 구현.
+  - L10-2(부서↔그룹 매핑/일괄 매핑 화면 FE) 구현.
 - **L7-2 VM 검증 시나리오**:
   - ① "편집 제한" + 그룹(EDIT) → 그룹 멤버가 편집 가능, 비멤버는 보기만.
   - ② "보기+편집 제한" + 그룹(VIEW) → 그룹 멤버는 보기만, 그룹 밖은 페이지 403.
@@ -163,7 +175,17 @@
   - ② 제한(VIEW_EDIT) 건 페이지 `GET /api/pages/:id/effective-access` → 공간 접근자보다
     좁혀지고 제한 멤버/작성자/공간관리자만 남는지.
   - ③ localtest(비관리자)로 호출 시 403.
+- **L10 VM 검증 시나리오**:
+  - ① department 있는 계정(testuser2) SSO 로그인 → 그룹 탭에 부서 그룹("플랫폼")이
+    DEPARTMENT 배지로 자동 생성 + 멤버 자동 배정(수동 편집 비활성).
+  - ② 그 부서 그룹에 공간 권한 부여 → 부서원 자동 접근.
+  - ③ 새 공간 생성(기본 옵션) → 생성자 부서 그룹이 편집자로 자동 등록.
+  - ④ LOCAL 그룹 멤버십·기존 동작 영향 없음.
 - **검증 완료(VM)**:
+  - **L9(2026-06-08, 콘솔 fetch)** — ① 비공개 공간 effective-access → 개인+그룹 멤버가
+    via·role max 와 함께, 전역 ADMIN 은 globalAdmins.count 로 정상 반환, ② VIEW_EDIT 제한
+    페이지 effective-access → 공간보다 좁혀져 제한 통과자만, ③ localtest(비관리자) 403 —
+    전부 합격. → L9 시나리오 ①~③ 종결.
   - **L8(2026-06-08)** — ① testuser2 SSO 로그인 시 dev-team1 이 KEYCLOAK 배지로 자동 생성
     + testuser2 멤버(편집 컨트롤 비활성), ② dev-team1 에 공간 편집자 부여 → testuser2 편집
     가능(PRIVATE 공간 확인), ③ LOCAL 그룹 멤버십 로그인 후에도 그대로, ④ 로컬 로그인 그룹

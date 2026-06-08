@@ -694,3 +694,61 @@
 - **비고**: BE 단독 사이클(FE L9-2 분리). 조회 전용 — 어떤 쓰기/판정도 바꾸지 않아
   기존 동작 영향 0. `EffectiveAccessService`/`EffectiveAccessModule`(spaces) 신설,
   spaces·pages 컨트롤러가 주입해 각자의 `:id/effective-access` 라우트 제공.
+
+---
+
+## Cycle L10 — 2026-06-08 — ✅ Done (부서 자동 권한 · department → 그룹 자동 배정)
+- **제목**: Task L-AUTHZ 후속 — department 기준 그룹 자동 배정 + 공간 생성 기본 정책
+- **카테고리**: BE only + infra(realm 시드) / 인가 (마이그레이션 1건). 매핑·일괄 화면 FE 는 L10-2.
+- **커밋**: `7dc63fb`(코드), 본 CYCLES-ldh.md
+- **배경**: 그룹(L6)·그룹 권한(L7/L7-2)·Keycloak 동기화(L8)는 됐으나 멤버십·공간 권한을
+  admin 이 수동 연결해야 했다. 직원이 많으면 운영 불가. L10 은 department 기준 자동 배정으로
+  admin 수작업을 0 에 가깝게. AFS 가 부서를 그룹으로 주면 L8 이, 속성(department)으로만
+  주면 L10 이 폴백.
+- **DB(마이그레이션 1건 `20260608000000_department_groups`)**:
+  - `GroupSource` enum 에 `DEPARTMENT` 추가(수동 편집 잠금 대상).
+  - `DepartmentGroupMapping`(@@map `department_group_mappings`): department(PK) → groupId,
+    FK Cascade. 부서명↔그룹 표기 차이 등록(옵션). 매핑 없으면 동명 그룹 자동 처리.
+  - 기존 Group/GroupMember/SpaceMemberGroup 무변경.
+- **`DepartmentGroupService`(신규, `src/department/`)** — 부서 자동 배정 단일 출처:
+  - `resolveOrCreateDepartmentGroup(부서명)`: 매핑 우선 → 동명 그룹 → 없으면 `source=DEPARTMENT`
+    생성(동시 로그인 경쟁 시 재조회 복구). 빈 부서명이면 null.
+  - `syncUserDepartmentGroup(userId, dept)`: 부서 없음(undefined/'') → 스킵(보존). 현 부서
+    그룹이 DEPARTMENT 면 멤버십 보장(idempotent), 동명 LOCAL 이면 스킵+경고(불가침),
+    KEYCLOAK 이면 L8 폴백으로 스킵. 현 부서가 아닌 DEPARTMENT 멤버십은 제거(부서 변경
+    대응). LOCAL/KEYCLOAK 불가침. `AdminModule`↔`AuthModule` 순환을 피해 독립 모듈.
+- **로그인 연동(`oidc.service`/`auth.service`)**:
+  - `oidc.service`: `department` claim 추출(user-attribute 매퍼). 미설정이면 undefined → 스킵.
+  - `findOrCreateOidcUser`: department claim 있으면 `User.department` 캐시 갱신(없으면 보존),
+    신규 생성도 claim 값 사용. L8 그룹 동기화 **다음**에 `syncDepartmentGroupBestEffort`
+    호출(우선순위: 그룹 claim 먼저, department 폴백). best-effort(실패해도 로그인 유지).
+  - `localLogin`: 성공 시 동일하게 부서 그룹 동기화(부서 있으면).
+- **공간 생성 기본 정책(`spaces.service.create`)**: `CreateSpaceDto.applyDepartmentDefault`
+  (기본 true). true + 생성자 department 있으면 생성자 부서 그룹을 그 공간에 `SpaceMemberGroup`
+  EDITOR 로 자동 부여(upsert, idempotent). 생성자는 기존대로 공간 ADMIN 멤버. department
+  없으면 무동작. best-effort(부여 실패가 공간 생성을 무효화하지 않음).
+- **L6 가드 확장(`groups.service.loadLocal`)**: KEYCLOAK 에 더해 **DEPARTMENT 도** 수동 편집
+  잠금(`source !== 'LOCAL'` → 403). 둘 다 외부 출처가 멤버십을 관리하므로 손대면 다음
+  로그인에 덮어쓰여진다.
+- **infra(realm 시드)**: docspace-web 에 `department` user-attribute 매퍼
+  (`oidc-usermodel-attribute-mapper`, user.attribute/claim.name `department`) + testuser/
+  testuser2 에 `attributes.department = ["플랫폼"]`.
+- **테스트(+15)**: `department-group.service.spec`(10) — 해석(매핑/동명/생성/빈값) + 동기화
+  (undefined 스킵, DEPARTMENT 생성+멤버십+정리, LOCAL 스킵, KEYCLOAK 폴백 스킵, 변경 없음
+  no-op). `spaces.service.spec`(3) — 공간 생성 부서 그룹 EDITOR 부여 / 옵션 off 무동작 /
+  department 없음 무동작. `auth.service.spec`(2) — department claim → User.department 갱신 +
+  부서 동기화 호출 / claim 없으면 department 키 없음(보존).
+- **검증**: api `tsc` EXIT 0, `nest build` EXIT 0, jest **321 passed (28 suites)**
+  (L9 306 + L10 15). realm JSON node 파싱+매퍼/속성 구조 확인. 마이그레이션은 `prisma generate`
+  + `prisma validate`(valid 🚀) + SQL 정적 검증(로컬 Postgres 미가동 → `migrate deploy`
+  미수행, VM 배포 시 자동 적용).
+- **남은 일**:
+  - L10 VM 검증: ① department 있는 계정(testuser2) SSO 로그인 → 그룹 탭에 부서 그룹이
+    DEPARTMENT 배지로 자동 생성 + 멤버 자동 배정, ② 그 부서 그룹에 공간 권한 부여 → 부서원
+    자동 접근, ③ 새 공간 생성(기본 옵션) → 생성자 부서 그룹 편집자 자동 등록, ④ LOCAL 영향 없음.
+  - L10-2(부서↔그룹 매핑/일괄 매핑 화면 FE).
+- **비고**: ⚠️ **배포 2단계** — (1) api 변경 → VM 풀빌드, (2) realm JSON 변경 →
+  `sudo docker compose up -d --force-recreate keycloak`(일반 up -d 로는 재import 안 됨).
+  force-recreate 는 런타임 Keycloak 계정을 초기화하나 testuser2 등은 시드로 영구(L8). 기존
+  세션은 쿠키 삭제 후 재로그인. L8(그룹 claim)과 L10(department)은 source 가 달라 충돌 없음 —
+  부서가 그룹으로도 오면 KEYCLOAK 이 이기고 L10 은 스킵.
