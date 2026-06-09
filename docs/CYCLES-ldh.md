@@ -971,3 +971,33 @@
 - **비고**: 배포는 **VM 풀빌드 필수**(새 의존성 — `--no-build`/`--no-deps` 금지). 교훈:
   workspace 에 패키지 추가 시 lockfile 의 해당 항목에 `resolved`/`integrity` 가 박혔는지
   확인할 것(누락 시 npm ci 가 조용히 스킵 → 런타임에서야 터진다).
+
+---
+
+## Cycle L-API-4 followup — 2026-06-09 — ✅ Done (Swagger 노출을 ENABLE_API_DOCS 플래그로)
+- **제목**: OpenAPI 노출 게이트를 `NODE_ENV` → 전용 플래그 `ENABLE_API_DOCS` 로 분리
+- **카테고리**: BE(부트스트랩/설정) + 문서 / 마이그레이션 없음
+- **커밋**: `51bc875`(코드: main.ts + .env.example), 본 CYCLES-ldh.md + docs/MCP-INTEGRATION.md
+- **배경/원인**: L-API-4 는 `/api/docs(-json)` 노출을 `NODE_ENV !== 'production'` 으로 게이트.
+  그런데 현 VM 은 "테스트 서버"인데 `NODE_ENV=production`(Dockerfile 런타임 기본)이라 명세가
+  404 로 막혔다. `NODE_ENV` 를 내리면 NestJS 의 로깅·에러 상세·최적화 등 다른 동작까지
+  바뀌므로, **명세 노출만 전용 플래그로 분리**해 테스트 서버는 production 을 유지한 채
+  명세만 켜고, 실운영(AFS)은 플래그를 꺼서 차단한다.
+- **변경**: `main.ts` 의 swagger setup 게이트 `process.env.NODE_ENV !== 'production'` →
+  **`process.env.ENABLE_API_DOCS === 'true'`**. 플래그가 'true' 일 때만 `SwaggerModule.setup`
+  (라우트 등록), 아니면 미등록 = 404. `NODE_ENV` 무관(production 이어도 켜짐).
+  **미설정/false = 비활성(기본 안전)** — 명시적으로 켜야만 열린다.
+- **설정 파일**: `apps/api/.env.example` 에 `ENABLE_API_DOCS=false` + 주석(개발/테스트만 true,
+  실운영 false/미설정). `docs/MCP-INTEGRATION.md` §6 명세 위치를 "ENABLE_API_DOCS=true 환경의
+  /api/docs" 로 갱신.
+- **검증**: api `tsc --noEmit` EXIT 0, `nest build` EXIT 0, jest **355 passed (31 suites)**
+  (회귀 0). 마이그레이션 없음. 런타임 노출은 VM 에서 플래그 on/off 로 확인.
+- **남은 일**:
+  - **VM 적용·검증**: ① 코드 배포(VM 풀빌드), ② **테스트 VM api env 에 `ENABLE_API_DOCS=true`
+    추가** — `docker-compose.override.yml` 의 `services.api.environment` 에 한 줄 추가 후
+    `docker compose up -d api`(재생성), ③ `/api/docs`(UI)·`/api/docs-json`(JSON) 열림 확인,
+    ④ 플래그 제거/false 로 두면 404 확인. ⑤ 실운영(AFS)은 플래그 미설정 → 차단 유지.
+  - (이전 단계) L-API-4 fix 의 api 컨테이너 Up(재시작 루프 해소)이 선행돼야 한다.
+- **비고**: 배포는 VM 풀빌드(코드 변경). 게이트가 **기본 비활성**이라, 코드만 배포하고 env 에
+  플래그를 안 넣으면 명세는 계속 닫혀 있다 — 테스트 VM 에서 명세를 보려면 env 추가가 필수.
+  실운영 안전이 기본값이라는 점이 NODE_ENV 게이트보다 명시적이고 의도가 분명하다.

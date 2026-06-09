@@ -104,7 +104,9 @@ MCP 가 본문을 텍스트로 다루려면 노드 트리에서 텍스트를 추
 
 ## 6. 기계가독 명세 (OpenAPI)
 
-비프로덕션 환경에서 Swagger 로 OpenAPI 명세를 노출한다(**운영에선 비활성**).
+`ENABLE_API_DOCS=true` 인 환경에서만 Swagger 로 OpenAPI 명세를 노출한다(미설정/false 면
+라우트 미등록 = 404). `NODE_ENV` 와 무관 — 테스트 서버가 `NODE_ENV=production` 이어도
+이 플래그만 켜면 열린다. **실운영(AFS)은 플래그를 꺼서(또는 미설정으로) 차단.**
 
 - **UI**: `GET /api/docs` — 엔드포인트 목록 + `Authorize` 버튼에 `dsp_` 토큰을 넣고 바로
   호출 테스트.
