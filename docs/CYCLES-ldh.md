@@ -888,3 +888,49 @@
   - (후속) 리소스별 세분화 스코프, MCP 서버 인증 연동.
 - **비고**: 배포는 **마이그레이션 포함 → VM 풀빌드**(`--no-build` 금지). 전역 인터셉터는
   스코프 enforcement 전용·토큰 경로에만 작동하는 additive 추가라 기존 라우트/가드 무영향.
+
+---
+
+## Cycle L-API-4 — 2026-06-09 — ✅ Done (OpenAPI(Swagger) 명세 + MCP 연동 가이드, BE+문서)
+- **제목**: OpenAPI(Swagger) 기계가독 명세 + `docs/MCP-INTEGRATION.md` (사내 MCP 개발 지원)
+- **카테고리**: BE(데코레이터·부트스트랩) + 문서 / 마이그레이션 없음
+- **커밋**: `9b87b3b`(코드), 본 CYCLES-ldh.md + docs/MCP-INTEGRATION.md
+- **배경**: 사내 팀이 DocSpace 용 MCP 서버 개발 예정. 받아주는 쪽(토큰 L-API-1, 스코프
+  L-API-3, 기존 REST)은 갖췄으니, 그 팀이 보고 만들 **기계가독 명세(OpenAPI)** + 토큰 가이드 제공.
+- **OpenAPI(Swagger)**:
+  - `@nestjs/swagger`(11.4.4) 도입. `main.ts` 에서 `DocumentBuilder` + `SwaggerModule.setup`
+    으로 `api/docs`(UI) + `api/docs-json`(raw OpenAPI JSON) 노출. `addBearerAuth({type:http,
+    scheme:bearer}, 'api-token')` 로 Bearer 스킴 등록 → Authorize 에 dsp_ 토큰 넣고 바로 호출.
+  - **⚠️ 노출 게이트(보고)**: `process.env.NODE_ENV !== 'production'` 일 때만 `setup` 호출.
+    운영에선 **라우트 자체가 등록되지 않아** /api/docs·/api/docs-json 이 404 → 명세 유출·
+    표면 확대 없음. (env 기반 + 핸들러 미등록 = 가장 단순·확실한 차단.)
+  - **경로 결정**: API 는 `setGlobalPrefix` 없는 bare 라우팅(웹이 `/api/* → api/*` 프록시).
+    Swagger 를 NestJS `api/docs`/`api/docs-json` 에 직접 올려 **API 서버 직접 접속 시 경로가
+    그대로 `/api/docs`, `/api/docs-json`** 이 되게 했다(UI 의 spec fetch 도 동일 오리진에서
+    정상). MCP 가 실제로 쓰는 건 raw JSON(`/api/docs-json`) — 단일 GET 이라 프록시로도 무난.
+- **데코레이터(전체 아님, 연동 핵심만)**:
+  - `auth`: `GET /auth/me`(@ApiBearerAuth, 토큰/쿠키 스모크용) + `auth-tokens`: `POST
+    /auth/tokens`(쿠키 전용·평문 1회·scope 설명).
+  - `spaces`: 목록. `pages`: 목록 / `full-search`(@ApiQuery q·limit·offset) / 단건 / 생성.
+  - 클래스 레벨 `@ApiTags` + 데이터 컨트롤러엔 `@ApiBearerAuth('api-token')`. 본문(content)
+    = ProseMirror JSON 주석 명시.
+  - 데코레이터는 **런타임 불변** — 가드/핸들러/권한 동작에 영향 0(기존 355 회귀 안전).
+- **문서(`docs/MCP-INTEGRATION.md` 신규)**: 인증(토큰 발급 쿠키 필요·평문 1회·Bearer 호출),
+  스코프(READ 쓰기 403 / READ_WRITE, 읽기 도구엔 READ 권장), 권한(토큰=발급자 권한 승계 →
+  MCP 전용 계정+적정 권한 권장), 핵심 엔드포인트 표(검색/페이지/스페이스), ⚠️ 본문 ProseMirror
+  JSON(텍스트로 다루려면 변환 필요, 이번엔 변환 엔드포인트 미제공), 명세 위치(비프로덕션
+  /api/docs·/api/docs-json).
+- **검증**: api `tsc --noEmit` EXIT 0, `nest build` EXIT 0, jest **355 passed (31 suites)**
+  (회귀 0 — 데코레이터 런타임 불변). 마이그레이션 없음. Bearer 스킴 생성은 `DocumentBuilder`
+  단독 실행으로 확인(`securitySchemes.api-token = {scheme:bearer, type:http}`). **런타임
+  /api/docs(-json) 덤프는 부트 시 Prisma `$connect` 필요 → 로컬 Postgres 미가동으로 미수행**,
+  VM(DB 가동)에서 확인.
+- **남은 일**:
+  - **L-API-4 VM 검증**(비프로덕션): ① `GET /api/docs` → 엔드포인트 목록 + Authorize(Bearer)
+    로 dsp_ 토큰 넣고 호출, ② `GET /api/docs-json` → OpenAPI JSON(보안 스킴 api-token·태그
+    auth/spaces/pages 포함), ③ `NODE_ENV=production` 부팅 시 두 경로 404 확인.
+  - (후속) **미니 MCP 스모크 테스트**: docs-json 으로 실제 MCP 서버 1개 띄워 검색/조회 왕복.
+    필요 시 ProseMirror→텍스트 변환 엔드포인트 검토.
+  - L-API-2(토큰 발급/관리 화면 FE).
+- **비고**: 배포는 VM 풀빌드(마이그레이션 없음). 운영 노출 차단은 `NODE_ENV=production` 전제 —
+  VM/운영 env 에 NODE_ENV=production 설정돼 있어야 게이트가 닫힌다(배포 env 점검 권장).
