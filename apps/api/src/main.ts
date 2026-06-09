@@ -18,9 +18,11 @@ async function bootstrap() {
   );
 
   // Cycle L-API-4 (feature/ldh) — OpenAPI(Swagger) 명세. 사내 MCP/외부 연동 개발 지원.
-  //   API 는 setGlobalPrefix 없는 bare 라우팅이라, 웹 프록시(/api/* → api/*)와 무관하게
-  //   API 서버에 직접 'api/docs'(UI) + 'api/docs-json'(raw) 로 올린다 → 직접 접속 시
-  //   경로가 그대로 /api/docs, /api/docs-json. Bearer 스킴('api-token')으로 Authorize 에
+  //   API 는 setGlobalPrefix 없는 bare 라우팅(/auth/me 식)이고, 프록시(nginx/Next)는
+  //   `/api/` prefix 를 떼고 api 로 전달한다(nginx `location /api/ { proxy_pass .../; }`).
+  //   따라서 Swagger 도 api 기준 **'docs'(/docs) + '/docs-json'** 로 등록한다(Cycle L-API-4
+  //   followup 2). 그러면 외부 브라우저 주소는 prefix-strip 으로 `/api/docs`·`/api/docs-json`
+  //   이 그대로 유지되며 api 의 /docs 로 매핑된다. Bearer 스킴('api-token')으로 Authorize 에
   //   dsp_ 토큰을 넣고 바로 호출 테스트 가능.
   //   ⚠️ 노출 게이트(Cycle L-API-4 followup): NODE_ENV 가 아니라 **전용 플래그
   //      ENABLE_API_DOCS === 'true'** 일 때만 setup → 라우트 등록(아니면 미등록 = 404).
@@ -48,8 +50,8 @@ async function bootstrap() {
       )
       .build();
     const document = SwaggerModule.createDocument(app, swaggerConfig);
-    SwaggerModule.setup('api/docs', app, document, {
-      jsonDocumentUrl: 'api/docs-json',
+    SwaggerModule.setup('docs', app, document, {
+      jsonDocumentUrl: 'docs-json',
       swaggerOptions: { persistAuthorization: true },
     });
   }
