@@ -13,6 +13,12 @@ import {
 } from '@nestjs/common';
 import type { Request } from 'express';
 import { PageStatus } from '@prisma/client';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiQuery,
+  ApiTags,
+} from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { OptionalJwtAuthGuard } from '../auth/optional-jwt-auth.guard';
 import { PagesService } from './pages.service';
@@ -57,6 +63,10 @@ function parseStatuses(raw?: string): Array<PageStatus | 'NONE'> | undefined {
   return list.length ? list : undefined;
 }
 
+// Cycle L-API-4 — OpenAPI 태그/Bearer. 토큰(dsp_) 또는 쿠키로 호출. 본문(content)은
+//   ProseMirror JSON(평문/마크다운 아님) — MCP 가 텍스트로 다루려면 변환 필요(가이드 참조).
+@ApiTags('pages')
+@ApiBearerAuth('api-token')
 @Controller('pages')
 export class PagesController {
   constructor(
@@ -68,6 +78,10 @@ export class PagesController {
   ) {}
 
   @Get()
+  @ApiOperation({
+    summary: '페이지 목록',
+    description: '접근 가능한 발행 페이지 목록. 토큰/쿠키의 가시성에 따라 필터링.',
+  })
   @UseGuards(OptionalJwtAuthGuard)
   findAll(@Req() req: Request) {
     return this.pages.findAll(userFromReq(req));
@@ -91,6 +105,11 @@ export class PagesController {
   }
 
   @Post()
+  @ApiOperation({
+    summary: '페이지 생성',
+    description:
+      '대상 스페이스 편집 권한 필요(READ 토큰은 403). 본문(content)은 ProseMirror JSON.',
+  })
   @UseGuards(JwtAuthGuard)
   async create(@Body() dto: CreatePageDto, @Req() req: Request) {
     // Cycle 74-A — 대상 스페이스 편집 권한 확인.
@@ -102,6 +121,13 @@ export class PagesController {
   // FR-091 (Cycle 15-3) — 스페이스/날짜 필터 + 정렬.
   // ⚠️ 모든 정적 path는 @Get(':id') 위에 선언.
   @Get('full-search')
+  @ApiOperation({
+    summary: '전문 검색',
+    description: '제목+본문 전문 검색(pg_trgm). 스페이스/작성자/날짜 필터·정렬 지원.',
+  })
+  @ApiQuery({ name: 'q', required: false, description: '검색어' })
+  @ApiQuery({ name: 'limit', required: false, description: '기본 20' })
+  @ApiQuery({ name: 'offset', required: false, description: '기본 0' })
   @UseGuards(OptionalJwtAuthGuard)
   fullSearch(
     @Req() req: Request,
@@ -205,6 +231,10 @@ export class PagesController {
   }
 
   @Get(':id')
+  @ApiOperation({
+    summary: '페이지 단건 조회',
+    description: '본문(content)은 ProseMirror JSON. 접근 권한 없으면 403/404.',
+  })
   @UseGuards(OptionalJwtAuthGuard)
   findOne(@Param('id') id: string, @Req() req: Request) {
     return this.pages.findOne(id, userFromReq(req));

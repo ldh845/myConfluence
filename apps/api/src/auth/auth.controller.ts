@@ -10,6 +10,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { CookieOptions, Request, Response } from 'express';
 import { AuthService, AuthUser } from './auth.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
@@ -30,6 +31,7 @@ import { ChangePasswordDto } from './dto/change-password.dto';
 // Cycle L2 followup (feature/ldh) — 전역 401 추방용 경량 세션 정리.
 //  POST  /auth/clear-session       — 세션 쿠키만 제거(인증 불요, SLO 미경유)
 
+@ApiTags('auth')
 @Controller('auth')
 export class AuthController {
   // OIDC 콜백(OidcController)과 동일한 세션 쿠키 옵션을 재사용해 두 경로가 같은
@@ -100,7 +102,14 @@ export class AuthController {
     return { user };
   }
 
+  // Cycle L-API-4 — 토큰/쿠키 인증 스모크에 쓰기 좋은 인증필수 GET(READ 토큰도 200).
   @Get('me')
+  @ApiBearerAuth('api-token')
+  @ApiOperation({
+    summary: '현재 사용자',
+    description:
+      'API 토큰(Bearer dsp_) 또는 세션 쿠키로 인증된 사용자. 토큰 스모크 테스트용 GET.',
+  })
   @UseGuards(JwtAuthGuard)
   me(@Req() req: Request): { user: AuthUser } {
     const user = (req as Request & { user?: AuthUser }).user;

@@ -11,6 +11,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import type { Request } from 'express';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { OptionalJwtAuthGuard } from '../auth/optional-jwt-auth.guard';
 import { SpacesService } from './spaces.service';
@@ -37,6 +38,9 @@ function userFromReq(
     : null;
 }
 
+// Cycle L-API-4 — OpenAPI 태그/Bearer. 토큰(dsp_) 또는 쿠키로 호출.
+@ApiTags('spaces')
+@ApiBearerAuth('api-token')
 @Controller('spaces')
 export class SpacesController {
   constructor(
@@ -62,6 +66,10 @@ export class SpacesController {
 
   // Cycle 32 — 인증 시 본인 개인 공간도 포함, 비인증이면 SITE만.
   @Get()
+  @ApiOperation({
+    summary: '스페이스 목록',
+    description: '접근 가능한 스페이스 목록(공개 + 멤버/그룹 권한 있는 비공개).',
+  })
   @UseGuards(OptionalJwtAuthGuard)
   findAll(@Req() req: Request) {
     return this.spaces.findAll(

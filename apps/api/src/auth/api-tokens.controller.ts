@@ -9,6 +9,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import type { Request } from 'express';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AuthUser } from './auth.service';
 import {
   ApiTokenService,
@@ -24,12 +25,19 @@ import { CreateApiTokenDto } from './dto/create-api-token.dto';
 //   POST   /auth/tokens      발급 → { ..., token(평문 1회) }
 //   GET    /auth/tokens      본인 목록(평문 없음)
 //   DELETE /auth/tokens/:id  폐기(즉시 무효)
+@ApiTags('auth-tokens')
 @Controller('auth/tokens')
 @UseGuards(CookieAuthGuard)
 export class ApiTokensController {
   constructor(private readonly apiTokens: ApiTokenService) {}
 
   @Post()
+  @ApiOperation({
+    summary: 'API 토큰 발급',
+    description:
+      '쿠키 세션(브라우저) 필요 — 토큰으로는 발급 불가. 평문 token 은 응답에 1회만. ' +
+      'scope: READ(읽기 전용) / READ_WRITE(기본). MCP 읽기 도구엔 READ 권장.',
+  })
   async create(
     @Req() req: Request,
     @Body() dto: CreateApiTokenDto,
