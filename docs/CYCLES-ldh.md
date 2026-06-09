@@ -1029,3 +1029,40 @@
 - **비고**: 배포는 VM 풀빌드. 이전(L-API-4)의 "api 직접 :3001/api/docs" 가정은 프록시 환경과
   안 맞았다 — bare 라우팅 + nginx prefix-strip 전제에선 등록 경로를 strip 後 경로(`/docs`)에
   맞추는 게 정답. 외부 주소(`/api/docs`)는 동일하게 유지된다.
+
+---
+
+## Cycle L-DOCS-1 — 2026-06-09 — ✅ Done (README/DEPLOY 현행 정합: L-AUTH/L-AUTHZ/L-API 반영)
+- **제목**: README.md / docs/DEPLOY.md 를 인증·권한·API 토큰·MCP 작업까지 현행 정합
+- **카테고리**: 문서 / 코드·마이그레이션 무관
+- **커밋**: 본 CYCLES-ldh.md + README.md + docs/DEPLOY.md (단일 docs 커밋)
+- **배경**: README(마지막 6ef8677)·DEPLOY(Cycle 46)가 stale — L-AUTH(하이브리드 인증)·
+  L-AUTHZ(그룹/부서 권한)·L-API(토큰·OpenAPI·MCP) 미반영. AFS 운영 이전 앞두고 운영자가
+  볼 문서라 정합 필요.
+- **갱신 정책(사용자 확정)**: ① DocSpace 전부 **사내망 전용**(외부 노출 없음). ②
+  `LOCAL_LOGIN_ENABLED` 운영 정책 미정 → "env on/off, 미정" 표기. ③ API 토큰 운영 켜둠.
+  ④ `ENABLE_API_DOCS` 사내망이라 켜둬도 무방, 단 "외부 노출 환경이면 끄라" 주의.
+- **README 갱신**: 주요 기능에 인증(SSO+로컬 병행·활성/비활성·비번정책·실패잠금·역할
+  ADMIN/DEVELOPER) 확장 + **권한**(3계층+그룹 max+부서 자동권한+역산 조회 API) + **프로그램
+  연동**(API 토큰·스코프·Bearer + OpenAPI `/api/docs`·`ENABLE_API_DOCS`) 신규 bullet.
+  환경변수에 `LOCAL_LOGIN_ENABLED`/`ENABLE_API_DOCS`(의미·기본 비활성). 관련 문서에
+  MCP-INTEGRATION.md + CYCLES-ldh.md/TASKS-ldh.md 링크. 운영·접속에 "사내망 전용" 명시.
+- **DEPLOY 갱신**: 신규 §3.13(인증·권한·API 토큰 운영) — 환경변수 표(LOCAL_LOGIN_ENABLED/
+  ENABLE_API_DOCS, 기본 비활성·사내망 켜둬도 무방/외부면 끄기) + **⚠️ Keycloak realm 변경 시
+  `docker compose up -d --force-recreate keycloak`**(import-realm 은 신규 realm 만 import →
+  일반 up -d 로 재import 안 됨, 재생성 시 KC 계정/세션 초기화·재로그인, admin/그룹/department
+  시드는 realm 에) + nginx `/api` prefix-strip ↔ bare 라우팅(Swagger /docs 등록 이유) + API
+  토큰 운영 메모(발급자 권한 승계·스코프 축소·MCP 전용 계정 권장). 끝에 §5 "TODO: AFS 입주"
+  자리(K8s manifest·Keycloak 실연동·시크릿 — 이번 범위 아님).
+- **코드 대조(grep 검증)**: `Role` enum(ADMIN/PART_LEADER/DEVELOPER/DESIGNER/PM, 관리 대상은
+  ADMIN/DEVELOPER — SetRoleDto `@IsIn(['ADMIN','DEVELOPER'])`) / realm 경로
+  `infra/keycloak/realm-docspace.json`(admin role·dev-team1/2·department 시드 확인) /
+  Keycloak `start-dev --import-realm`(docker-compose.yml) / nginx `location /api/ {
+  proxy_pass http://api:3001/; }`(deploy/nginx-stack.conf, 끝 슬래시 strip) /
+  `LOCAL_LOGIN_ENABLED`(config.get==='true', 기본 false) / `ENABLE_API_DOCS`(main.ts
+  process.env==='true') — 문서 표기와 모두 일치. **미구현 기능(이메일 알림 등) 미기재**
+  (멘션·인앱 알림 미구현은 README '알려진 한계'에 기존대로 유지).
+- **검증**: 문서만(코드·마이그레이션 무관). 환경변수명·경로·링크를 실제 코드와 grep 대조 완료.
+- **남은 일**: AFS 입주 시 DEPLOY §5 채우기(K8s manifest·Keycloak 실연동·시크릿).
+- **비고**: 공통 README/CYCLES.md/TASKS.md 가 아니라 README(루트)·DEPLOY 만 갱신. feature/ldh
+  로그는 CYCLES-ldh.md/TASKS-ldh.md 유지(공통 문서 불변).
