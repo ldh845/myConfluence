@@ -13,5 +13,9 @@ declare module 'express' {
       role: 'ADMIN' | 'PART_LEADER' | 'DEVELOPER' | 'DESIGNER' | 'PM';
       createdAt: Date;
     };
+    // Cycle L-API-3 (feature/ldh) — 토큰 인증 경로 표시. ApiTokenStrategy 가 채우고
+    // ApiTokenScopeInterceptor 가 READ 토큰의 쓰기 차단에 사용. 쿠키 인증은 미설정.
+    authVia?: 'cookie' | 'api-token';
+    tokenScope?: 'READ' | 'READ_WRITE';
   }
 }

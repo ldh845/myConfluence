@@ -3,6 +3,7 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { ApiTokenScope } from '@prisma/client';
 import { createHash, randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthService, AuthUser } from './auth.service';
@@ -16,6 +17,11 @@ import { AuthService, AuthUser } from './auth.service';
 //   - Bearer 평문 → sha256 → ApiToken 조회 → revokedAt null + 미만료 → 발급자 user.
 //   - 발급자가 비활성(isActive=false)이면 거부(L2 원칙 일관).
 //   - lastUsedAt 은 분 단위 throttle 로 갱신(매 요청 write 부담 회피).
+// Cycle L-API-3 (feature/ldh) — 토큰 스코프(READ / READ_WRITE). 발급 시 선택,
+//   기본 READ_WRITE. 인증 결과에 scope 를 실어 보내면 인터셉터가 쓰기를 막는다.
+//   스코프는 권한을 넓히지 않고 좁히기만 한다(주인 권한 위 상한선).
+
+export { ApiTokenScope };
 
 // 평문 토큰 접두. 사람이/로그에서 DocSpace 토큰임을 식별하고 시크릿 스캐너가
 // 패턴으로 잡을 수 있게 한다.
@@ -32,6 +38,7 @@ export type IssuedApiToken = {
   // 평문 — 이 응답에서만 단 1회. 재조회 불가.
   token: string;
   tokenPrefix: string;
+  scope: ApiTokenScope;
   expiresAt: Date | null;
   createdAt: Date;
 };
@@ -41,10 +48,17 @@ export type ApiTokenView = {
   id: string;
   name: string;
   tokenPrefix: string;
+  scope: ApiTokenScope;
   expiresAt: Date | null;
   lastUsedAt: Date | null;
   revokedAt: Date | null;
   createdAt: Date;
+};
+
+// 토큰 인증 성공 결과 — 발급자(주인) + 토큰 스코프. 인터셉터가 scope 로 쓰기를 판정.
+export type ApiTokenAuth = {
+  user: AuthUser;
+  scope: ApiTokenScope;
 };
 
 // admin 전체 목록 — 소유자 정보 동반.
@@ -78,11 +92,12 @@ export class ApiTokenService {
   }
 
   // 발급(본인). expiresInDays>0 이면 만료 설정, 아니면 무기한(null).
-  // 평문(token)은 이 반환값에서만 노출된다.
+  // scope 미지정이면 READ_WRITE(기존 동작 보존). 평문(token)은 이 반환값에서만 노출.
   async createForUser(
     userId: string,
     name: string,
     expiresInDays?: number,
+    scope: ApiTokenScope = ApiTokenScope.READ_WRITE,
   ): Promise<IssuedApiToken> {
     const { raw, tokenHash, tokenPrefix } = this.generate();
     const expiresAt =
@@ -90,13 +105,14 @@ export class ApiTokenService {
         ? new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000)
         : null;
     const rec = await this.prisma.apiToken.create({
-      data: { userId, name: name.trim(), tokenHash, tokenPrefix, expiresAt },
+      data: { userId, name: name.trim(), tokenHash, tokenPrefix, scope, expiresAt },
     });
     return {
       id: rec.id,
       name: rec.name,
       token: raw,
       tokenPrefix: rec.tokenPrefix,
+      scope: rec.scope,
       expiresAt: rec.expiresAt,
       createdAt: rec.createdAt,
     };
@@ -142,6 +158,7 @@ export class ApiTokenService {
       id: r.id,
       name: r.name,
       tokenPrefix: r.tokenPrefix,
+      scope: r.scope,
       expiresAt: r.expiresAt,
       lastUsedAt: r.lastUsedAt,
       revokedAt: r.revokedAt,
@@ -167,10 +184,11 @@ export class ApiTokenService {
     return { ok: true };
   }
 
-  // Bearer 평문 → 인증된 발급자(AuthUser) 또는 null(거부).
+  // Bearer 평문 → 인증된 발급자 + 토큰 스코프({ user, scope }) 또는 null(거부).
   //   거부 사유(미존재/폐기/만료/비활성)는 구분 없이 null 로 반환 → 정보 노출 최소화.
-  //   ApiTokenStrategy 가 이 결과로 success/fail 을 결정한다.
-  async authenticateToken(rawToken: string): Promise<AuthUser | null> {
+  //   ApiTokenStrategy 가 이 결과로 success/fail 을 결정하고, scope 를 req 에 실어
+  //   인터셉터가 쓰기를 막는다. 스코프는 권한을 넓히지 않는다(주인 권한 한도 유지).
+  async authenticateToken(rawToken: string): Promise<ApiTokenAuth | null> {
     if (!rawToken || !rawToken.startsWith(TOKEN_PREFIX)) return null;
     const tokenHash = this.hash(rawToken);
     const rec = await this.prisma.apiToken.findUnique({ where: { tokenHash } });
@@ -183,7 +201,7 @@ export class ApiTokenService {
     if (!user || !user.isActive) return null;
 
     await this.touchLastUsed(rec.id, rec.lastUsedAt);
-    return user;
+    return { user, scope: rec.scope };
   }
 
   // lastUsedAt throttle 갱신. 갱신 실패가 인증을 막지 않도록 best-effort.
@@ -214,6 +232,7 @@ export class ApiTokenService {
       id: true,
       name: true,
       tokenPrefix: true,
+      scope: true,
       expiresAt: true,
       lastUsedAt: true,
       revokedAt: true,

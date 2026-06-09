@@ -39,13 +39,23 @@ describe('ApiTokenStrategy.authenticate', () => {
     expect(authenticateToken).not.toHaveBeenCalled();
   });
 
-  it('유효 토큰 → success(주인)', async () => {
+  it('유효 토큰 → success(주인) + req 에 authVia/tokenScope 표시', async () => {
     const user = { id: 'u1', role: 'ADMIN' };
-    const { s, success, fail, authenticateToken } = make(user);
-    await s.authenticate(bearer('dsp_ok') as never);
+    const { s, success, fail, authenticateToken } = make({
+      user,
+      scope: 'READ',
+    });
+    const req = bearer('dsp_ok') as Req & {
+      authVia?: string;
+      tokenScope?: string;
+    };
+    await s.authenticate(req as never);
     expect(authenticateToken).toHaveBeenCalledWith('dsp_ok');
     expect(success).toHaveBeenCalledWith(user);
     expect(fail).not.toHaveBeenCalled();
+    // 인터셉터가 읽을 표식.
+    expect(req.authVia).toBe('api-token');
+    expect(req.tokenScope).toBe('READ');
   });
 
   it('서비스가 null(무효/폐기/만료) → fail', async () => {

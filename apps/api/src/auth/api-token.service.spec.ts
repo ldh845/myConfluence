@@ -51,6 +51,7 @@ describe('ApiTokenService — createForUser (발급)', () => {
             name: data.name,
             tokenHash: data.tokenHash,
             tokenPrefix: data.tokenPrefix,
+            scope: data.scope,
             expiresAt: data.expiresAt,
             createdAt: new Date('2026-06-09'),
           }),
@@ -95,6 +96,27 @@ describe('ApiTokenService — createForUser (발급)', () => {
     const ms = issued.expiresAt!.getTime();
     expect(ms).toBeGreaterThanOrEqual(before + 30 * 86_400_000);
     expect(ms).toBeLessThanOrEqual(after + 30 * 86_400_000);
+  });
+
+  it('scope 미지정 → READ_WRITE(기존 동작 보존), 응답에 노출', async () => {
+    const prisma = prismaEcho();
+    const issued = await svc(prisma, makeAuth()).createForUser('u1', 'def');
+    expect(prisma.apiToken.create.mock.calls[0][0].data.scope).toBe(
+      'READ_WRITE',
+    );
+    expect(issued.scope).toBe('READ_WRITE');
+  });
+
+  it('scope=READ 지정 → 그대로 저장 + 응답 노출', async () => {
+    const prisma = prismaEcho();
+    const issued = await svc(prisma, makeAuth()).createForUser(
+      'u1',
+      'ro',
+      undefined,
+      'READ' as never,
+    );
+    expect(prisma.apiToken.create.mock.calls[0][0].data.scope).toBe('READ');
+    expect(issued.scope).toBe('READ');
   });
 });
 
@@ -200,18 +222,20 @@ describe('ApiTokenService — authenticateToken (Bearer 검증)', () => {
     lastUsedAt: null,
   };
 
-  it('유효 토큰 → 발급자(주인) 승계 + lastUsedAt 갱신', async () => {
+  it('유효 토큰 → 발급자(주인)+scope 승계 + lastUsedAt 갱신', async () => {
     const prisma = makePrisma({
       apiToken: {
-        findUnique: jest.fn().mockResolvedValue(validRec),
+        findUnique: jest
+          .fn()
+          .mockResolvedValue({ ...validRec, scope: 'READ' }),
         update: jest.fn().mockResolvedValue({}),
         create: jest.fn(),
         findMany: jest.fn(),
       },
     });
     const auth = makeAuth();
-    const user = await svc(prisma, auth).authenticateToken('dsp_valid');
-    expect(user).toBe(activeUser);
+    const result = await svc(prisma, auth).authenticateToken('dsp_valid');
+    expect(result).toEqual({ user: activeUser, scope: 'READ' });
     expect(auth.findById).toHaveBeenCalledWith('u1');
     // 해시로만 조회.
     expect(prisma.apiToken.findUnique).toHaveBeenCalledWith({

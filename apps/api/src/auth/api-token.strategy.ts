@@ -27,12 +27,20 @@ export class ApiTokenStrategy extends PassportStrategy(Strategy, 'api-token') {
     }
     const raw = header.slice('Bearer '.length).trim();
     try {
-      const user = await this.apiTokens.authenticateToken(raw);
-      if (!user) {
+      const result = await this.apiTokens.authenticateToken(raw);
+      if (!result) {
         this.fail(401);
         return;
       }
-      this.success(user);
+      // Cycle L-API-3 — 인증 경로/스코프를 req 에 표시 → ApiTokenScopeInterceptor 가
+      // READ 토큰의 쓰기(POST/PUT/PATCH/DELETE)를 403 으로 막는다(라우트 무변경).
+      const marked = req as Request & {
+        authVia?: string;
+        tokenScope?: string;
+      };
+      marked.authVia = 'api-token';
+      marked.tokenScope = result.scope;
+      this.success(result.user);
     } catch (err) {
       // 인증 실패가 아닌 내부 오류(DB 등)는 error 로 — 500 으로 표면화.
       this.error(err instanceof Error ? err : new Error(String(err)));

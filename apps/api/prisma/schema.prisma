@@ -70,6 +70,14 @@ enum SpaceShortcutType {
   EXTERNAL_URL
 }
 
+// Cycle L-API-3 (feature/ldh) — API 토큰 스코프(최소권한). 2단계.
+//   READ = 읽기 전용(GET/HEAD 만). READ_WRITE = 전체(주인 권한 한도).
+//   스코프는 주인 권한 위 상한선 = min(주인 권한, 스코프) — 넓히지 않고 좁히기만.
+enum ApiTokenScope {
+  READ
+  READ_WRITE
+}
+
 model User {
   id                         String        @id @default(cuid())
   username                   String        @unique
@@ -147,6 +155,9 @@ model ApiToken {
   user        User      @relation("UserApiTokens", fields: [userId], references: [id], onDelete: Cascade)
   // 사람이 식별할 토큰 이름(예: "CI 배포 봇").
   name        String
+  // Cycle L-API-3 — 스코프(최소권한). 기본 READ_WRITE(기존 토큰 동작 보존 — 백필).
+  //   READ 토큰은 쓰기(POST/PUT/PATCH/DELETE) 요청 시 가드/인터셉터가 403.
+  scope       ApiTokenScope @default(READ_WRITE)
   // sha256(평문) 해시. 평문은 절대 저장하지 않는다. 조회/비교는 이 해시로만.
   tokenHash   String    @unique
   // 목록 표시용 앞부분(예: "dsp_AbCd1234"). 평문 전체가 아니므로 노출 안전.

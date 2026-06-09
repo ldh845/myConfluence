@@ -35,7 +35,12 @@ export class ApiTokensController {
     @Body() dto: CreateApiTokenDto,
   ): Promise<IssuedApiToken> {
     const user = (req as Request & { user?: AuthUser }).user!;
-    return this.apiTokens.createForUser(user.id, dto.name, dto.expiresInDays);
+    return this.apiTokens.createForUser(
+      user.id,
+      dto.name,
+      dto.expiresInDays,
+      dto.scope,
+    );
   }
 
   @Get()
