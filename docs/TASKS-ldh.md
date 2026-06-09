@@ -228,12 +228,15 @@
   있도록 장수명 opaque API 토큰을 발급/검증/폐기한다. Bearer 인증으로 기존 쿠키 보호
   라우트와 공존(하이브리드). 토큰은 발급자(주인)의 권한(L5~L10)을 그대로 승계 — 별도
   권한 설계 없음. 스코프(토큰별 권한 축소)·MCP 서버 인증은 후속.
-- **상태**: 🟢 Active (L-API-1 ✅ — 발급 UI(L-API-2 FE) 남음)
+- **상태**: 🟢 Active (L-API-1·L-API-3 ✅ — 발급 UI(L-API-2 FE)만 남음)
 - **하위 사이클**:
   - **L-API-1** — 토큰 BE: ApiToken 모델, opaque 토큰 발급(평문 1회)·sha256 해시 저장·
     Bearer 검증 전략(쿠키와 공존)·본인 발급/목록/폐기 + admin 강제 폐기. ✅ Done
   - **L-API-2** — 토큰 발급/관리 화면(FE). 📝 Planned
-  - **(후속)** — 토큰 스코프(권한 축소), MCP 서버 인증 연동. 📝 Planned
+  - **L-API-3** — 토큰 스코프(READ / READ_WRITE): ApiTokenScope enum + scope 컬럼
+    (기본 READ_WRITE 백필), 발급 시 선택, READ 토큰의 쓰기(GET/HEAD 외) 인터셉터 403.
+    스코프=주인 권한 상한선(좁히기만). BE only. ✅ Done
+  - **(후속)** — 리소스별 세분화 스코프, MCP 서버 인증 연동. 📝 Planned
 - **진척**:
   - **Cycle L-API-1 (2026-06-09) ✅** — ApiToken(마이그레이션 1건: tokenHash unique·평문
     미저장, tokenPrefix/expiresAt/lastUsedAt/revokedAt) + ApiTokenService(발급 `dsp_`+32B
@@ -245,10 +248,20 @@
     (CookieAuthGuard, 토큰 자기증식 차단). api tsc·nest build EXIT 0, jest 343 passed
     (30 suites, +23). 마이그레이션 prisma validate(valid 🚀)+SQL 정적 검증(로컬 PG 미가동).
     상세는 `docs/CYCLES-ldh.md` Cycle L-API-1.
+  - **Cycle L-API-3 (2026-06-09) ✅** — ApiTokenScope enum + ApiToken.scope(마이그레이션
+    1건, 기본 READ_WRITE 백필). POST /auth/tokens scope?(기본 READ_WRITE), 발급/목록/admin
+    응답에 scope. ApiTokenStrategy 가 req.authVia/tokenScope 표시 → 전역
+    ApiTokenScopeInterceptor 가 READ 토큰의 쓰기(GET/HEAD 외) 403(인증 유효, 401 아님 →
+    자동 로그아웃 안 걸림). 스코프=주인 권한 상한선(좁히기만, 쿠키 인증 무관). api tsc·
+    nest build EXIT 0, jest 355 passed(31 suites, +12). 마이그레이션 prisma validate(valid 🚀)
+    +SQL 정적 검증(로컬 PG 미가동). 상세는 `docs/CYCLES-ldh.md` Cycle L-API-3.
 - **남은 일**:
+  - **L-API-3 VM 검증**(콘솔, credentials:'omit'+cache:'no-store', /auth/me): ① READ 토큰
+    → GET /api/auth/me 200, ② 같은 READ 토큰 쓰기(POST 계열) → 403, ③ READ_WRITE 토큰
+    같은 쓰기 → 정상.
   - **L-API-1 VM 검증**(콘솔/curl): ① POST /api/auth/tokens 발급 → 평문 1회, ② 그 토큰
     Bearer 헤더로 GET /api/spaces(쿠키 없이) → 성공, ③ DELETE 폐기 후 같은 호출 → 401,
     ④ GET /api/auth/tokens 목록에 평문 없이 prefix/만료/lastUsed, ⑤ admin /admin/api-tokens
     강제 폐기.
-  - L-API-2(토큰 발급/관리 화면 FE).
-  - (후속) 토큰 스코프, MCP 서버 인증 연동.
+  - L-API-2(토큰 발급/관리 화면 FE) — scope 선택 + 목록 scope 배지.
+  - (후속) 리소스별 세분화 스코프, MCP 서버 인증 연동.

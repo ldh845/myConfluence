@@ -836,3 +836,55 @@
 - **비고**: 배포는 **마이그레이션 포함 → VM 풀빌드**(`--no-build` 금지). 기존 쿠키 인증은
   멀티 전략 전환 후에도 동작 100% 동일(토큰 없이 쿠키로 오는 요청은 jwt 전략이 종전대로).
   토큰=주인 권한 승계라 별도 인가 설계 없음 — 스코프는 후속.
+
+---
+
+## Cycle L-API-3 — 2026-06-09 — ✅ Done (API 토큰 스코프 READ / READ_WRITE, BE)
+- **제목**: API 토큰 최소권한 스코프(2단계) — READ(읽기 전용) / READ_WRITE(전체) (Task L-API 후속)
+- **카테고리**: BE / 인증·인가(토큰) / 마이그레이션 1건
+- **커밋**: `3e8f280`(코드), 본 CYCLES-ldh.md
+- **배경**: L-API-1 토큰은 발급자 전권(read-write). 외부/MCP 에 줄 때 최소권한으로 좁히도록
+  토큰별 스코프 도입. 리소스별 세분화는 미도입(2단계만).
+- **확정 설계**:
+  - 2단계: READ(GET·HEAD 만) / READ_WRITE(전체). 발급 시 선택, **기본 READ_WRITE**(기존
+    동작 유지 — 기존 레코드 READ_WRITE 백필).
+  - 결합: 스코프 = 주인 권한 위 **상한선 = min(주인 권한, 스코프)**. 넓히지 않고 좁히기만.
+    쿠키 세션 인증은 스코프 무관(토큰 인증에만 적용).
+  - 쓰기 차단은 **403**(인증은 유효, 401 아님) → 전역 401 자동 로그아웃에 안 걸림.
+- **DB(마이그레이션 `20260609010000_api_token_scope`)**: `ApiTokenScope` enum
+  { READ, READ_WRITE } + `ApiToken.scope @default(READ_WRITE)`. 기존 토큰은 DEFAULT 로
+  백필 → 종전 동작 100% 보존.
+- **발급 API**: `POST /auth/tokens` body 에 `scope?`('READ'|'READ_WRITE', 생략 시 서비스가
+  READ_WRITE). 발급/목록/admin 응답에 `scope` 포함. DTO `@IsIn([READ, READ_WRITE])`.
+- **enforcement(토큰 인증 경로에만, 라우트 무변경)**:
+  - `ApiTokenStrategy` 인증 성공 시 `req.authVia='api-token'` + `req.tokenScope=scope` 표시
+    (`authenticateToken` 이 `{ user, scope }` 반환).
+  - 전역 `ApiTokenScopeInterceptor`(APP_INTERCEPTOR, AuthModule 등록)가 판정: `authVia===
+    'api-token'` && `tokenScope==='READ'` && 메서드가 GET/HEAD 아니면 403.
+  - **왜 인터셉터인가**: 가드 실행 순서(전역 가드→컨트롤러→라우트)상 전역 *가드*는 라우트
+    JwtAuthGuard 보다 **먼저** 돌아 req 표식이 아직 없다. *인터셉터*는 모든 가드 **이후**
+    실행 → 토큰 전략이 심은 표식을 안전하게 읽는다. 라우트엔 손 안 댄다.
+  - 쿠키 인증(authVia 없음/'cookie')·public 라우트엔 표식이 없어 **no-op** → 스코프 영향 0.
+    READ_WRITE 토큰도 통과(쓰기 권한은 결국 주인 권한 가드가 최종 판정 — 스코프가 권한
+    안 넓힘).
+- **기존 동작 보존**: 기존 토큰 READ_WRITE 백필, 멀티 전략·쿠키 경로 무변경 → 쿠키
+  사용자·기존 토큰 영향 0.
+- **테스트(+12 → 355 통과, 31 suites)**: `api-token.service.spec` — scope 미지정→READ_WRITE,
+  scope=READ 저장·노출, 인증 결과 `{ user, scope }`. `api-token.strategy.spec` — 유효 토큰
+  성공 시 req.authVia/tokenScope 표시. `api-token-scope.interceptor.spec`(신규 10) — READ
+  GET/HEAD 통과·POST/PUT/PATCH/DELETE 403, READ_WRITE 쓰기 통과, 쿠키(authVia 없음/cookie)
+  통과, non-http no-op.
+- **검증**: api `tsc --noEmit` EXIT 0, `nest build` EXIT 0, jest **355 passed (31 suites)**
+  (L-API-1 343 + 본 사이클 12). 마이그레이션 `prisma generate` + `prisma validate`(valid 🚀)
+  + SQL 정적 검증(로컬 Postgres 미가동 ECONNREFUSED → `migrate deploy` 미수행, VM 배포 시
+  자동 적용).
+- **응답 스키마(발급)**:
+  `{ "id": "ck...", "name": "읽기봇", "token": "dsp_...(평문 1회)", "tokenPrefix": "dsp_xxxxxxxx", "scope": "READ", "expiresAt": null, "createdAt": "2026-06-09T..." }`
+- **남은 일**:
+  - **L-API-3 VM 검증**(콘솔, `credentials:'omit'` + `cache:'no-store'`, 인증필수 `/auth/me`):
+    ① READ 토큰 Bearer → `GET /api/auth/me` 200, ② 같은 READ 토큰으로 쓰기(POST 계열) →
+    403, ③ READ_WRITE 토큰으로 같은 쓰기 → 정상. ※쓰기 차단은 403이라 자동 로그아웃 안 됨.
+  - L-API-2(토큰 발급/관리 화면 FE) — 발급 폼에 scope 선택 + 목록에 scope 배지 반영 필요.
+  - (후속) 리소스별 세분화 스코프, MCP 서버 인증 연동.
+- **비고**: 배포는 **마이그레이션 포함 → VM 풀빌드**(`--no-build` 금지). 전역 인터셉터는
+  스코프 enforcement 전용·토큰 경로에만 작동하는 additive 추가라 기존 라우트/가드 무영향.
