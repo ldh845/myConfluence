@@ -934,3 +934,40 @@
   - L-API-2(토큰 발급/관리 화면 FE).
 - **비고**: 배포는 VM 풀빌드(마이그레이션 없음). 운영 노출 차단은 `NODE_ENV=production` 전제 —
   VM/운영 env 에 NODE_ENV=production 설정돼 있어야 게이트가 닫힌다(배포 env 점검 권장).
+
+---
+
+## Cycle L-API-4 fix — 2026-06-09 — ✅ Done (api 컨테이너 부팅 실패 수정: platform-express)
+- **제목**: L-API-4 배포 후 api 재시작 루프 수정 — `@nestjs/platform-express` 미설치
+- **카테고리**: BE(의존성/배포) / 마이그레이션 없음
+- **커밋**: `1d9d744`(코드: package.json + package-lock.json), 본 CYCLES-ldh.md
+- **증상**: L-API-4(@nestjs/swagger 도입) 배포 후 api 컨테이너 재시작 루프. 로그:
+  `No driver (HTTP) has been selected ... install @nestjs/platform-express`. Nest 가 HTTP
+  어댑터를 못 잡아 부팅 실패.
+- **원인**: L-API-4 의 `npm install @nestjs/swagger -w apps/api` 가 의존성 트리를 재배치하며
+  `@nestjs/platform-express` 를 **루트 hoist(resolved+integrity 있음)에서 떼어내
+  `apps/api/node_modules` 하위 항목으로 옮기고, 그 lockfile 항목에 `resolved`/`integrity`
+  를 누락**시켰다. 컨테이너 빌드는 `npm ci`(Dockerfile L38) — resolved 누락 항목은 **에러
+  없이 설치를 건너뛴다**. 그 결과 빌드는 성공해도 platform-express 실파일이 루트·api 어느
+  node_modules 에도 안 깔려, 런타임 `require` 실패 → "No HTTP driver" → 부팅 루프.
+  (swagger 가 platform-express 를 요구하지만 의존성에 *명시*돼 있어도 lockfile 항목이
+  깨져 있으면 npm ci 가 안 깐다 — 핵심은 lockfile 무결성.)
+- **해법**: 루트에서 `npm install @nestjs/platform-express@^11 -w apps/api` 재설치 →
+  platform-express 가 **루트 node_modules 로 다시 hoist + `resolved`/`integrity` 복구**
+  (11.1.26, core/common 메이저와 일치). package.json range `^11.0.1`→`^11.1.26`,
+  package-lock 갱신. 이제 npm ci 가 정상 설치 → 런타임 `COPY --from=build /app/node_modules`
+  (Dockerfile L58)로 포함 → 부팅 성공.
+- **lockfile 점검**: 수정 전 lockfile 에 `resolved/integrity` 누락 항목 630개(거의 전부
+  `apps/api/node_modules/*` 하위 — 사내 프록시/CA 환경 생성물, 종전 배포는 정상)였고,
+  본 수정으로 563개로 **감소**(새 손상 유입 없음, platform-express 항목은 완치). 나머지는
+  종전부터 빌드되던 build-time devDep 들이라 미손대(불필요 churn·web 의존성 영향 회피).
+- **검증**: api `tsc --noEmit` EXIT 0, `nest build` EXIT 0, jest **355 passed (31 suites)**
+  (회귀 0). **web `npm run build` 성공**(react 18.3.1 / next 14.2.35 무손상 — workspace
+  hoist 부작용 없음 확인). 마이그레이션 없음. 런타임 부팅은 VM 확인 대기(패키지 의존·
+  lockfile 무결성까지 점검 완료).
+- **남은 일**:
+  - **VM 배포 검증**: VM 풀빌드(새 의존성 포함) 후 `docker compose ps` 로 api **Up**(재시작
+    루프 해소) 확인 → 이어서 L-API-4 VM 검증(① /api/docs ② /api/docs-json ③ prod 404) 진행.
+- **비고**: 배포는 **VM 풀빌드 필수**(새 의존성 — `--no-build`/`--no-deps` 금지). 교훈:
+  workspace 에 패키지 추가 시 lockfile 의 해당 항목에 `resolved`/`integrity` 가 박혔는지
+  확인할 것(누락 시 npm ci 가 조용히 스킵 → 런타임에서야 터진다).
