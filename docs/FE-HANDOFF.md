@@ -27,6 +27,11 @@
 - BE 상태: 완료(L10). 자동 배정·자동 권한 동작 중. DepartmentGroupMapping(department→groupId) CRUD 화면 필요(관리 엔드포인트 별도 필요 시 ldh 와 확인). 배지 DEPARTMENT 는 이미 추가됨.
 - 요청: ① 매핑 등록/수정/삭제 화면(먼저) ② 부서→공간 권한 일괄 부여(후속).
 
+## 5. API 토큰 발급/관리 화면 (L-API-2)
+- 무엇: 프로필/설정에서 API 토큰 발급·조회·폐기(현재 F12 콘솔로만 가능).
+- BE 상태: 완료(L-API-1/3). POST /api/auth/tokens(쿠키 인증, body {name, expiresInDays?, scope?}, 평문 token 1회·재조회 불가), GET /api/auth/tokens(목록, 평문 없음), DELETE /api/auth/tokens/:id. scope=READ|READ_WRITE.
+- 요청: 발급 다이얼로그(이름·만료·스코프) + 평문 토큰 1회 노출(복사 버튼, "다시 못 봄" 경고) + 목록(tokenPrefix·scope·만료·lastUsedAt·생성일) + 폐기 버튼.
+
 ## 참고 — 그룹 source 3종
 - LOCAL(수동, 편집 가능) / KEYCLOAK(L8 동기화, 잠금) / DEPARTMENT(L10 부서자동, 잠금)
 - 멤버 편집 UI 는 LOCAL 만 활성.

@@ -266,6 +266,10 @@
     핵심 엔드포인트·ProseMirror 주의). 데코레이터 런타임 불변 → 회귀 0. api tsc·nest build
     EXIT 0, jest 355 passed(31 suites). 마이그레이션 없음. Bearer 스킴은 DocumentBuilder
     단독 확인, 런타임 /api/docs 덤프는 부트 DB 필요로 VM 검증. 상세는 `docs/CYCLES-ldh.md`.
+  - **MCP 연동 개념검증 완료(2026-06-09)** — 사내 AI(MCP 클라이언트)에 DocSpace MCP
+    서버(HTTP 트랜스포트, READ 토큰)를 연결해 docspace_read_page 로 작성자·날짜·상태·본문까지
+    정상 수신. 토큰·스코프·OpenAPI 명세가 실제 AI 연동에서 동작 확인. 운영용 MCP 서버는
+    사내 MCP 팀 담당, DocSpace 받침(L-API-1/3/4)은 완료.
 - **남은 일**:
   - **L-API-4 VM 검증**(비프로덕션): ① GET /api/docs → 목록+Authorize(Bearer), ② GET
     /api/docs-json → OpenAPI JSON(api-token 스킴·태그 포함), ③ NODE_ENV=production 시 둘 다 404.
