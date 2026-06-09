@@ -112,6 +112,9 @@ MCP 가 본문을 텍스트로 다루려면 노드 트리에서 텍스트를 추
   호출 테스트.
 - **raw OpenAPI(JSON)**: `GET /api/docs-json` — MCP 서버가 그대로 파싱할 기계가독 명세.
 
+> 외부(브라우저) 주소는 `/api/docs`·`/api/docs-json` 이고, 프록시가 `/api` prefix 를 떼므로
+> api 내부 등록 경로는 `/docs`·`/docs-json` 이다(접근은 외부 주소 그대로 쓰면 된다).
+
 > 보안 스킴 이름은 `api-token`(HTTP Bearer). 핵심 라우트에 `auth / auth-tokens / spaces /
 > pages` 태그가 붙어 있다. 전체 라우트가 아니라 연동에 필요한 핵심만 문서화돼 있으며,
 > 필요 시 점진적으로 확장한다.

@@ -1001,3 +1001,31 @@
 - **비고**: 배포는 VM 풀빌드(코드 변경). 게이트가 **기본 비활성**이라, 코드만 배포하고 env 에
   플래그를 안 넣으면 명세는 계속 닫혀 있다 — 테스트 VM 에서 명세를 보려면 env 추가가 필수.
   실운영 안전이 기본값이라는 점이 NODE_ENV 게이트보다 명시적이고 의도가 분명하다.
+
+---
+
+## Cycle L-API-4 followup 2 — 2026-06-09 — ✅ Done (Swagger 경로 /api/docs → /docs, nginx 정합)
+- **제목**: Swagger 등록 경로를 'api/docs' → 'docs' 로 — nginx `/api` prefix-strip 와 정합
+- **카테고리**: BE(부트스트랩) + 문서 / 마이그레이션 없음
+- **커밋**: `0098e2e`(코드: main.ts), 본 CYCLES-ldh.md + docs/MCP-INTEGRATION.md
+- **증상**: 브라우저로 `/api/docs` 접속 시 404. (api 직접 `http://localhost:3001/api/docs-json`
+  은 200 — api 자체는 정상, **프록시 경로만 불일치**.)
+- **원인**: VM nginx 가 `location /api/ { proxy_pass http://api:3001/; }` — **끝 슬래시로
+  `/api` prefix 를 떼고** api 로 전달한다. api 라우트는 `setGlobalPrefix` 없이 `/auth/me` 식
+  bare 경로라 이 strip 과 잘 맞는다. 그런데 L-API-4 가 Swagger 를 **'api/docs'** 로 등록해서,
+  외부 `/api/docs` → nginx 가 `/docs` 로 떼 보내는데 api 엔 `/docs` 가 아니라 `/api/docs` 가
+  등록돼 있어 매칭 실패 → 404. (등록 경로가 prefix-strip 규칙과 어긋난 것.)
+- **해법**: `SwaggerModule.setup('api/docs', …, { jsonDocumentUrl: 'api/docs-json' })`
+  → **`setup('docs', …, { jsonDocumentUrl: 'docs-json' })`**. api 기준 최종 경로가 `/docs`,
+  `/docs-json` 이 되어 nginx 의 `/api/docs → /docs` 전달과 일치한다. **외부 접근 주소는
+  prefix-strip 으로 `/api/docs`·`/api/docs-json` 그대로 유지**(브라우저는 바뀐 게 없다).
+  다른 변경 없음(ENABLE_API_DOCS 게이트·Bearer 스킴 그대로).
+- **문서**: `docs/MCP-INTEGRATION.md` §6 에 "외부 주소 /api/docs(브라우저), api 내부 등록은
+  /docs" 한 줄 추가.
+- **검증**: api `tsc --noEmit` EXIT 0, `nest build` EXIT 0, jest **355 passed (31 suites)**
+  (회귀 0). 마이그레이션 없음.
+- **남은 일**: VM 배포(풀빌드, `ENABLE_API_DOCS=true` 유지) 후 **브라우저 `/api/docs` → Swagger
+  UI**, **`/api/docs-json` → OpenAPI JSON** 확인. (api 직접 접속은 이제 `:3001/docs`.)
+- **비고**: 배포는 VM 풀빌드. 이전(L-API-4)의 "api 직접 :3001/api/docs" 가정은 프록시 환경과
+  안 맞았다 — bare 라우팅 + nginx prefix-strip 전제에선 등록 경로를 strip 後 경로(`/docs`)에
+  맞추는 게 정답. 외부 주소(`/api/docs`)는 동일하게 유지된다.
