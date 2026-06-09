@@ -221,3 +221,34 @@
   - ⑪ 비편집자의 공유 링크 발급·resolve → 403.
   - ⑫ 비관리자의 setHomePage(`PATCH /api/spaces/:id`) → 403.
   - ⑬ PUBLIC 공간의 댓글·리액션·지켜보기 기존 흐름 정상 — 회귀 없음.
+
+## Task L-API — 프로그램 접근용 API 토큰 (+ MCP 토대)
+
+- **범위**: 프로그램/외부 시스템/MCP 서버가 사람 세션(쿠키) 없이 DocSpace 를 호출할 수
+  있도록 장수명 opaque API 토큰을 발급/검증/폐기한다. Bearer 인증으로 기존 쿠키 보호
+  라우트와 공존(하이브리드). 토큰은 발급자(주인)의 권한(L5~L10)을 그대로 승계 — 별도
+  권한 설계 없음. 스코프(토큰별 권한 축소)·MCP 서버 인증은 후속.
+- **상태**: 🟢 Active (L-API-1 ✅ — 발급 UI(L-API-2 FE) 남음)
+- **하위 사이클**:
+  - **L-API-1** — 토큰 BE: ApiToken 모델, opaque 토큰 발급(평문 1회)·sha256 해시 저장·
+    Bearer 검증 전략(쿠키와 공존)·본인 발급/목록/폐기 + admin 강제 폐기. ✅ Done
+  - **L-API-2** — 토큰 발급/관리 화면(FE). 📝 Planned
+  - **(후속)** — 토큰 스코프(권한 축소), MCP 서버 인증 연동. 📝 Planned
+- **진척**:
+  - **Cycle L-API-1 (2026-06-09) ✅** — ApiToken(마이그레이션 1건: tokenHash unique·평문
+    미저장, tokenPrefix/expiresAt/lastUsedAt/revokedAt) + ApiTokenService(발급 `dsp_`+32B
+    base64url 평문 1회·sha256 저장, authenticateToken 폐기/만료/미존재/비활성 거부,
+    lastUsedAt 1분 throttle) + ApiTokenStrategy(passport `api-token`). JwtAuthGuard/
+    OptionalJwtAuthGuard 를 `AuthGuard(['jwt','api-token'])` 로 확장 → 모든 보호 라우트가
+    쿠키/Bearer 양쪽 수용(라우트 무변경, 토큰=주인 권한 승계). 관리 API: 본인 POST/GET/
+    DELETE `/auth/tokens`, admin GET/DELETE `/admin/api-tokens` — 둘 다 쿠키 전용
+    (CookieAuthGuard, 토큰 자기증식 차단). api tsc·nest build EXIT 0, jest 343 passed
+    (30 suites, +23). 마이그레이션 prisma validate(valid 🚀)+SQL 정적 검증(로컬 PG 미가동).
+    상세는 `docs/CYCLES-ldh.md` Cycle L-API-1.
+- **남은 일**:
+  - **L-API-1 VM 검증**(콘솔/curl): ① POST /api/auth/tokens 발급 → 평문 1회, ② 그 토큰
+    Bearer 헤더로 GET /api/spaces(쿠키 없이) → 성공, ③ DELETE 폐기 후 같은 호출 → 401,
+    ④ GET /api/auth/tokens 목록에 평문 없이 prefix/만료/lastUsed, ⑤ admin /admin/api-tokens
+    강제 폐기.
+  - L-API-2(토큰 발급/관리 화면 FE).
+  - (후속) 토큰 스코프, MCP 서버 인증 연동.

@@ -776,3 +776,63 @@
   멤버 편집 컨트롤 비활성. (L10 본 사이클 VM 시나리오 ①에 흡수.)
 - **비고**: FE 만 변경 → 배포는 VM 풀빌드(마이그레이션 없음). 데이터/판정은 무변경이라
   순수 표시 정합성 수정.
+
+---
+
+## Cycle L-API-1 — 2026-06-09 — ✅ Done (프로그램 접근용 API 토큰, BE)
+- **제목**: 프로그램/외부 시스템/MCP 서버용 장수명 API 토큰 발급/검증/폐기 (Task L-API 1단계)
+- **카테고리**: BE / 인증(하이브리드) / 마이그레이션 1건
+- **커밋**: `7586b66`(코드), 본 CYCLES-ldh.md
+- **배경**: 리더 요청 — 프로그램/외부 시스템/MCP 서버가 사람 세션(쿠키) 없이 DocSpace 를
+  호출하려면 장수명 토큰이 필요. 향후 MCP 서버 인증 수단의 선행조건. 권한은 토큰 주인의
+  권한(L5~L10)을 그대로 승계 → 별도 권한 설계 불필요.
+- **DB(마이그레이션 `20260609000000_api_tokens`)**: `ApiToken { id, userId(FK Cascade),
+  name, tokenHash(unique), tokenPrefix, expiresAt?, lastUsedAt?, revokedAt?, createdAt }`.
+  인덱스 tokenHash(unique)/userId. **평문 미저장 — sha256 해시만**.
+- **발급·검증(ApiTokenService)**:
+  - 발급 = `dsp_` + 암호학적 난수 32바이트 base64url. 평문은 **발급 응답에만 1회**(재조회
+    불가). 저장은 sha256 해시 + tokenPrefix(앞 12자, 표시용).
+  - 검증(`authenticateToken`) = Bearer 평문 → sha256 → 조회 → revokedAt null + 미만료 →
+    발급자 `findById`(쿠키 인증과 동일 AuthUser) → isActive 확인. 미존재/폐기/만료/비활성은
+    구분 없이 `null`(정보 노출 최소화).
+  - `lastUsedAt` 은 **1분 throttle**(마지막 갱신이 60초 초과일 때만 update) — 매 요청
+    write 부담 회피. 갱신 실패는 best-effort(인증 막지 않음).
+- **하이브리드 인증(가드 확장, 라우트 무변경)**: `ApiTokenStrategy`(passport `'api-token'`)
+  등록 + `JwtAuthGuard`/`OptionalJwtAuthGuard` 를 `AuthGuard(['jwt','api-token'])` 로 확장.
+  passport 가 순서대로 시도 → 쿠키 있으면 jwt, Bearer 만 있으면 api-token. 토큰 인증 후
+  `req.user` 가 쿠키와 **동일 형태** → 기존 RolesGuard/SpacePermissionService(L5~L10) 그대로
+  동작. Optional 경로(GET /spaces 등)는 쿠키/토큰/둘 다 없음(익명) 세 경우 종전 의미 유지.
+- **관리 API**:
+  - 본인(쿠키 전용 `CookieAuthGuard`): `POST /auth/tokens { name, expiresInDays? }` →
+    `{ id, name, token(평문 1회), tokenPrefix, expiresAt, createdAt }`. `GET /auth/tokens`
+    (평문 없음). `DELETE /auth/tokens/:id`(즉시 무효, 남의 것 404, idempotent).
+  - admin(`CookieAuthGuard`+`RolesGuard` ADMIN): `GET /admin/api-tokens`(전체, 소유자 동반),
+    `DELETE /admin/api-tokens/:id`(강제 폐기).
+  - **토큰 관리 라우트는 쿠키 전용** — 유출 토큰이 스스로 새 토큰을 발급/폐기하지 못하게
+    차단(자기증식 방지). 데이터 라우트만 하이브리드.
+- **보안**: 평문은 발급 응답 외 어디에도 노출 안 함(목록/에러/로그 포함). 비교는 해시로만.
+  `dsp_` 접두 아닌 입력은 DB 조회조차 안 함.
+- **테스트(+23 → 343 통과, 30 suites)**: `api-token.service.spec`(18) — 평문 미저장·해시
+  일치·prefix, 무기한/만료, 본인/admin 폐기·404·idempotent, 인증(유효/접두불일치/미존재/폐기/
+  만료/비활성/throttle 생략·갱신). `api-token.strategy.spec`(5) — 헤더없음/비-Bearer fail,
+  유효 success, null fail, 내부오류 error.
+- **검증**: api `tsc --noEmit` EXIT 0, `nest build` EXIT 0, jest **343 passed (30 suites)**
+  (L10 321 + 본 사이클 22 + …). 마이그레이션은 `prisma generate` + `prisma validate`(valid 🚀)
+  + SQL 정적 검증(로컬 Postgres 미가동 ECONNREFUSED → `migrate deploy` 미수행, VM 배포 시 자동 적용).
+- **발급/검증 흐름**:
+  1. `POST /api/auth/tokens`(쿠키) → 평문 1회 수령.
+  2. 프로그램이 `Authorization: Bearer dsp_...` 로 보호 API 호출 → api-token 전략이 해시
+     조회·검증 → 주인 권한으로 처리.
+  3. `DELETE /api/auth/tokens/:id` → revokedAt 설정 → 같은 토큰 호출 즉시 401.
+- **응답 스키마(발급)**:
+  `{ "id": "ck...", "name": "CI 봇", "token": "dsp_xxxxxxxx...", "tokenPrefix": "dsp_xxxxxxxx", "expiresAt": null, "createdAt": "2026-06-09T..." }`
+- **남은 일**:
+  - **L-API-1 VM 검증**(콘솔/curl): ① `POST /api/auth/tokens` 발급 → 평문 1회 확인,
+    ② 그 토큰 Bearer 헤더로 `GET /api/spaces`(쿠키 없이) → 성공(본인 공간 반환),
+    ③ `DELETE` 폐기 후 같은 호출 → 401, ④ `GET /api/auth/tokens` 목록에 평문 없이
+    prefix/만료/lastUsed 표시, ⑤ admin `GET/DELETE /api/admin/api-tokens` 강제 폐기.
+  - L-API-2(토큰 발급/관리 화면 FE).
+  - (후속) 토큰 스코프(권한 축소), MCP 서버 인증 연동.
+- **비고**: 배포는 **마이그레이션 포함 → VM 풀빌드**(`--no-build` 금지). 기존 쿠키 인증은
+  멀티 전략 전환 후에도 동작 100% 동일(토큰 없이 쿠키로 오는 요청은 jwt 전략이 종전대로).
+  토큰=주인 권한 승계라 별도 인가 설계 없음 — 스코프는 후속.
