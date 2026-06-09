@@ -18,13 +18,17 @@ async function bootstrap() {
   );
 
   // Cycle L-API-4 (feature/ldh) — OpenAPI(Swagger) 명세. 사내 MCP/외부 연동 개발 지원.
-  //   ⚠️ 노출 게이트: NODE_ENV !== 'production' 일 때만 setup → 운영에선 라우트 자체가
-  //      등록되지 않는다(미들웨어/핸들러 부재 = 404). 명세 유출·표면 확대 방지.
   //   API 는 setGlobalPrefix 없는 bare 라우팅이라, 웹 프록시(/api/* → api/*)와 무관하게
   //   API 서버에 직접 'api/docs'(UI) + 'api/docs-json'(raw) 로 올린다 → 직접 접속 시
   //   경로가 그대로 /api/docs, /api/docs-json. Bearer 스킴('api-token')으로 Authorize 에
   //   dsp_ 토큰을 넣고 바로 호출 테스트 가능.
-  if (process.env.NODE_ENV !== 'production') {
+  //   ⚠️ 노출 게이트(Cycle L-API-4 followup): NODE_ENV 가 아니라 **전용 플래그
+  //      ENABLE_API_DOCS === 'true'** 일 때만 setup → 라우트 등록(아니면 미등록 = 404).
+  //      NODE_ENV 게이트는 "테스트 서버인데 NODE_ENV=production" 인 환경에서 명세를 막아버려
+  //      분리했다. 이제 production 이어도 플래그만 켜면 노출되고, NODE_ENV 의 로깅·에러
+  //      상세·최적화 동작은 건드리지 않는다. **미설정/false = 비활성(기본 안전)** — 실운영
+  //      (AFS)은 플래그를 끄거나 미설정으로 두면 차단된다.
+  if (process.env.ENABLE_API_DOCS === 'true') {
     const swaggerConfig = new DocumentBuilder()
       .setTitle('DocSpace API')
       .setDescription(
