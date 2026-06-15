@@ -13,6 +13,11 @@ export type AuthUser = {
   department: string;
   role: "ADMIN" | "PART_LEADER" | "DEVELOPER" | "DESIGNER" | "PM";
   createdAt: string;
+  // Cycle L2 (feature/ldh) — 계정 활성 상태.
+  isActive: boolean;
+  // Cycle L3 (feature/ldh) — 로컬 비밀번호 보유 여부. '비밀번호 변경' 메뉴 노출 판단용.
+  // SSO 전용 계정이면 false → 변경 메뉴 미표시.
+  hasLocalPassword: boolean;
   // Cycle 49 — 사용자별 환경설정. SystemSidebar '내 공간' 토글의 상태.
   // PATCH /api/auth/me/prefs 로 갱신 후 invalidate(['me']) 로 즉시 반영.
   showPersonalSpaceInSidebar: boolean;

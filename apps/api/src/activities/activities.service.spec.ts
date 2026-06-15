@@ -185,6 +185,29 @@ describe('ActivitiesService', () => {
     });
   });
 
+  // Cycle L5 (feature/ldh) — 공개 피드 가시성 필터(visibilityWhere)를 AND 로 결합.
+  describe('list — visibilityWhere (Cycle L5)', () => {
+    it('visibilityWhere 를 주면 where 에 그대로 결합', async () => {
+      const vis = { OR: [{ spaceId: null }, { spaceId: 'sp-x' }] };
+      await service.list({ visibilityWhere: vis });
+      expect(capturedWhere()).toEqual(vis);
+    });
+
+    it('다른 필터와 AND 로 공존 (type + visibility)', async () => {
+      const vis = { OR: [{ spaceId: null }] };
+      await service.list({ type: 'page.created', visibilityWhere: vis });
+      expect(capturedWhere()).toEqual({
+        type: 'page.created',
+        OR: [{ spaceId: null }],
+      });
+    });
+
+    it('visibilityWhere 미전달(감사 로그 등) → 필터 없음 (기존 호환)', async () => {
+      await service.list({ spaceId: 'sp-1' });
+      expect(capturedWhere()).toEqual({ spaceId: 'sp-1' });
+    });
+  });
+
   describe('log — best-effort', () => {
     it('정상 케이스: create 호출', async () => {
       await service.log({

@@ -1,0 +1,1 @@
+{"name": "docspace-mcp", "version": "1.0.0", "description": "MCP server for DocSpace — search & read pages via Streamable HTTP", "type": "module", "main": "server.js", "scripts": {"start": "node server.js"}}

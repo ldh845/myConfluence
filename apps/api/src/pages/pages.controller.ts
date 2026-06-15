@@ -13,10 +13,17 @@ import {
 } from '@nestjs/common';
 import type { Request } from 'express';
 import { PageStatus } from '@prisma/client';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiQuery,
+  ApiTags,
+} from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { OptionalJwtAuthGuard } from '../auth/optional-jwt-auth.guard';
 import { PagesService } from './pages.service';
 import { SpacePermissionService } from '../spaces/space-permission.service';
+import { EffectiveAccessService } from '../spaces/effective-access.service';
 import { CreatePageDto } from './dto/create-page.dto';
 import { UpdatePageDto } from './dto/update-page.dto';
 import { UpdateDraftDto } from './dto/update-draft.dto';
@@ -56,21 +63,53 @@ function parseStatuses(raw?: string): Array<PageStatus | 'NONE'> | undefined {
   return list.length ? list : undefined;
 }
 
+// Cycle L-API-4 — OpenAPI 태그/Bearer. 토큰(dsp_) 또는 쿠키로 호출. 본문(content)은
+//   ProseMirror JSON(평문/마크다운 아님) — MCP 가 텍스트로 다루려면 변환 필요(가이드 참조).
+@ApiTags('pages')
+@ApiBearerAuth('api-token')
 @Controller('pages')
 export class PagesController {
   constructor(
     private readonly pages: PagesService,
     // Cycle 74-A — 스페이스 권한 판정(읽기/쓰기 가드).
     private readonly perms: SpacePermissionService,
+    // Cycle L9 — 페이지 접근 권한 역산.
+    private readonly effectiveAccess: EffectiveAccessService,
   ) {}
 
   @Get()
+  @ApiOperation({
+    summary: '페이지 목록',
+    description: '접근 가능한 발행 페이지 목록. 토큰/쿠키의 가시성에 따라 필터링.',
+  })
   @UseGuards(OptionalJwtAuthGuard)
   findAll(@Req() req: Request) {
     return this.pages.findAll(userFromReq(req));
   }
 
+  // Cycle L9 (feature/ldh) — 접근 권한 역산: 이 페이지를 볼 수 있는 사용자 전부와 경로.
+  //   NONE → 공간 결과와 동일, EDIT/VIEW_EDIT → 제한 통과자로 좁힘(L7-2 그룹 포함).
+  //   조회 권한은 공간 canManage(또는 전역 ADMIN) — service 가 게이트.
+  @Get(':id/effective-access')
+  @UseGuards(JwtAuthGuard)
+  effectiveAccessForPage(
+    @Param('id') id: string,
+    @Req() req: Request,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.effectiveAccess.pageEffectiveAccess(id, userFromReq(req), {
+      limit: limit ? Number(limit) : undefined,
+      offset: offset ? Number(offset) : undefined,
+    });
+  }
+
   @Post()
+  @ApiOperation({
+    summary: '페이지 생성',
+    description:
+      '대상 스페이스 편집 권한 필요(READ 토큰은 403). 본문(content)은 ProseMirror JSON.',
+  })
   @UseGuards(JwtAuthGuard)
   async create(@Body() dto: CreatePageDto, @Req() req: Request) {
     // Cycle 74-A — 대상 스페이스 편집 권한 확인.
@@ -82,6 +121,13 @@ export class PagesController {
   // FR-091 (Cycle 15-3) — 스페이스/날짜 필터 + 정렬.
   // ⚠️ 모든 정적 path는 @Get(':id') 위에 선언.
   @Get('full-search')
+  @ApiOperation({
+    summary: '전문 검색',
+    description: '제목+본문 전문 검색(pg_trgm). 스페이스/작성자/날짜 필터·정렬 지원.',
+  })
+  @ApiQuery({ name: 'q', required: false, description: '검색어' })
+  @ApiQuery({ name: 'limit', required: false, description: '기본 20' })
+  @ApiQuery({ name: 'offset', required: false, description: '기본 0' })
   @UseGuards(OptionalJwtAuthGuard)
   fullSearch(
     @Req() req: Request,
@@ -137,9 +183,11 @@ export class PagesController {
   }
 
   // FR-024 (Cycle 18-1a) — 휴지통 목록. 정적 path → :id 위에.
+  // Cycle L5 — 인증 필수 + 가시성 필터(접근 불가 스페이스의 삭제 페이지 누수 차단).
   @Get('trash')
-  listTrash() {
-    return this.pages.listTrash();
+  @UseGuards(JwtAuthGuard)
+  listTrash(@Req() req: Request) {
+    return this.pages.listTrash(userFromReq(req));
   }
 
   // FR-130 (Cycle 22) — 홈 화면 최근 수정 페이지.
@@ -183,6 +231,10 @@ export class PagesController {
   }
 
   @Get(':id')
+  @ApiOperation({
+    summary: '페이지 단건 조회',
+    description: '본문(content)은 ProseMirror JSON. 접근 권한 없으면 403/404.',
+  })
   @UseGuards(OptionalJwtAuthGuard)
   findOne(@Param('id') id: string, @Req() req: Request) {
     return this.pages.findOne(id, userFromReq(req));
@@ -229,6 +281,7 @@ export class PagesController {
       dto.mode,
       userFromReq(req),
       dto.members,
+      dto.groups,
     );
   }
 
@@ -346,13 +399,20 @@ export class PagesController {
     return this.pages.copy(id, dto, actorFromReq(req));
   }
 
+  // Cycle L5 — 무가드였던 다이어그램/버전 목록에 읽기 권한 가드 추가.
+  //   비공개/개인 공간·VIEW_EDIT 제한 페이지의 다이어그램/편집 이력 누수 차단.
+  //   PUBLIC 은 그대로 통과(OptionalJwt — 공개 흐름 무변화).
   @Get(':id/diagrams')
-  listDiagrams(@Param('id') id: string) {
+  @UseGuards(OptionalJwtAuthGuard)
+  async listDiagrams(@Param('id') id: string, @Req() req: Request) {
+    await this.perms.assertCanViewPage(id, userFromReq(req));
     return this.pages.listDiagrams(id);
   }
 
   @Get(':id/versions')
-  listVersions(@Param('id') id: string) {
+  @UseGuards(OptionalJwtAuthGuard)
+  async listVersions(@Param('id') id: string, @Req() req: Request) {
+    await this.perms.assertCanViewPage(id, userFromReq(req));
     return this.pages.listVersions(id);
   }
 

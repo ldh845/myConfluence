@@ -10,10 +10,17 @@ export type PageRestrictionMember = {
   name: string;
   department: string | null;
 };
+// Cycle L7-2 — 페이지 제한의 그룹 멤버.
+export type PageRestrictionGroup = {
+  groupId: string;
+  role: PageRestrictionRole;
+  name: string;
+};
 export type PageRestrictionState = {
   mode: PageRestrictionMode;
   canManage: boolean;
   members: PageRestrictionMember[];
+  groups: PageRestrictionGroup[];
 };
 
 export type PageNode = {

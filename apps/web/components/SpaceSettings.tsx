@@ -7,6 +7,7 @@ import { useAuth } from "@/lib/auth/useAuth";
 import { canManageSpace } from "@/lib/spacePermission";
 import SpaceAvatar from "@/components/SpaceAvatar";
 import SpaceMembersPanel from "@/components/SpaceMembersPanel";
+import SpaceMemberGroupsPanel from "@/components/SpaceMemberGroupsPanel";
 import SpaceAuditPanel from "@/components/SpaceAuditPanel";
 import SpacePageOrderPanel from "@/components/SpacePageOrderPanel";
 import SpaceSidebarConfigPanel from "@/components/SpaceSidebarConfigPanel";
@@ -216,7 +217,23 @@ export default function SpaceSettings({ spaceId }: { spaceId: string }) {
         ))}
       </div>
 
-      {activeTab === "permissions" && <SpaceMembersPanel spaceId={spaceId} />}
+      {activeTab === "permissions" && (
+        <div className="space-y-8">
+          <section>
+            <h3 className="text-[13px] font-semibold text-[#172b4d] mb-3">
+              멤버 (개인)
+            </h3>
+            <SpaceMembersPanel spaceId={spaceId} />
+          </section>
+          {/* Cycle L7 — 그룹 권한. 개인 멤버십과 max 결합. */}
+          <section>
+            <h3 className="text-[13px] font-semibold text-[#172b4d] mb-3">
+              그룹
+            </h3>
+            <SpaceMemberGroupsPanel spaceId={spaceId} />
+          </section>
+        </div>
+      )}
       {activeTab === "audit" && <SpaceAuditPanel spaceId={spaceId} />}
       {activeTab === "order" && <SpacePageOrderPanel spaceId={spaceId} />}
       {activeTab === "sidebar" && (
