@@ -4,9 +4,15 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
 import { noStore } from './common/no-store.middleware';
+import { json, urlencoded } from 'express';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  // Cycle L-MCP (feature/ldh) — JSON body 크기 제한 1MB로 증가.
+  //   컨플루언스 HTML → ProseMirror 변환 결과가 100KB 초과하여 413 에러 발생.
+  //   사내망 환경이므로 보안 리스크 최소.
+  app.use(json({ limit: '1mb' }));
+  app.use(urlencoded({ extended: true, limit: '1mb' }));
   // FR-001 (Cycle 27a) — JwtStrategy가 httpOnly cookie에서 토큰 추출.
   app.use(cookieParser());
   // Cycle L4 followup (feature/ldh) — 권한/세션 응답의 디스크 캐시 잔재 차단.

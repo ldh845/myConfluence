@@ -42,3 +42,9 @@ SRS.md
 # DB 마이그레이션 직전 백업 덤프(예: backup_before_cycle48.sql) + 발표자료(*.pptx).
 backup_*.sql
 *.pptx
+# 임시 파일 (AI 작업 중 생성)
+_tmp/
+_tmp_*
+*.bak
+docspace-mcp/.env.bak
+docspace-mcp/*.bak
