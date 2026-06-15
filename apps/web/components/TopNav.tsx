@@ -56,11 +56,11 @@ export default function TopNav({
           window.location.href = "/home";
         }}
       >
-        <div className="w-7 h-7 rounded bg-[#0052cc] text-white flex items-center justify-center font-bold text-sm">
-          M
+        <div className="shrink-0">
+          <AppIcon name="space" size={28} alt="DocSpace" />
         </div>
-        <span className="font-semibold text-[#172b4d]">
-          my<span className="text-[#0052cc]">Confluence</span>
+        <span className="font-semibold text-[#172b4d] whitespace-nowrap">
+          Doc<span className="text-[#0052cc]">Space</span>
         </span>
       </a>
 

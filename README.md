@@ -56,6 +56,7 @@ docs/     # 운영 문서 (DEPLOY.md 등)
 ## 시작하기 — 개발 환경 (Docker)
 
 ### 1. 환경변수 준비
+
 - 루트 `.env` ← `.env.example` 복사: `POSTGRES_PASSWORD`(Cycle 46 부터
   필수, `openssl rand -hex 32` 권장), 필요 시 `NEXT_PUBLIC_WS_URL`
 - `apps/api/.env` ← `.env.example` 복사: `DATABASE_URL`
@@ -68,9 +69,11 @@ docs/     # 운영 문서 (DEPLOY.md 등)
     [`docs/DEPLOY.md`](docs/DEPLOY.md) 참조
 
 ### 2. 컨테이너 풀스택 기동 (권장)
+
 ```bash
 docker compose up -d   # postgres + api + web + keycloak + redis + nginx
 ```
+
 - Keycloak 이 함께 기동(realm `docspace` 자동 import) — SSO 테스트에 필요
 - api 컨테이너가 기동 시 자동으로 `prisma migrate deploy`
 - 브라우저 <http://localhost:3000> (web 컨테이너 직접 진입). `/api` 호출은
@@ -83,11 +86,13 @@ docker compose up -d   # postgres + api + web + keycloak + redis + nginx
   [`docs/DEPLOY.md` 3.7](docs/DEPLOY.md) 참조
 
 ### 3. (선택) 호스트에서 직접 개발 (핫리로드)
+
 ```bash
 npm install
 cd apps/api && npx prisma migrate deploy
 npm run dev:all        # web + api + hocuspocus 동시 기동
 ```
+
 - 브라우저 <http://localhost:3000>
 - postgres·keycloak 는 compose 로 띄워두고 api/web 만 호스트에서
 
@@ -125,10 +130,13 @@ npm run dev:all        # web + api + hocuspocus 동시 기동
 ## 관련 문서
 
 - [`CLAUDE.md`](CLAUDE.md) — 프로젝트 메모리 (AI 협업·기술 컨텍스트·함정)
+
 - [`docs/CYCLES.md`](docs/CYCLES.md) — 개발 로그 (사이클별 상세 — 커밋·
   변경 파일·검증·함정)
+
 - [`docs/TASKS.md`](docs/TASKS.md) — Task 현황 (주제 중심 7 Epic — 주간
   보고·Jira 입력 base)
+
 - [`docs/DEPLOY.md`](docs/DEPLOY.md) — 운영·배포 매뉴얼 (VM 셋업·재배포·
   트러블슈팅·함정)
 - [`docs/MCP-INTEGRATION.md`](docs/MCP-INTEGRATION.md) — 사내 MCP/외부 연동
