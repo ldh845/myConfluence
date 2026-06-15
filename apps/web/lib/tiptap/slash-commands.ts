@@ -151,13 +151,15 @@ export const SLASH_ITEMS: SlashCommandItem[] = [
     command: ({ editor, range }) => {
       // slash 토큰 먼저 제거 후 picker. picker 선택은 비동기 콜백.
       editor.chain().focus().deleteRange(range).run();
+      // 커서 좌표 구해서 picker 가 그 근처에 뜨도록
+      const coords = editor.view.coordsAtPos(range.from, -1);
       pickDate(undefined, (iso) => {
         editor
           .chain()
           .focus()
           .insertContent({ type: "date", attrs: { date: iso } })
           .run();
-      });
+      }, coords);
     },
   },
   {

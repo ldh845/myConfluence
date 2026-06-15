@@ -164,11 +164,28 @@ export default function PageHeader({
       if (!r.ok) throw new Error("watch toggle failed");
       return (await r.json()) as { watching: boolean };
     },
-    onSuccess: (data) => {
+    onMutate: (next) => {
+      const prev = queryClient.getQueryData<{ watching: boolean }>(
+        ["watch", page.id, user?.id ?? null]
+      );
       queryClient.setQueryData(
         ["watch", page.id, user?.id ?? null],
-        data,
+        { watching: next }
       );
+      return { prev };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.prev) {
+        queryClient.setQueryData(
+          ["watch", page.id, user?.id ?? null],
+          ctx.prev
+        );
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["watch", page.id, user?.id ?? null],
+      });
     },
   });
   const toggleWatching = () => {
@@ -213,9 +230,10 @@ export default function PageHeader({
           e.preventDefault();
           toggleSaved();
           break;
-        // Cycle 61 followup — 지켜보기 비활성화(개발 중). W 단축키 무동작.
-        // toggleWatching 코드/알림 인프라는 유지 (재활성화 시 한 줄 복구).
-        // case "w": e.preventDefault(); toggleWatching(); break;
+        case "w":
+          e.preventDefault();
+          toggleWatching();
+          break;
         case "s":
           if (onShareClick) {
             e.preventDefault();
@@ -338,14 +356,19 @@ export default function PageHeader({
                 disabled={!user || saveMutation.isPending}
                 onClick={toggleSaved}
               />
-              {/* (4) 지켜보기 — Cycle 61 followup: 개발 중이라 비활성화.
-                  WatchList 토글 + 알림 인프라(Cycle 53/61)는 코드로 유지,
-                  재활성화 시 disabled/onClick/단축키만 복구. */}
+              {/* (4) 지켜보기 — WatchList 토글. 페이지 변경 알림 수신. */}
               <ActionButton
-                icon={<AppIcon name="watch" size={14} alt="지켜보기" />}
+                icon={
+                  <AppIcon
+                    name={isWatching ? "watch" : "crossedEye"}
+                    size={14}
+                    alt="지켜보기"
+                  />
+                }
                 label="지켜보기"
-                tooltip="지켜보기 — 아직 개발 중인 기능입니다"
-                disabled
+                tooltip={user ? `지켜보기 (W)` : notLoggedInTitle}
+                disabled={!user || watchMutation.isPending}
+                onClick={toggleWatching}
               />
               {/* (5) 공유 (S) — SharePageDialog */}
               <ActionButton

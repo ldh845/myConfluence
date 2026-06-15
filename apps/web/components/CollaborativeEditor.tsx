@@ -831,15 +831,18 @@ function EditorContentWithCursorStyles({ editor }: { editor: Editor }) {
           border-collapse: collapse;
           margin: 0.8em 0;
           overflow: hidden;
-          table-layout: fixed;
-          width: 100%;
+          table-layout: auto;
+          width: auto;
+          min-width: 500px;
+          max-width: 100%;
         }
         .ProseMirror table td,
         .ProseMirror table th {
           border: 1px solid #dfe1e6;
-          padding: 6px 10px;
+          padding: 3px 8px;
           vertical-align: top;
           position: relative;
+          min-width: 120px;
         }
         .ProseMirror table th {
           background: #f4f5f7;

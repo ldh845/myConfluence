@@ -3,8 +3,11 @@ import "./globals.css";
 import Providers from "./providers";
 
 export const metadata: Metadata = {
-  title: "myConfluence",
+  title: "DocSpace",
   description: "사내 위키 POC - Confluence 대체",
+  icons: {
+    icon: "/icons/space.png",
+  },
 };
 
 export default function RootLayout({

@@ -163,6 +163,24 @@ body {
   margin: 1.2em 0 0.4em;
   color: var(--c-navy);
 }
+.cf-article h4 {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 1.1em 0 0.3em;
+  color: var(--c-navy);
+}
+.cf-article h5 {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 1.1em 0 0.3em;
+  color: var(--c-navy);
+}
+.cf-article h6 {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 1.1em 0 0.3em;
+  color: var(--c-text-muted);
+}
 .cf-article p {
   margin: 0.6em 0;
 }
@@ -310,21 +328,21 @@ body {
 .cf-article th,
 .cf-article td {
   border: 1px solid var(--c-border);
-  padding: 6px 10px;
+  padding: 3px 8px;
 }
 .cf-article th {
   background: #f4f5f7;
 }
 
 /* Cycle 87 — 반응형 표 모드. data-width-mode='responsive' (기본) 면 셀 내용
-   기준 폭 (table-layout:auto, width:auto). resizable=true 가 박은 colwidth 도
-   col 의 width:auto 강제로 무력화. 고정폭 모드(=fixed)에서만 기존 동작 유지. */
+   기준 폭 (table-layout:auto, width:auto). 고정폭 모드(=fixed)에서만 전폭. */
 .ProseMirror table[data-width-mode="responsive"] {
-  table-layout: auto !important;
-  width: auto !important;
+  table-layout: auto;
+  width: auto;
 }
+/* TipTap 기본 col width=75px 인라인 스타일을 !important 로 덮어씀 (너무 좁으므로). */
 .ProseMirror table[data-width-mode="responsive"] col {
-  width: auto !important;
+  width: 150px !important;
 }
 /* Cycle 87 — TableCell/Header 의 verticalAlign attr 시각화는 inline style 로
    처리되므로 별도 CSS 불필요. (style="vertical-align: top|middle|bottom") */
