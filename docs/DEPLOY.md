@@ -622,6 +622,60 @@ curl -s -o /dev/null -w '%{http_code}\n' http://localhost:8082/    # 200/307
 
 ---
 
+## 3.13 인증·권한·API 토큰 운영 (Cycle L-AUTH / L-AUTHZ / L-API)
+
+`feature/ldh` 의 인증·권한·API 토큰 보강이 운영에 닿는 부분. 상세는
+`docs/CYCLES-ldh.md` / `docs/TASKS-ldh.md`, MCP 연동은 `docs/MCP-INTEGRATION.md`.
+
+### 환경변수 (`apps/api/.env` — 둘 다 기본 비활성)
+
+| 변수 | 의미 | 운영 권장 |
+|---|---|---|
+| `LOCAL_LOGIN_ENABLED` | `true` 면 로컬 ID/PW 로그인(`POST /auth/login`) + 로그인 화면 ID/PW 폼 노출. 대상은 관리자가 `PATCH /admin/users/:id/local-password` 로 비번을 채운 계정뿐(SSO 전용 계정은 400). | **운영 정책 미정** — env 로 on/off. 기본 SSO 단일이면 미설정(false). |
+| `ENABLE_API_DOCS` | `true` 면 OpenAPI 명세 노출(`/api/docs` UI + `/api/docs-json` raw). `NODE_ENV` 와 무관(테스트 서버가 `NODE_ENV=production` 이어도 켜짐). 미설정/false = 라우트 미등록(404). | **사내망 전용이라 켜둬도 무방**(MCP 팀이 명세 참조). ⚠️ **외부 노출 환경이면 끄기.** |
+
+> 게이트는 둘 다 "명시적으로 켜야만 열림"(기본 안전). 컨테이너 운영 시
+> `docker-compose.override.yml` 의 `services.api.environment` 에 한 줄 추가 후
+> `docker compose up -d api`(재생성)로 반영.
+
+### ⚠️ Keycloak realm 변경 시 — `--force-recreate` 필수
+
+admin 역할·그룹(`dev-team1`/`dev-team2`)·`department` 시드가 모두
+`infra/keycloak/realm-docspace.json` 에 들어 있다. Keycloak 은
+`start-dev --import-realm` 으로 기동하는데, **`--import-realm` 은 신규 realm 만
+import** 한다(같은 이름 realm 이 이미 있으면 건너뜀). 따라서 realm JSON 을 바꾼 배포는
+일반 `docker compose up -d` 로는 **재import 되지 않는다**:
+
+```bash
+sudo docker compose up -d --force-recreate keycloak
+```
+
+- 재생성 시 start-dev 인메모리(H2)라 **런타임 Keycloak 계정/세션이 초기화**되고,
+  서명키도 갱신돼 **기존 세션이 무효화** → 사용자는 쿠키 정리 후 재로그인.
+  (테스트 계정 등은 realm 시드로 복구되므로 영구.)
+- 그룹 동기화(L8)·부서 자동 권한(L10)은 이 realm 의 group-membership/`department`
+  claim 에 의존하므로, 매퍼·속성을 바꿨다면 위 재생성으로만 반영된다.
+
+### nginx — `/api` prefix-strip 와 bare 라우팅
+
+`deploy/nginx-stack.conf` 의 `location /api/ { proxy_pass http://api:3001/; }` 는
+**끝 슬래시로 `/api` prefix 를 떼고** api 로 전달한다(`/auth/` 는 keycloak 으로).
+api 는 `setGlobalPrefix` 없는 **bare 라우팅**(`/auth/me` 식)이라 이 strip 과 맞물린다.
+→ **새 라우트를 prefix 없이 추가**하면 외부에선 `/api/<route>` 로 접근된다.
+(이 때문에 OpenAPI Swagger 도 api 내부엔 `/docs`·`/docs-json` 으로 등록 — 외부 주소는
+`/api/docs`·`/api/docs-json`. L-API-4 followup 2.)
+
+### API 토큰 운영 메모
+
+- 토큰은 **발급자(주인)의 권한을 그대로 승계**한다(별도 인가 설계 없음). 스코프
+  (`READ`/`READ_WRITE`)로 쓰기를 축소할 뿐, 권한을 넓히지 않는다.
+- **MCP/외부 연동은 전용 계정 + 그 계정의 토큰**을 권장 — 필요한 스페이스/그룹 권한만
+  부여한 계정으로 발급해 최소권한을 유지한다. 개인 계정 토큰은 그 사람의 전 권한을 노출.
+- 발급(`POST /api/auth/tokens`)은 **쿠키 세션(사람)** 만 가능(토큰으로는 발급 불가).
+  평문 토큰은 발급 응답에 1회만. 비활성 계정의 토큰은 거부.
+
+---
+
 ## 4. 트러블슈팅
 
 | 증상 | 원인/해결 |
@@ -644,3 +698,18 @@ curl -s -o /dev/null -w '%{http_code}\n' http://localhost:8082/    # 200/307
 | (VM) `docker compose build` 가 base image metadata 단계에서 i/o timeout (직통 IP 로 dial) | embedded BuildKit 이 데몬 HTTP_PROXY 를 base image 해결에 안 쓴다. `docker pull <base image>`(예: `node:22-bookworm`)로 먼저 받아두면 — 이 경로는 containerd 프록시 경유라 정상 — BuildKit 이 로컬 이미지를 써서 우회된다 |
 | (compose nginx) 앱 컨테이너 재빌드/재생성 후 `/api`·`/auth` 등이 502 | nginx 는 config 로드 시점에 upstream(`api`/`web`/`keycloak`) IP 를 1회 해석·캐시한다. `docker compose up -d --build` 로 앱 컨테이너만 새 IP 를 받으면 nginx 가 옛 IP 를 들고 502. **`docker compose restart nginx`(단독)** 로 upstream 재해석하면 해소. **redeploy.sh 가 [4/5] 단계 끝에서 자동 처리함 (Fix 이후).** (정공법: nginx conf 에 `resolver 127.0.0.11` + 변수 `proxy_pass` 로 동적 해석) |
 | (compose 전환) 옛 페이지·공간이 화면에서 사라짐 | nohup(네이티브 PostgreSQL 16, `/var/lib/postgresql/16/main`)→compose(컨테이너 `docspace_postgres`)로 전환하며 **DB 가 갈림**. 컨테이너 postgres 가 5432 점유 → 네이티브 클러스터 down. 복구: 네이티브 클러스터를 임시 `:5433` 으로 기동 → `pg_dump` → 컨테이너 DB drop/recreate → 덤프 복원 → api 재기동(entrypoint 의 `prisma migrate deploy` 자동). 백업 먼저 떠둘 것 |
+
+---
+
+## 5. TODO: AFS 입주 (K8s 운영 이전)
+
+> 현재 문서는 **VM 단일 인스턴스 / Docker Compose** 운영 기준이다. AFS(사내 K8s)
+> 입주 시 아래가 별도로 다뤄져야 한다 — **이번 문서 범위 아님(자리만 표시)**.
+
+- K8s manifest(Deployment/Service/Ingress/ConfigMap/Secret) — compose → 매니페스트 전환.
+- AFS Keycloak 실연동 — realm/클라이언트/issuer·redirect URI 를 AFS 도메인 기준으로.
+- 시크릿 관리 — `JWT_SECRET`/`POSTGRES_PASSWORD`/`KC_CLIENT_SECRET` 등을 K8s Secret
+  (또는 사내 Vault)로. 평문 `.env` 탈피.
+- 영속 스토리지 — Postgres PVC + 백업 정책, 첨부 저장소.
+- 환경 플래그 — `ENABLE_API_DOCS`(외부 노출 여부에 따라), `LOCAL_LOGIN_ENABLED`,
+  `USE_REDIS`(수평 확장 시 true) 를 환경별로 분리.

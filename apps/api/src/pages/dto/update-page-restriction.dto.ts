@@ -12,6 +12,11 @@ export class UpdatePageRestrictionModeDto {
   @IsOptional()
   @IsArray()
   members?: Array<{ userId: string; role: PageRestrictionRole }>;
+
+  // Cycle L7-2 (feature/ldh) — 제한 멤버에 그룹 추가. members 와 함께 원자적 교체.
+  @IsOptional()
+  @IsArray()
+  groups?: Array<{ groupId: string; role: PageRestrictionRole }>;
 }
 
 export class AddPageRestrictionMemberDto {

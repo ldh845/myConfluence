@@ -15,8 +15,18 @@
 - **첨부파일** — 드래그앤드롭 업로드, 100MB 제한
 - **검색** — pg_trgm 한국어 전문 검색, Ctrl+K 빠른 검색,
   스페이스/날짜/작성자 필터
-- **인증** — Keycloak OIDC SSO + 단일 로그아웃(SLO). 세션은 자체
-  `docspace_session` JWT httpOnly 쿠키(7일 만료) 유지
+- **인증** — Keycloak OIDC SSO + 단일 로그아웃(SLO), **로컬 로그인 병행
+  (하이브리드, `LOCAL_LOGIN_ENABLED`)**. 세션은 자체 `docspace_session` JWT
+  httpOnly 쿠키(7일 만료). 계정 활성/비활성, 비밀번호 정책·로그인 실패 잠금,
+  역할(ADMIN/DEVELOPER) 관리
+- **권한** — 3계층(전역 역할 / 스페이스 멤버십·공개범위 / 페이지 단위 제한)에
+  **그룹 기반 권한(개인∪그룹 max, deny 없음)** + **부서 자동 권한**(로그인 시
+  그룹 자동배정 — Keycloak 그룹 동기화 + `department` 폴백) 결합. 접근 권한
+  역산 조회 API(공간/페이지를 누가 볼 수 있나)
+- **프로그램 연동** — **API 토큰**(발급·스코프 READ/READ_WRITE·폐기,
+  `Authorization: Bearer dsp_…`) + **OpenAPI 명세**(`/api/docs`,
+  `ENABLE_API_DOCS`) → 사내 MCP 연동. 자세히는
+  [`docs/MCP-INTEGRATION.md`](docs/MCP-INTEGRATION.md)
 - **공유** — 토큰 기반 read-only 외부 링크
 - **내보내기** — Markdown / PDF
 - **홈 대시보드** — 발견 / 내 작업 / 내 공간 (Confluence 스타일)
@@ -53,6 +63,10 @@ docs/     # 운영 문서 (DEPLOY.md 등)
   (`${POSTGRES_PASSWORD}` 참조), `JWT_SECRET`, Keycloak OIDC 값
   (`KC_ISSUER_URI`, `KC_CLIENT_ID`, `KC_CLIENT_SECRET`,
   `OIDC_REDIRECT_URI`, `OIDC_POST_LOGIN_REDIRECT`, `OIDC_POST_LOGOUT_REDIRECT`)
+  - 선택 플래그(둘 다 기본 비활성): `LOCAL_LOGIN_ENABLED`(로컬 ID/PW 로그인
+    on/off — 운영 정책 미정), `ENABLE_API_DOCS`(OpenAPI 명세 `/api/docs` 노출
+    — 사내망이면 켜둬도 무방, 외부 노출 환경이면 끄기). 운영 의미는
+    [`docs/DEPLOY.md`](docs/DEPLOY.md) 참조
 
 ### 2. 컨테이너 풀스택 기동 (권장)
 
@@ -85,6 +99,8 @@ npm run dev:all        # web + api + hocuspocus 동시 기동
 자세한 운영·배포 절차는 [`docs/DEPLOY.md`](docs/DEPLOY.md) 참조.
 
 ## 운영·접속
+
+> DocSpace 는 **사내망 전용**(외부 인터넷 노출 없음)을 전제로 운영한다.
 
 - **운영 환경**: VM 단일 인스턴스 — <http://166.79.31.248:8082>
 - **개발**: 로컬 <http://localhost:3000>(호스트 dev) 또는
@@ -123,8 +139,8 @@ npm run dev:all        # web + api + hocuspocus 동시 기동
 
 - [`docs/DEPLOY.md`](docs/DEPLOY.md) — 운영·배포 매뉴얼 (VM 셋업·재배포·
   트러블슈팅·함정)
-
+- [`docs/MCP-INTEGRATION.md`](docs/MCP-INTEGRATION.md) — 사내 MCP/외부 연동
+  가이드 (API 토큰·스코프·권한·핵심 엔드포인트·OpenAPI 위치)
 - [`deploy/redeploy.sh`](deploy/redeploy.sh) — VM 재배포 스크립트
-  =======
-  
-  Source repository
+- `docs/CYCLES-ldh.md` / `docs/TASKS-ldh.md` — `feature/ldh` 작업 로그·Task
+  현황 (인증·권한·API 토큰 보강 — L-AUTH/L-AUTHZ/L-API)

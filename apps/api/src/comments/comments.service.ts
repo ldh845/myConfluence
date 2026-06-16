@@ -144,6 +144,23 @@ export class CommentsService {
     });
   }
 
+  // Cycle L5-2 (feature/ldh) — 댓글 쓰기 권한 판정용 컨텍스트 해석.
+  //   댓글 → 소속 페이지/스페이스/작성자. 컨트롤러가 이걸로 본인 여부·편집/관리 권한을 판정.
+  async getContext(
+    id: string,
+  ): Promise<{ pageId: string; spaceId: string; authorId: string | null }> {
+    const c = await this.prisma.comment.findUnique({
+      where: { id },
+      select: {
+        pageId: true,
+        authorId: true,
+        page: { select: { spaceId: true } },
+      },
+    });
+    if (!c) throw new NotFoundException({ error: 'comment not found' });
+    return { pageId: c.pageId, spaceId: c.page.spaceId, authorId: c.authorId };
+  }
+
   listByPage(pageId: string) {
     return this.prisma.comment.findMany({
       where: { pageId },

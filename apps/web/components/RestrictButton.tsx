@@ -11,11 +11,15 @@ import {
 import AppIcon from "@/components/AppIcon";
 import UserSearchCombobox from "@/components/UserSearchCombobox";
 import type {
+  PageRestrictionGroup,
   PageRestrictionMember,
   PageRestrictionMode,
   PageRestrictionRole,
   PageRestrictionState,
 } from "@/lib/types";
+
+// Cycle L7-2 — 그룹 선택용 디렉터리(GET /api/groups, 인증 사용자 누구나).
+type GroupOption = { id: string; name: string };
 
 // Cycle 83 — 페이지 단위 제한 버튼.
 //   3 모드: 제한 없음 / 편집 제한 / 보기 및 편집 제한.
@@ -96,6 +100,10 @@ function RealRestrictButton({ pageId }: { pageId: string }) {
   // Cycle 83 followup 3 — 모든 변경은 로컬 draft. '적용' 시 한 번에 PATCH.
   const [draftMode, setDraftMode] = useState<PageRestrictionMode>("NONE");
   const [draftMembers, setDraftMembers] = useState<PageRestrictionMember[]>([]);
+  // Cycle L7-2 — 그룹 제한 멤버 draft + 추가 UI 상태/역할.
+  const [draftGroups, setDraftGroups] = useState<PageRestrictionGroup[]>([]);
+  const [addingGroup, setAddingGroup] = useState(false);
+  const [addGroupRole, setAddGroupRole] = useState<PageRestrictionRole>("VIEW");
   const qc = useQueryClient();
 
   const queryKey = ["page-restriction", pageId];
@@ -110,14 +118,29 @@ function RealRestrictButton({ pageId }: { pageId: string }) {
     },
   });
 
+  // Cycle L7-2 — 그룹 디렉터리(다이얼로그 열릴 때만 조회). 그룹 선택 드롭다운용.
+  const { data: allGroups } = useQuery<GroupOption[]>({
+    queryKey: ["groups-directory"],
+    enabled: open,
+    queryFn: async () => {
+      const r = await fetch("/api/groups", { credentials: "include" });
+      if (!r.ok) throw new Error("failed");
+      return (await r.json()) as GroupOption[];
+    },
+  });
+
   // 다이얼로그 열릴 때 서버 상태로 draft 초기화. 닫힐 때 보조 상태 정리.
   useEffect(() => {
     if (open && data) {
       setDraftMode(data.mode);
       setDraftMembers(data.members);
+      setDraftGroups(data.groups);
       setMemberPage(0);
     }
-    if (!open) setAdding(false);
+    if (!open) {
+      setAdding(false);
+      setAddingGroup(false);
+    }
   }, [open, data]);
 
   const canManage = data?.canManage ?? false;
@@ -129,6 +152,16 @@ function RealRestrictButton({ pageId }: { pageId: string }) {
   useEffect(() => {
     if (adding) setAddRole(draftMode === "EDIT" ? "EDIT" : "VIEW");
   }, [adding, draftMode]);
+
+  // Cycle L7-2 — 그룹 추가 UI 열릴 때도 모드에 맞게 기본 역할.
+  useEffect(() => {
+    if (addingGroup) setAddGroupRole(draftMode === "EDIT" ? "EDIT" : "VIEW");
+  }, [addingGroup, draftMode]);
+
+  // 아직 추가되지 않은 그룹만 드롭다운에 노출.
+  const availableGroups = (allGroups ?? []).filter(
+    (g) => !draftGroups.some((d) => d.groupId === g.id),
+  );
 
   // 페이지네이션 계산 (draft 기준).
   const totalPages = Math.max(
@@ -146,8 +179,10 @@ function RealRestrictButton({ pageId }: { pageId: string }) {
     if (next === draftMode) return;
     setDraftMode(next);
     setDraftMembers([]);
+    setDraftGroups([]);
     setMemberPage(0);
     setAdding(false);
+    setAddingGroup(false);
   };
 
   const apply = useMutation({
@@ -161,6 +196,10 @@ function RealRestrictButton({ pageId }: { pageId: string }) {
           members: draftMembers.map((m) => ({
             userId: m.userId,
             role: m.role,
+          })),
+          groups: draftGroups.map((g) => ({
+            groupId: g.groupId,
+            role: g.role,
           })),
         }),
       });
@@ -180,6 +219,12 @@ function RealRestrictButton({ pageId }: { pageId: string }) {
       draftMembers.length !== data.members.length ||
       draftMembers.some((d) => {
         const s = data.members.find((sm) => sm.userId === d.userId);
+        return !s || s.role !== d.role;
+      }) ||
+      // Cycle L7-2 — 그룹 변경도 dirty 로 감지.
+      draftGroups.length !== data.groups.length ||
+      draftGroups.some((d) => {
+        const s = data.groups.find((sg) => sg.groupId === d.groupId);
         return !s || s.role !== d.role;
       }));
 
@@ -256,6 +301,135 @@ function RealRestrictButton({ pageId }: { pageId: string }) {
 
               {(draftMode === "EDIT" || draftMode === "VIEW_EDIT") && (
                 <div className="mt-3 pt-3 border-t border-[#dfe1e6] flex-1 min-h-0 flex flex-col">
+                  {/* Cycle L7-2 — 허용 그룹(개인 사용자와 별개로 결합, 역할 max). */}
+                  <div className="mb-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="text-[11px] font-semibold uppercase tracking-wide text-[#6b778c]">
+                        허용 그룹
+                      </div>
+                      {canManage && (
+                        <button
+                          type="button"
+                          onClick={() => setAddingGroup((v) => !v)}
+                          className="text-[11px] text-[#0052cc] hover:underline"
+                        >
+                          {addingGroup ? "닫기" : "+ 그룹 추가"}
+                        </button>
+                      )}
+                    </div>
+                    {addingGroup && canManage && (
+                      <div className="mb-2 flex items-center gap-1.5">
+                        {draftMode === "VIEW_EDIT" && (
+                          <select
+                            value={addGroupRole}
+                            onChange={(e) =>
+                              setAddGroupRole(
+                                e.target.value as PageRestrictionRole,
+                              )
+                            }
+                            className="text-[11px] border border-[#dfe1e6] rounded px-1 py-1"
+                          >
+                            <option value="VIEW">보기</option>
+                            <option value="EDIT">조회+편집</option>
+                          </select>
+                        )}
+                        <select
+                          value=""
+                          onChange={(e) => {
+                            const g = availableGroups.find(
+                              (x) => x.id === e.target.value,
+                            );
+                            if (!g) return;
+                            setDraftGroups((prev) => [
+                              ...prev,
+                              {
+                                groupId: g.id,
+                                name: g.name,
+                                role:
+                                  draftMode === "EDIT" ? "EDIT" : addGroupRole,
+                              },
+                            ]);
+                            setAddingGroup(false);
+                          }}
+                          className="flex-1 text-[12px] border border-[#dfe1e6] rounded px-1.5 py-1"
+                        >
+                          <option value="" disabled>
+                            {availableGroups.length === 0
+                              ? "추가할 그룹이 없습니다"
+                              : "그룹 선택..."}
+                          </option>
+                          {availableGroups.map((g) => (
+                            <option key={g.id} value={g.id}>
+                              {g.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                    {draftGroups.length === 0 ? (
+                      <div className="text-[#6b778c] text-[11px]">
+                        추가된 그룹이 없습니다.
+                      </div>
+                    ) : (
+                      <ul className="space-y-1 max-h-[5.5rem] overflow-y-auto">
+                        {draftGroups.map((g) => (
+                          <li
+                            key={g.groupId}
+                            className="flex items-center gap-2 py-0.5 text-[12px]"
+                          >
+                            <span className="px-1 rounded bg-[#eae6ff] text-[#5243aa] text-[10px] font-semibold shrink-0">
+                              그룹
+                            </span>
+                            <span className="flex-1 truncate text-[#172b4d]">
+                              {g.name}
+                            </span>
+                            {draftMode === "VIEW_EDIT" ? (
+                              <select
+                                value={g.role}
+                                disabled={!canManage}
+                                onChange={(e) => {
+                                  const role = e.target
+                                    .value as PageRestrictionRole;
+                                  setDraftGroups((prev) =>
+                                    prev.map((x) =>
+                                      x.groupId === g.groupId
+                                        ? { ...x, role }
+                                        : x,
+                                    ),
+                                  );
+                                }}
+                                className="text-[11px] border border-[#dfe1e6] rounded px-1 py-0.5"
+                              >
+                                <option value="VIEW">보기</option>
+                                <option value="EDIT">조회+편집</option>
+                              </select>
+                            ) : (
+                              <span className="text-[11px] text-[#0052cc] font-medium">
+                                {g.role === "EDIT" ? "편집" : "보기"}
+                              </span>
+                            )}
+                            {canManage && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setDraftGroups((prev) =>
+                                    prev.filter(
+                                      (x) => x.groupId !== g.groupId,
+                                    ),
+                                  )
+                                }
+                                className="text-[#6b778c] hover:text-[#de350b] text-[14px] leading-none"
+                                title="제거"
+                                aria-label={`${g.name} 제거`}
+                              >
+                                ×
+                              </button>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
                   <div className="flex items-center justify-between mb-2">
                     <div className="text-[11px] font-semibold uppercase tracking-wide text-[#6b778c]">
                       허용 사용자

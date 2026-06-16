@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth/useAuth";
 import AdminGeneralSettings from "./AdminGeneralSettings";
 import AdminUsers from "./AdminUsers";
+import AdminGroups from "./AdminGroups";
 
 // Cycle 48 — 관리자 페이지 (/admin). (app) route group 안이라 TopNav+Sidebar
 // 셸이 자동 적용. ADMIN 만 접근 — 비-ADMIN 진입 시 /home 으로 redirect.
@@ -13,10 +14,11 @@ import AdminUsers from "./AdminUsers";
 // Cycle 48 followup — 좌측 탭 사이드바 제거. 탭 전환은 TopNav 톱니바퀴 드롭다운
 // (?tab=general | ?tab=users) 으로만. 페이지는 useSearchParams 로 초기 탭만 결정.
 
-type Tab = "general" | "users";
+type Tab = "general" | "users" | "groups";
 const TAB_LABEL: Record<Tab, string> = {
   general: "일반 설정",
   users: "사용자 관리",
+  groups: "그룹 관리",
 };
 
 function AdminPageInner() {
@@ -24,7 +26,12 @@ function AdminPageInner() {
   const { user, isLoading } = useAuth();
   const searchParams = useSearchParams();
   const tabParam = searchParams.get("tab");
-  const tab: Tab = tabParam === "users" ? "users" : "general";
+  const tab: Tab =
+    tabParam === "users"
+      ? "users"
+      : tabParam === "groups"
+        ? "groups"
+        : "general";
 
   useEffect(() => {
     if (isLoading) return;
@@ -44,6 +51,7 @@ function AdminPageInner() {
         </h1>
         {tab === "general" && <AdminGeneralSettings />}
         {tab === "users" && <AdminUsers />}
+        {tab === "groups" && <AdminGroups />}
       </div>
     </main>
   );

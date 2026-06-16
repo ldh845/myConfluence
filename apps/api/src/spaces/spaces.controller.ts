@@ -11,14 +11,18 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import type { Request } from 'express';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { OptionalJwtAuthGuard } from '../auth/optional-jwt-auth.guard';
 import { SpacesService } from './spaces.service';
+import { EffectiveAccessService } from './effective-access.service';
 import { CreateSpaceDto } from './dto/create-space.dto';
 import { SetHomePageDto } from './dto/set-home-page.dto';
 import { UpdateSpaceSettingsDto } from './dto/update-space-settings.dto';
 import { AddMemberDto } from './dto/add-member.dto';
 import { UpdateMemberRoleDto } from './dto/update-member-role.dto';
+import { AddMemberGroupDto } from './dto/add-member-group.dto';
+import { UpdateMemberGroupRoleDto } from './dto/update-member-group-role.dto';
 import {
   AddShortcutDto,
   UpdateShortcutDto,
@@ -34,12 +38,38 @@ function userFromReq(
     : null;
 }
 
+// Cycle L-API-4 — OpenAPI 태그/Bearer. 토큰(dsp_) 또는 쿠키로 호출.
+@ApiTags('spaces')
+@ApiBearerAuth('api-token')
 @Controller('spaces')
 export class SpacesController {
-  constructor(private readonly spaces: SpacesService) {}
+  constructor(
+    private readonly spaces: SpacesService,
+    private readonly effectiveAccess: EffectiveAccessService,
+  ) {}
+
+  // Cycle L9 (feature/ldh) — 접근 권한 역산: 이 공간을 볼 수 있는 사용자 전부와 경로.
+  //   조회 권한은 공간 canManage(또는 전역 ADMIN) — service 가 게이트. limit/offset 옵션.
+  @Get(':id/effective-access')
+  @UseGuards(JwtAuthGuard)
+  effectiveAccessForSpace(
+    @Param('id') id: string,
+    @Req() req: Request,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.effectiveAccess.spaceEffectiveAccess(id, userFromReq(req), {
+      limit: limit ? Number(limit) : undefined,
+      offset: offset ? Number(offset) : undefined,
+    });
+  }
 
   // Cycle 32 — 인증 시 본인 개인 공간도 포함, 비인증이면 SITE만.
   @Get()
+  @ApiOperation({
+    summary: '스페이스 목록',
+    description: '접근 가능한 스페이스 목록(공개 + 멤버/그룹 권한 있는 비공개).',
+  })
   @UseGuards(OptionalJwtAuthGuard)
   findAll(@Req() req: Request) {
     return this.spaces.findAll(
@@ -58,20 +88,27 @@ export class SpacesController {
   }
 
   // Cycle 33 — 공간 생성 시 홈 페이지 자동 생성. 인증 시 actor 전달.
+  // Cycle L5 — 인증 필수로 강화(OptionalJwt→Jwt). 웹 미들웨어는 직접 API 호출(curl)을
+  //   막지 못해 비인증 생성(소유자·멤버 없는 ownerless 공간)이 가능했던 구멍을 폐쇄.
+  //   개인 공간 자동 생성은 별도 경로(getOrCreatePersonal)라 무영향. 이제 생성자가 ADMIN 멤버.
   @Post()
-  @UseGuards(OptionalJwtAuthGuard)
+  @UseGuards(JwtAuthGuard)
   create(@Body() dto: CreateSpaceDto, @Req() req: Request) {
-    return this.spaces.create(
-      dto,
-      req.user ? { id: req.user.id, name: req.user.name } : null,
-    );
+    return this.spaces.create(dto, {
+      id: req.user!.id,
+      name: req.user!.name,
+    });
   }
 
-  // Cycle 33 — 공간 홈 페이지 지정.
+  // Cycle 33 — 공간 홈 페이지 지정. Cycle L5-2 — 공간 관리 권한 필수(service 에서 판정).
   @Patch(':id')
   @UseGuards(JwtAuthGuard)
-  setHomePage(@Param('id') id: string, @Body() dto: SetHomePageDto) {
-    return this.spaces.setHomePage(id, dto.homePageId);
+  setHomePage(
+    @Param('id') id: string,
+    @Body() dto: SetHomePageDto,
+    @Req() req: Request,
+  ) {
+    return this.spaces.setHomePage(id, dto.homePageId, userFromReq(req));
   }
 
   // Cycle 74-B — 공간 도구 '개요' 탭: 이름/설명/공개범위 변경. canManage 는 service 에서.
@@ -128,6 +165,54 @@ export class SpacesController {
     @Req() req: Request,
   ) {
     return this.spaces.removeMember(id, userId, userFromReq(req));
+  }
+
+  // ─── Cycle L7 (feature/ldh) — 스페이스 그룹 권한. canManage 는 service. ───
+  @Get(':id/member-groups')
+  @UseGuards(JwtAuthGuard)
+  listMemberGroups(@Param('id') id: string, @Req() req: Request) {
+    return this.spaces.listMemberGroups(id, userFromReq(req));
+  }
+
+  @Post(':id/member-groups')
+  @UseGuards(JwtAuthGuard)
+  addMemberGroup(
+    @Param('id') id: string,
+    @Body() dto: AddMemberGroupDto,
+    @Req() req: Request,
+  ) {
+    return this.spaces.addMemberGroup(
+      id,
+      dto.groupId,
+      dto.role,
+      userFromReq(req),
+    );
+  }
+
+  @Patch(':id/member-groups/:groupId')
+  @UseGuards(JwtAuthGuard)
+  updateMemberGroupRole(
+    @Param('id') id: string,
+    @Param('groupId') groupId: string,
+    @Body() dto: UpdateMemberGroupRoleDto,
+    @Req() req: Request,
+  ) {
+    return this.spaces.updateMemberGroupRole(
+      id,
+      groupId,
+      dto.role,
+      userFromReq(req),
+    );
+  }
+
+  @Delete(':id/member-groups/:groupId')
+  @UseGuards(JwtAuthGuard)
+  removeMemberGroup(
+    @Param('id') id: string,
+    @Param('groupId') groupId: string,
+    @Req() req: Request,
+  ) {
+    return this.spaces.removeMemberGroup(id, groupId, userFromReq(req));
   }
 
   // Cycle 74-D — 감사 로그(공간 단위 ActivityLog 필터 뷰). canManage 는 service.
