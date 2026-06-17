@@ -12,11 +12,11 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 
 // Cycle 74-A — 스페이스 단위 권한 판정의 단일 출처.
-//   정책:
+//   정책 (visibility 제거 후):
 //   - 전역 ADMIN(Cycle 48 User.role): 모든 스페이스에 대해 override(전권).
-//   - PUBLIC: 읽기=누구나(앱 미들웨어가 로그인 강제), 편집=로그인 사용자(암묵적 Editor),
-//             관리=Space Admin 또는 전역 ADMIN.
-//   - PRIVATE: 읽기=멤버, 편집=멤버 role>=EDITOR, 관리=멤버 role=ADMIN.
+//   - 일반 공간(SITE): 읽기/편집/관리 = 멤버/그룹 역할 기반.
+//     VIEWER 이상 = 보기, EDITOR 이상 = 편집, ADMIN = 관리.
+//     멤버가 아니면 접근 불가(canView=false).
 //   - PERSONAL: 읽기/편집/관리=소유자(ownerId)만.
 
 export type Actor = { id: string; role: string } | null;
@@ -93,39 +93,33 @@ export class SpacePermissionService {
 
   canView(access: SpaceAccess, user: Actor): boolean {
     if (this.isGlobalAdmin(user)) return true;
-    switch (access.space.visibility) {
-      case 'PUBLIC':
-        return true;
-      case 'PRIVATE':
-        return access.role !== null;
-      case 'PERSONAL':
-        return !!user && access.space.ownerId === user.id;
-      default:
-        return false;
+    // PERSONAL 공간: 소유자만 접근
+    if (access.space.visibility === 'PERSONAL') {
+      return !!user && access.space.ownerId === user.id;
     }
+    // 일반 공간(SITE): 멤버/그룹 역할이 있으면 접근 가능 (VIEWER 이상)
+    return access.role !== null;
   }
 
   canEdit(access: SpaceAccess, user: Actor): boolean {
     if (this.isGlobalAdmin(user)) return true;
     if (!user) return false;
-    switch (access.space.visibility) {
-      case 'PUBLIC':
-        return true;
-      case 'PRIVATE':
-        return access.role === 'ADMIN' || access.role === 'EDITOR';
-      case 'PERSONAL':
-        return access.space.ownerId === user.id;
-      default:
-        return false;
+    // PERSONAL 공간: 소유자만 편집
+    if (access.space.visibility === 'PERSONAL') {
+      return access.space.ownerId === user.id;
     }
+    // 일반 공간(SITE): EDITOR 또는 ADMIN 멤버만 편집
+    return access.role === 'ADMIN' || access.role === 'EDITOR';
   }
 
   canManage(access: SpaceAccess, user: Actor): boolean {
     if (this.isGlobalAdmin(user)) return true;
     if (!user) return false;
+    // PERSONAL 공간: 소유자만 관리
     if (access.space.visibility === 'PERSONAL') {
       return access.space.ownerId === user.id;
     }
+    // 일반 공간(SITE): ADMIN 멤버만 관리
     return access.role === 'ADMIN';
   }
 
@@ -225,7 +219,6 @@ export class SpacePermissionService {
   //   기존 assertCanEditPage 의 '읽기판'. 첨부/다이어그램/버전/댓글/리액션 등 pageId 로
   //   키되는 읽기 엔드포인트가 공통으로 사용해 비공개·개인 공간·VIEW_EDIT 제한 페이지의
   //   부속 데이터(첨부·다이어그램·버전·댓글·리액션) 누수를 차단한다.
-  //   PUBLIC 공간이면 누구나 통과(기존 본문 읽기와 동일 정책) → 공개 흐름 무변화.
   async assertCanViewPage(pageId: string, user: Actor): Promise<void> {
     const page = await this.prisma.page.findUnique({
       where: { id: pageId },
@@ -274,22 +267,20 @@ export class SpacePermissionService {
   }
 
   // 접근 가능한 스페이스 OR 조건(Space WHERE). 전역 ADMIN 은 {}(제한 없음).
+  //   visibility 제거 후: 멤버/그룹 멤버인 공간 + 본인 개인 공간만 노출.
   private accessibleSpaceOr(user: Actor): Prisma.SpaceWhereInput {
-    const ors: Prisma.SpaceWhereInput[] = [{ visibility: 'PUBLIC' }];
-    if (user) {
-      ors.push({
-        visibility: 'PRIVATE',
-        members: { some: { userId: user.id } },
-      });
-      // Cycle L7 (feature/ldh) — 소속 그룹을 통해 권한을 받은 비공개 공간도 목록에
-      //   노출(접근 가능과 일관). 개인 멤버십과 별개의 OR 가지로만 추가 → 기존 가시성
-      //   조건을 약화하지 않는다(없던 접근만 더해짐).
-      ors.push({
-        visibility: 'PRIVATE',
-        memberGroups: { some: { group: { members: { some: { userId: user.id } } } } },
-      });
-      ors.push({ visibility: 'PERSONAL', ownerId: user.id });
+    if (!user) {
+      // 비로그인: 접근 가능한 공간 없음
+      return { id: '__never__' };
     }
+    const ors: Prisma.SpaceWhereInput[] = [
+      // 개인 멤버십
+      { members: { some: { userId: user.id } } },
+      // 그룹 멤버십
+      { memberGroups: { some: { group: { members: { some: { userId: user.id } } } } } },
+      // 개인 공간
+      { visibility: 'PERSONAL', ownerId: user.id },
+    ];
     return { OR: ors };
   }
 

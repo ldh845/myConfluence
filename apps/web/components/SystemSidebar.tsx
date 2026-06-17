@@ -5,7 +5,6 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import type { SpaceWithPages } from "@/lib/types";
 import { useStarredSpacesStore } from "@/lib/stores/useStarredSpacesStore";
-import { useAuth } from "@/lib/auth/useAuth";
 import { getSpaceHomePageId } from "@/lib/spaceHome";
 import SpaceStarButton from "@/components/SpaceStarButton";
 import SpaceAvatar from "@/components/SpaceAvatar";
@@ -123,24 +122,10 @@ export default function SystemSidebar({
     },
   });
   // Cycle 29 (별표) — "내 공간"은 별표한 스페이스만.
-  // Cycle 49 — 사용자 토글(showPersonalSpaceInSidebar) ON 이면 본인 personal
-  // space 도 '내 공간' 섹션 맨 위에 표시(별표와 dedupe). 토글 자체는 섹션
-  // 헤더 옆 작은 버튼 — PATCH /api/auth/me/prefs 호출 후 ['me']·['spaces']
-  // invalidate 로 즉시 갱신.
+  // 개인 공간도 별표해야만 "내 공간"에 표시됨.
   const starredIds = useStarredSpacesStore((s) => s.ids);
-  const { user } = useAuth();
   const all = spacesData ?? [];
-  const personalSpace =
-    user?.showPersonalSpaceInSidebar
-      ? all.find((s) => s.type === "PERSONAL" && s.ownerId === user.id) ?? null
-      : null;
-  const starredSpaces = all.filter((s) => starredIds.includes(s.id));
-  const spaces: SpaceWithPages[] = personalSpace
-    ? [
-        personalSpace,
-        ...starredSpaces.filter((s) => s.id !== personalSpace.id),
-      ]
-    : starredSpaces;
+  const spaces = all.filter((s) => starredIds.includes(s.id));
 
   const enterSpace = (sp: SpaceWithPages) => {
     // Cycle 32 — 공간의 홈(메인) 페이지로 진입.
@@ -215,7 +200,7 @@ export default function SystemSidebar({
         ))}
       </div>
 
-      {/* 내 공간 — 별표한 스페이스 (+ Cycle 49 토글 ON 시 본인 personal space) */}
+      {/* 내 공간 — 별표한 스페이스만 */}
       <div className="px-4 pt-4 pb-1">
         <span className="text-[11px] font-semibold uppercase tracking-wide text-[#6b778c]">
           내 공간

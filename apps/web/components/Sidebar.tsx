@@ -648,7 +648,7 @@ export default function Sidebar({
 
         {/* Cycle 84 followup 10 — 공간 바로가기 / 페이지 트리 floating 패널.
             followup 11 — 클릭한 아이콘 옆에 뜨도록 inline top 적용. */}
-        {compactPopover?.kind === "shortcuts" && (
+        {compactPopover?.kind === "shortcuts" && space?.canView !== false && (
           <div
             style={compactPopover.style}
             className="absolute left-14 ml-1 w-72 max-h-[60vh] overflow-y-auto bg-white border border-[#dfe1e6] rounded-md shadow-lg z-30"
@@ -694,7 +694,7 @@ export default function Sidebar({
             )}
           </div>
         )}
-        {compactPopover?.kind === "tree" && (
+        {compactPopover?.kind === "tree" && space?.canView !== false && (
           <div
             style={compactPopover.style}
             className="absolute left-14 ml-1 w-72 max-h-[60vh] overflow-y-auto bg-white border border-[#dfe1e6] rounded-md shadow-lg z-30"
@@ -818,6 +818,7 @@ export default function Sidebar({
             !!homePageId &&
             selectedPageId === homePageId
           }
+          disabled={space?.canView === false}
           onClick={goHome}
         />
         {/* Cycle 51 — "페이지" 메뉴 동작 변경: 첫 페이지 자동 이동 폐기.
@@ -828,6 +829,7 @@ export default function Sidebar({
           icon={<AppIcon name="page" size={15} alt="" />}
           label="페이지"
           active={pathname === "/" && view === "pages"}
+          disabled={space?.canView === false}
           onClick={() => {
             if (space) router.push(`/?spaceId=${space.id}&view=pages`);
           }}
@@ -837,6 +839,7 @@ export default function Sidebar({
           icon={<AppIcon name="chart" size={15} alt="" />}
           label="보드"
           active={pathname === "/" && view === "board"}
+          disabled={space?.canView === false}
           onClick={() => {
             if (space) router.push(`/?spaceId=${space.id}&view=board`);
           }}
@@ -874,6 +877,8 @@ export default function Sidebar({
         </>
       )}
 
+      {space?.canView !== false && (
+      <>
       <div className="border-t border-[#dfe1e6] mx-2" />
 
       <div className="px-4 pt-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-[#6b778c]">
@@ -912,7 +917,10 @@ export default function Sidebar({
           <div className="px-3 py-1">빠른 링크가 없습니다</div>
         </div>
       )}
-
+      </>
+      )}
+      {space?.canView !== false && (
+      <>
       <div className="border-t border-[#dfe1e6] mx-2 my-1" />
 
       <div className="px-4 pt-2 pb-1">
@@ -960,8 +968,10 @@ export default function Sidebar({
           </DragOverlay>
         </DndContext>
       </div>
+      </>
+      )}
 
-      <div className="border-t border-[#dfe1e6] px-4 py-2 space-y-1">
+      <div className="mt-auto border-t border-[#dfe1e6] px-4 py-2 space-y-1">
         <button
           type="button"
           onClick={() => onOpenTrash?.()}

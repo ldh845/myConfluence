@@ -9,7 +9,7 @@ import { SpacePermissionService, type Actor } from './space-permission.service';
 //   본 서비스가 그 역방향을 만든다. canView/loadAccess 와 같은 데이터·규칙을 써서
 //   결과가 실제 판정과 일치하도록 한다(개인 SpaceMember ∪ 그룹 SpaceMemberGroup, max).
 //   - 전역 ADMIN 은 개별 나열 대신 globalAdmins:{count} 로 별도 표기.
-//   - PUBLIC 공간은 전체 사용자 덤프를 피하려 { everyone:true } 플래그.
+//   - visibility 제거 후: 모든 일반 공간은 멤버/그룹 기반 접근자만 열거.
 
 // 공간 접근 경로: 개인 멤버십 / 소유자 / 그룹 부여.
 export type AccessVia = 'personal' | 'owner' | { group: { id: string; name: string } };
@@ -23,16 +23,14 @@ export type SpaceAccessUser = {
   via: AccessVia[];
 };
 
-export type SpaceEffectiveAccess =
-  | { everyone: true; globalAdmins: { count: number } }
-  | {
-      everyone: false;
-      users: SpaceAccessUser[];
-      total: number;
-      limit: number;
-      offset: number;
-      globalAdmins: { count: number };
-    };
+export type SpaceEffectiveAccess = {
+  everyone: false;
+  users: SpaceAccessUser[];
+  total: number;
+  limit: number;
+  offset: number;
+  globalAdmins: { count: number };
+};
 
 // 페이지 제한 통과 경로(공간 접근 경로에 더해).
 export type PageRestrictionVia =
@@ -46,21 +44,15 @@ export type PageAccessUser = SpaceAccessUser & {
   restrictionVia?: PageRestrictionVia[]; // 제한 모드일 때 통과 근거
 };
 
-export type PageEffectiveAccess =
-  | {
-      everyone: true;
-      restrictionMode: 'NONE' | 'EDIT';
-      globalAdmins: { count: number };
-    }
-  | {
-      everyone: false;
-      restrictionMode: 'NONE' | 'EDIT' | 'VIEW_EDIT';
-      users: PageAccessUser[];
-      total: number;
-      limit: number;
-      offset: number;
-      globalAdmins: { count: number };
-    };
+export type PageEffectiveAccess = {
+  everyone: false;
+  restrictionMode: 'NONE' | 'EDIT' | 'VIEW_EDIT';
+  users: PageAccessUser[];
+  total: number;
+  limit: number;
+  offset: number;
+  globalAdmins: { count: number };
+};
 
 // 사용자 최소 정보 select (목록 표시용).
 const USER_SELECT = {
@@ -109,19 +101,15 @@ export class EffectiveAccessService {
     });
   }
 
-  private canEditSpace(visibility: string, role: SpaceRole | null): boolean {
-    if (visibility === 'PUBLIC') return true; // 로그인 사용자 암묵적 Editor
+  private canEditSpace(role: SpaceRole | null): boolean {
     return role === 'EDITOR' || role === 'ADMIN';
   }
 
   // ─── 공간 접근자 집합(게이트 없음) ───────────────────────────────────────────
-  //   PUBLIC → everyone(열거 안 함). PRIVATE → 개인 멤버 ∪ 그룹 멤버(max). PERSONAL → 소유자.
+  //   PERSONAL → 소유자. 일반 공간 → 개인 멤버 ∪ 그룹 멤버(max).
   private async computeSpaceUsers(
     space: SpaceLite,
-  ): Promise<{ everyone: boolean; map: Map<string, SpaceAccessUser> }> {
-    if (space.visibility === 'PUBLIC') {
-      return { everyone: true, map: new Map() };
-    }
+  ): Promise<Map<string, SpaceAccessUser>> {
     const map = new Map<string, SpaceAccessUser>();
 
     if (space.visibility === 'PERSONAL') {
@@ -131,14 +119,13 @@ export class EffectiveAccessService {
           select: USER_SELECT,
         });
         if (owner) {
-          // PERSONAL 은 소유자만 canView → 멤버/그룹 무관하게 소유자 1명.
           this.addEntry(map, owner, 'ADMIN', 'owner');
         }
       }
-      return { everyone: false, map };
+      return map;
     }
 
-    // PRIVATE: 개인 멤버.
+    // 일반 공간: 개인 멤버.
     const members = await this.prisma.spaceMember.findMany({
       where: { spaceId: space.id },
       select: { role: true, user: { select: USER_SELECT } },
@@ -147,7 +134,7 @@ export class EffectiveAccessService {
       this.addEntry(map, m.user, m.role, 'personal');
     }
 
-    // PRIVATE: 그룹 부여 → 그룹 멤버를 한 번에 펼침(N+1 없음).
+    // 일반 공간: 그룹 부여 → 그룹 멤버를 한 번에 펼침(N+1 없음).
     const grants = await this.prisma.spaceMemberGroup.findMany({
       where: { spaceId: space.id },
       select: { groupId: true, role: true, group: { select: { id: true, name: true } } },
@@ -167,7 +154,7 @@ export class EffectiveAccessService {
       }
     }
 
-    return { everyone: false, map };
+    return map;
   }
 
   // 사용자 단위 합치기 — 역할은 max, via 는 누적.
@@ -210,10 +197,7 @@ export class EffectiveAccessService {
     const space = access.space as SpaceLite;
     const globalAdmins = await this.countGlobalAdmins();
 
-    const { everyone, map } = await this.computeSpaceUsers(space);
-    if (everyone) {
-      return { everyone: true, globalAdmins: { count: globalAdmins } };
-    }
+    const map = await this.computeSpaceUsers(space);
 
     const all = this.sortUsers([...map.values()]);
     const { limit, offset } = this.normalizePaging(paging);
@@ -252,12 +236,8 @@ export class EffectiveAccessService {
     const { limit, offset } = this.normalizePaging(paging);
 
     // NONE/EDIT: 보기 제한 없음 → 공간 접근자가 곧 페이지 접근자.
-    //   (EDIT 은 '편집'만 제한 — 보기 집합은 공간과 동일. 편집 narrowing 은 제한 API 참조.)
     if (mode === 'NONE' || mode === 'EDIT') {
-      const { everyone, map } = await this.computeSpaceUsers(space);
-      if (everyone) {
-        return { everyone: true, restrictionMode: mode, globalAdmins: { count: globalAdmins } };
-      }
+      const map = await this.computeSpaceUsers(space);
       // 제한 멤버십(EDIT 모드 편집 능력 판정용) 로드.
       const { roleByUser, viaByUser } =
         mode === 'EDIT'
@@ -265,7 +245,7 @@ export class EffectiveAccessService {
           : { roleByUser: new Map<string, 'EDIT' | 'VIEW'>(), viaByUser: new Map<string, PageRestrictionVia[]>() };
 
       const all = this.sortUsers([...map.values()]).map((u) =>
-        this.toPageUser(u, page, space, mode, roleByUser, viaByUser),
+        this.toPageUser(u, page, mode, roleByUser, viaByUser),
       );
       return {
         everyone: false,
@@ -278,7 +258,7 @@ export class EffectiveAccessService {
       };
     }
 
-    // VIEW_EDIT: 보기 자체가 제한 → 공간 접근자 ∩ 제한 통과자. 항상 좁혀짐(everyone 불가).
+    // VIEW_EDIT: 보기 자체가 제한 → 공간 접근자 ∩ 제한 통과자.
     const users = await this.computeViewEditAccess(page, space);
     const all = this.sortUsers(users);
     return {
@@ -296,12 +276,11 @@ export class EffectiveAccessService {
   private toPageUser(
     u: SpaceAccessUser,
     page: { authorId: string | null },
-    space: SpaceLite,
     mode: 'NONE' | 'EDIT',
     roleByUser: Map<string, 'EDIT' | 'VIEW'>,
     viaByUser: Map<string, PageRestrictionVia[]>,
   ): PageAccessUser {
-    const canEditSpace = this.canEditSpace(space.visibility, u.role);
+    const canEditSpace = this.canEditSpace(u.role);
     if (mode === 'NONE') {
       return { ...u, pageRole: canEditSpace ? 'EDIT' : 'VIEW' };
     }
@@ -380,7 +359,7 @@ export class EffectiveAccessService {
     page: { id: string; authorId: string | null },
     space: SpaceLite,
   ): Promise<PageAccessUser[]> {
-    const { everyone, map: spaceMap } = await this.computeSpaceUsers(space);
+    const spaceMap = await this.computeSpaceUsers(space);
     const { roleByUser, viaByUser, userById } = await this.loadRestrictionMembers(
       page.id,
     );
@@ -401,7 +380,7 @@ export class EffectiveAccessService {
       }
     }
 
-    // 공간 ADMIN 멤버(canManage bypass) — PUBLIC 포함 항상 조회.
+    // 공간 ADMIN 멤버(canManage bypass).
     const adminMembers = await this.prisma.spaceMember.findMany({
       where: { spaceId: space.id, role: 'ADMIN' },
       select: { user: { select: USER_SELECT } },
@@ -417,32 +396,24 @@ export class EffectiveAccessService {
     const out: PageAccessUser[] = [];
     for (const userId of candidates) {
       // 공간 접근 가능 여부(실제 canView 와 일치):
-      //   PUBLIC → 누구나. PRIVATE → 공간 접근자만. PERSONAL → 소유자만.
-      let accessibleInSpace: boolean;
-      let spaceRole: SpaceRole;
-      if (everyone) {
-        // PUBLIC: 누구나 보기/편집(암묵적 Editor). ADMIN 멤버면 ADMIN.
-        accessibleInSpace = true;
-        spaceRole = adminIds.has(userId) ? 'ADMIN' : 'EDITOR';
-      } else {
-        const inSpace = spaceMap.get(userId);
-        accessibleInSpace = !!inSpace;
-        spaceRole = inSpace?.role ?? 'VIEWER';
-      }
+      //   PERSONAL → 소유자만. 일반 공간 → 멤버/그룹 멤버만.
+      const inSpace = spaceMap.get(userId);
+      const accessibleInSpace = !!inSpace;
       if (!accessibleInSpace) continue;
 
       const user = userById.get(userId) ?? this.fromSpaceMap(spaceMap, userId);
       if (!user) continue;
 
+      const spaceRole = inSpace?.role ?? 'VIEWER';
       const rRole = roleByUser.get(userId);
       const isAuthor = userId === page.authorId;
       const isManager = adminIds.has(userId);
       const bypass = isAuthor || isManager;
-      const canEditSpace = this.canEditSpace(space.visibility, spaceRole);
+      const canEditSpace = this.canEditSpace(spaceRole);
       const canEditPage = canEditSpace && (bypass || rRole === 'EDIT');
 
-      // 공간 접근 경로(via) — PRIVATE/PERSONAL 은 spaceMap 에서, PUBLIC 은 표기 생략.
-      const spaceVia = everyone ? [] : spaceMap.get(userId)?.via ?? [];
+      // 공간 접근 경로(via)
+      const spaceVia = spaceMap.get(userId)?.via ?? [];
 
       out.push({
         userId,

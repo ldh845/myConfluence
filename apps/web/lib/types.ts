@@ -32,14 +32,14 @@ export type PageNode = {
   // Cycle 30 — /spaces "내 공간" 탭 필터용. 레거시 페이지는 null 가능.
   authorId?: string | null;
   // Cycle 35 — 발행 시각. null이면 미발행 draft → Sidebar 페이지 트리에서 숨김.
-  // 첫 publish 시 백엔드가 채운다. 백엔드 응답에서 빠져있을 수도 있어 optional.
+  // 첫 publish 시 백엔드가 채운다. 백엔드 응답에서 빠져있을 수 있어 optional.
   publishedAt?: string | null;
   // Cycle 70 — 작업 상태(카드 배지용). 백엔드 select 에 따라 빠질 수 있어 optional.
   status?: PageStatus | null;
 };
 
-// Cycle 74 — 스페이스 공개 범위 / 멤버 역할 / 바로가기.
-export type SpaceVisibility = "PUBLIC" | "PRIVATE" | "PERSONAL";
+// Cycle 74 — 스페이스 멤버 역할 / 바로가기.
+// visibility 제거 후: 접근 제어는 멤버/그룹 역할만으로 판정.
 export type SpaceRole = "ADMIN" | "EDITOR" | "VIEWER";
 export type SpaceShortcutType = "INTERNAL_PAGE" | "EXTERNAL_URL";
 export type SpaceShortcut = {
@@ -66,12 +66,13 @@ export type SpaceWithPages = {
   // SystemSidebar/UserMenu 가 본인 personal space 식별에 사용.
   type?: "SITE" | "PERSONAL";
   ownerId?: string | null;
-  // Cycle 74-A — 공개 범위.
-  visibility?: SpaceVisibility;
   // Cycle 74-B — 현재 사용자의 멤버 역할(0~1행). '공간 도구' 노출/canManage 판정용.
   members?: { role: SpaceRole }[];
   // Cycle 74-F — 사이드바 바로가기(순서대로).
   shortcuts?: SpaceShortcut[];
+  // 현재 사용자의 공간 접근 권한. API에서 계산하여 전달.
+  canView?: boolean;
+  canEdit?: boolean;
 };
 
 // FR-001 (Cycle 27c) — 페이지 작성자/마지막 편집자 요약.
