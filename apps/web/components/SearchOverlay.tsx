@@ -69,7 +69,7 @@ function FilterButton({
   children,
 }: {
   id: string;
-  icon: string;
+  icon: React.ReactNode;
   label: string;
   count?: number;
   openFilter: string | null;
@@ -98,7 +98,7 @@ function FilterButton({
         title={disabledHint}
         className="flex items-center gap-2 px-2.5 py-2 rounded text-[13px] text-[#a5adba] cursor-not-allowed"
       >
-        <span className="w-4 text-center">{icon}</span>
+        <span className="w-4 h-4 flex items-center justify-center shrink-0">{icon}</span>
         <span className="flex-1">{label}</span>
         <span className="text-[10px]">▾</span>
       </div>
@@ -116,7 +116,7 @@ function FilterButton({
             : "text-[#172b4d] hover:bg-[#f4f5f7]"
         }`}
       >
-        <span className="w-4 text-center">{icon}</span>
+        <span className="w-4 h-4 flex items-center justify-center shrink-0">{icon}</span>
         <span className="flex-1 text-left">{label}</span>
         {count !== undefined && count > 0 && (
           <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-[#0052cc] text-white text-[10px] font-semibold flex items-center justify-center">
@@ -341,7 +341,7 @@ export default function SearchOverlay({ open, onClose }: Props) {
             {/* 스페이스 */}
             <FilterButton
               id="space"
-              icon="📁"
+              icon={<img src="/icons/folder.png" alt="스페이스" className="w-4 h-4" />}
               label="스페이스"
               count={selectedSpaceIds.length}
               openFilter={openFilter}
@@ -386,7 +386,7 @@ export default function SearchOverlay({ open, onClose }: Props) {
             {/* 기여자 */}
             <FilterButton
               id="contributor"
-              icon="👤"
+              icon={<img src="/icons/user.png" alt="기여자" className="w-4 h-4" />}
               label="기여자"
               count={selectedAuthorIds.length}
               openFilter={openFilter}
@@ -429,7 +429,7 @@ export default function SearchOverlay({ open, onClose }: Props) {
             {/* 날짜 */}
             <FilterButton
               id="date"
-              icon="📅"
+              icon={<img src="/icons/calendar.svg" alt="날짜" className="w-4 h-4" />}
               label="날짜"
               count={dateFrom || dateTo ? 1 : 0}
               openFilter={openFilter}

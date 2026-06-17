@@ -37,7 +37,6 @@ function parseInitial(json: string): ExcalidrawInitialDataState {
       elements: obj.elements ?? [],
       appState: {
         ...(obj.appState ?? {}),
-        // runtime-only flags we should not restore
         collaborators: new Map(),
       },
       files: obj.files ?? {},
@@ -111,6 +110,7 @@ export default function ExcalidrawEditor({
         (snap.elements?.length ?? 0) > 0 ? await generatePreview(snap) : null;
       await onSave({ data: json, preview, title });
       setDirty(false);
+      onClose(); // 저장 성공 → 편집 화면으로 돌아가기
     } finally {
       setSaving(false);
     }
@@ -142,7 +142,8 @@ export default function ExcalidrawEditor({
 
   return (
     <div className="fixed inset-0 z-[60] bg-black/60 flex flex-col">
-      <div className="flex items-center gap-3 px-4 py-2 bg-white border-b border-[#dfe1e6]">
+      {/* ── 상단 툴바: z-10 으로 Excalidraw 캔버스 위에 항상 렌더 ── */}
+      <div className="relative z-10 flex items-center gap-3 px-4 py-2 bg-white border-b border-[#dfe1e6] shadow-sm">
         <span className="text-lg">📐</span>
         <input
           value={title}
@@ -167,13 +168,13 @@ export default function ExcalidrawEditor({
           disabled={saving}
           className="text-xs px-3 py-1.5 rounded bg-[#0052cc] text-white hover:bg-[#0747a6] disabled:opacity-50"
         >
-          저장
+          💾 저장
         </button>
         <button
           onClick={requestClose}
           className="text-xs px-3 py-1.5 rounded bg-white border border-[#dfe1e6] hover:bg-[#ebecf0] text-[#172b4d]"
         >
-          닫기
+          ← 편집 페이지로 돌아가기
         </button>
       </div>
       <div className="flex-1 bg-white">
@@ -183,6 +184,26 @@ export default function ExcalidrawEditor({
           }}
           initialData={initialData}
           onChange={handleChange}
+          /* ── Excalidraw 내부 우측 상단에도 저장/돌아가기 버튼 배치 ── */
+          renderTopRightUI={() => (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={doSave}
+                disabled={saving}
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded bg-[#0052cc] text-white hover:bg-[#0747a6] disabled:opacity-50 shadow-sm"
+                title="저장 후 돌아가기 (Ctrl+S)"
+              >
+                💾 {saving ? "저장 중..." : "저장"}
+              </button>
+              <button
+                onClick={requestClose}
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded bg-white border border-[#dfe1e6] hover:bg-[#ebecf0] text-[#172b4d] shadow-sm"
+                title="편집 페이지로 돌아가기 (Esc)"
+              >
+                ← 돌아가기
+              </button>
+            </div>
+          )}
         />
       </div>
     </div>

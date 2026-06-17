@@ -568,7 +568,7 @@ function SpaceCombobox({ spaces, onSelectSpace, onCreateSpace }: Props) {
             onClick={() => setOpen(false)}
             className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-[#172b4d] hover:bg-[#ebecf0]"
           >
-            <span className="w-4 text-center">🗂️</span>
+            <img src="/icons/open-folder.png" alt="공간 목록" className="w-4 h-4" />
             공간 목록
           </Link>
           <button

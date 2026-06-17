@@ -165,7 +165,7 @@ export const SLASH_ITEMS: SlashCommandItem[] = [
   {
     // Cycle 64 — 다이어그램(Excalidraw). 새 Diagram 엔티티 POST 생성 후
     //   본문에 diagram 노드(diagramId 참조) 삽입. 노드 클릭 시 편집 모달.
-    title: "다이어그램",
+    title: "Excalidraw 다이어그램",
     description: "Excalidraw 다이어그램 삽입",
     searchTerms: ["diagram", "draw", "excalidraw", "다이어그램", "그림판", "도형"],
     command: ({ editor, range }) => {
@@ -188,6 +188,14 @@ export const SLASH_ITEMS: SlashCommandItem[] = [
             .chain()
             .focus()
             .insertContent({ type: "diagram", attrs: { diagramId: d.id } })
+            .run();
+          // atom 노드 뒤로 커스를 놓아 텍스트 입력 가능하도록 함.
+          const pos = editor.state.selection.to + 1;
+          editor
+            .chain()
+            .focus()
+            .insertContentAt(pos, { type: "paragraph" })
+            .setTextSelection(pos)
             .run();
         })
         .catch(() => {
