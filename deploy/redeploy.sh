@@ -57,7 +57,7 @@ if ! git diff --quiet || ! git diff --cached --quiet; then
   STASHED=true
   echo "  → local 변경사항 임시 stash (태그: $STASH_TAG)"
 fi
-HTTP_PROXY= HTTPS_PROXY= git pull --rebase origin feature/ldh
+HTTP_PROXY= HTTPS_PROXY= git pull --rebase origin dev
 if [ "$STASHED" = "true" ]; then
   if git stash list | grep -q "$STASH_TAG"; then
     git stash pop >/dev/null
