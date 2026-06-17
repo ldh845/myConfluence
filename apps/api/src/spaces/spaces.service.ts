@@ -54,12 +54,10 @@ export class SpacesService {
     private readonly deptGroups: DepartmentGroupService,
   ) {}
 
-  // Cycle 32 — SITE 전체 + (인증 시) 본인 PERSONAL 공간만. 남의 개인 공간은 숨김.
-  // Cycle 74-A — visibility 기반으로 전환. PUBLIC 전체 + 본인 멤버인 PRIVATE +
-  //   본인 PERSONAL. 전역 ADMIN 은 전체. (기존 SITE→PUBLIC, PERSONAL→PERSONAL 백필과 일치.)
-  findAll(actor: Actor) {
-    return this.prisma.space.findMany({
-      where: this.perms.spaceVisibilityWhere(actor),
+  // 모든 공간을 반환하되, 각 공간에 현재 사용자의 canView/canEdit 권한을 추가.
+  // 권한이 없는 공간도 목록에 보이지만, FE에서 접근 제한 알림을 표시할 수 있다.
+  async findAll(actor: Actor) {
+    const spaces = await this.prisma.space.findMany({
       orderBy: { createdAt: 'asc' },
       include: {
         ...PAGES_INCLUDE,
@@ -72,30 +70,35 @@ export class SpacesService {
         shortcuts: { orderBy: { position: 'asc' } },
       },
     });
+
+    // 각 공간에 대해 canView/canEdit 계산
+    const enriched = await Promise.all(
+      spaces.map(async (space) => {
+        const access = await this.perms.loadAccess(space.id, actor?.id ?? null);
+        const canView = access ? this.perms.canView(access, actor) : false;
+        const canEdit = access ? this.perms.canEdit(access, actor) : false;
+        return { ...space, canView, canEdit };
+      }),
+    );
+
+    return enriched;
   }
 
-  // Cycle 74-B — 공간 도구 '개요' 탭: 이름/설명/공개범위 변경. canManage 가드.
-  //   PERSONAL 공간은 visibility 변경 불가(개인 공간 유지).
+  // Cycle 74-B — 공간 도구 '개요' 탭: 이름/설명/아이콘 변경. canManage 가드.
+  //   visibility 제거 후 더 이상 공개 범위 변경 불가.
   async updateSettings(
     id: string,
     dto: {
       name?: string;
       description?: string | null;
-      visibility?: 'PUBLIC' | 'PRIVATE';
       icon?: string | null;
     },
     user: Actor,
   ) {
-    const access = await this.perms.assertCanManage(id, user);
-    if (dto.visibility && access.space.visibility === 'PERSONAL') {
-      throw new BadRequestException({
-        error: 'cannot change visibility of a personal space',
-      });
-    }
+    await this.perms.assertCanManage(id, user);
     const data: Prisma.SpaceUpdateInput = {};
     if (dto.name !== undefined) data.name = dto.name;
     if (dto.description !== undefined) data.description = dto.description;
-    if (dto.visibility !== undefined) data.visibility = dto.visibility;
     if (dto.icon !== undefined) {
       // Cycle 74-G — 아이콘은 이모지(짧은 문자) 또는 data:image URL 만 허용. 빈 값=제거.
       const icon = dto.icon;
@@ -413,7 +416,13 @@ export class SpacesService {
     }
     const result = await this.prisma.$transaction(async (tx) => {
       const space = await tx.space.create({
-        data: { name: dto.name, description: dto.description ?? null, key },
+        data: {
+          name: dto.name,
+          description: dto.description ?? null,
+          key,
+          // visibility 제거 후: 새 공간은 PRIVATE(멤버/그룹 기반 접근 제어)
+          visibility: 'PRIVATE',
+        },
       });
       const homePage = await tx.page.create({
         data: {
@@ -430,7 +439,6 @@ export class SpacesService {
         },
       });
       // Cycle 74-A — 공간 생성자를 자동으로 Space Admin 멤버로 등록.
-      //   (PUBLIC 기본이라 당장 권한 차이는 없지만, PRIVATE 전환 시 관리 권한의 출처.)
       if (actor?.id) {
         await tx.spaceMember.create({
           data: { spaceId: space.id, userId: actor.id, role: 'ADMIN' },
@@ -540,6 +548,7 @@ export class SpacesService {
           name: `${user.name}의 개인 공간`,
           description: '개인 작업 공간',
           type: 'PERSONAL',
+          visibility: 'PERSONAL',
           ownerId: user.id,
         },
       });

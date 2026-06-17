@@ -75,8 +75,10 @@ function AppShell({ children }: { children: React.ReactNode }) {
   }, [queryClient]);
 
   const handleSelectSpace = (id: string) => {
-    setSelectedSpaceId(id);
     const space = spaces.find((s) => s.id === id);
+    // 권한 없는 공간도 내부로 진입 → page.tsx에서 accessDenied UI 통일 표시.
+    // (기존: canView === false 시 토스트로 차단 → 변경: 그냥 진입)
+    setSelectedSpaceId(id);
     // Cycle 32 — 공간 진입 시 그 공간의 홈(메인) 페이지로.
     const homeId = getSpaceHomePageId(space);
     if (homeId) router.push(`/?pageId=${homeId}`);

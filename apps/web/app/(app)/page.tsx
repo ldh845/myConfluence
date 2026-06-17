@@ -123,6 +123,8 @@ export default function HomePage() {
   // 존재한다고 보고 발행 버튼을 활성화한다. currentPage가 다시 로드되면
   // (페이지 전환 / 발행 직후) 서버 값 기준으로 재설정.
   const [hasDraft, setHasDraft] = useState(false);
+  // 접근 불가(403) 상태 — 페이지 로드 시 권한 없음이면 true.
+  const [accessDenied, setAccessDenied] = useState(false);
 
   // URL에 pageId가 없을 때의 fallback.
   // spaceId가 지정됐고 그 스페이스에 페이지가 있으면 첫 페이지로.
@@ -186,8 +188,14 @@ export default function HomePage() {
 
   const loadCurrentPage = useCallback(async (pageId: string) => {
     const r = await fetch(`/api/pages/${pageId}`);
+    if (r.status === 403) {
+      setCurrentPage(null);
+      setAccessDenied(true);
+      return;
+    }
     const p = r.ok ? ((await r.json()) as PageFull) : null;
     setCurrentPage(p);
+    setAccessDenied(false);
   }, []);
 
   useEffect(() => {
@@ -198,10 +206,16 @@ export default function HomePage() {
     // searchParams를 deps에 넣지 않는 건 의도적: edit=1 정리(router.replace)
     // 시 이 effect가 다시 돌면 isBodyEditable이 즉시 false로 떨어진다.
     setIsBodyEditable(searchParams.get("edit") === "1");
+    // 편집 권한이 없으면 즉시 편집 모드 해제
+    if (searchParams.get("edit") === "1") {
+      const sp = spaces.find((s) => s.id === currentPage?.spaceId);
+      if (sp && sp.canEdit !== true) setIsBodyEditable(false);
+    }
     // selectedPageId가 바뀔 땐 currentPage도 즉시 비운다. 그렇게 안 하면
     // loadCurrentPage 가 도착하기 전 1프레임 동안 stale한 이전 페이지가
     // FullScreenEditor에 그대로 박혀 "전혀 안 바뀐 듯한 깜빡임"으로 보인다.
     setCurrentPage(null);
+    setAccessDenied(false);
     if (!selectedPageId) {
       return;
     }
@@ -396,12 +410,15 @@ export default function HomePage() {
   );
 
   const enterEditMode = useCallback(() => {
+    // 공간 편집 권한이 없으면 편집 모드 진입 차단
+    const sp = spaces.find((s) => s.id === currentPage?.spaceId);
+    if (!sp || sp.canEdit !== true) return;
     setIsBodyEditable(true);
     requestAnimationFrame(() => {
       const el = document.querySelector<HTMLElement>(".ProseMirror");
       el?.focus({ preventScroll: true });
     });
-  }, []);
+  }, [spaces, currentPage?.spaceId]);
 
   const exitEditMode = useCallback(() => {
     setIsBodyEditable(false);
@@ -423,6 +440,9 @@ export default function HomePage() {
 
       if ((e.key === "e" || e.key === "E") && !e.ctrlKey && !e.metaKey && !e.altKey) {
         if (inInput || inBody) return;
+        // 조회 권한만 있으면 편집 모드 진입 차단
+        const sp = spaces.find((s) => s.id === currentPage?.spaceId);
+        if (!sp || sp.canEdit !== true) return;
         e.preventDefault();
         toggleEditMode();
         return;
@@ -460,7 +480,7 @@ export default function HomePage() {
     const byId = new Map(activeSpace.pages.map((p) => [p.id, p]));
     const chain: { id: string; title: string }[] = [];
     let cursor = byId.get(currentPage.id);
-    // 자기 자신은 제외하고 부모부터 위로 올라가며 누적.
+    // 자기 자신은 제외하고 부터부터 위로 올라가며 누적.
     cursor = cursor?.parentId ? byId.get(cursor.parentId) : undefined;
     while (cursor) {
       chain.unshift({ id: cursor.id, title: cursor.title });
@@ -615,6 +635,23 @@ export default function HomePage() {
           꽉 채운다. 모드 전환 시 폭 jump 없음. */}
       <div className="px-8 lg:px-12 xl:px-16 pt-2 pb-16">
         {!currentPage ? (
+          // 접근 불가(403) 안내 — 권한 없는 공간/페이지에 진입한 경우.
+          // 공간 수준 canView === false 도 동일하게 처리 (진입 후 페이지 영역에 표시).
+          (accessDenied || activeSpace?.canView === false) ? (
+            <div className="mt-24 text-center">
+              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-[#deebff] mb-4">
+                <svg className="w-8 h-8 text-[#0052cc]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+              </div>
+              <div className="text-[16px] font-semibold text-[#172b4d] mb-1">
+                접근 권한이 없습니다
+              </div>
+              <div className="text-[13px] text-[#6b778c]">
+                이 공간에 대한 열람 권한이 없습니다. 공간 관리자에게 권한을 요청하세요.
+              </div>
+            </div>
+          ) :
           // 빈 스페이스로 진입한 경우 그 스페이스 이름을 안내.
           spaceIdFromUrl && activeSpace && activeSpace.pages.length === 0 ? (
             <div className="mt-24 text-center text-[#6b778c]">

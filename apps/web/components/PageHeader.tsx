@@ -96,9 +96,10 @@ export default function PageHeader({
   const [draft, setDraft] = useState(page.title);
   const inputRef = useRef<HTMLInputElement>(null);
   const { user } = useAuth();
-  // Cycle 70 — 상태 변경 권한(임시 가드: 작성자 또는 ADMIN). 백엔드가 최종 검증.
-  const canEditStatus =
-    !!user && (user.role === "ADMIN" || page.author?.id === user.id);
+  // 공간 편집 권한: canEdit이 명시적으로 true일 때만 편집 허용
+  const spaceCanEdit = space?.canEdit === true;
+  // 공간 편집 권한 기반: canEdit이 true면 상태 변경도 허용. 백엔드가 최종 검증.
+  const canEditStatus = spaceCanEdit;
   const queryClient = useQueryClient();
 
   // Cycle 53 — '나중을 위해 저장' 상태. 로그인 사용자만 의미가 있다.
@@ -306,23 +307,25 @@ export default function PageHeader({
               ● 편집 중
             </span>
           )}
-          {/* (1) 편집 — 양쪽 모드에서 노출. 단축키 E. */}
-          <button
-            onClick={onToggleEdit}
-            title={isBodyEditable ? "편집 종료 (E)" : "편집 (E)"}
-            className={`inline-flex items-center gap-1 px-2 py-1 rounded text-[12px] ${
-              isBodyEditable
-                ? "bg-[#0052cc] text-white hover:bg-[#0747a6]"
-                : "text-[#42526e] hover:bg-[#ebecf0]"
-            }`}
-          >
-            {isBodyEditable ? (
-              <span>✓</span>
-            ) : (
-              <AppIcon name="edit" size={14} alt="편집" />
-            )}
-            <span>{isBodyEditable ? "완료 (E)" : "편집 (E)"}</span>
-          </button>
+          {/* (1) 편집 — 공간 편집 권한이 있을 때만 노출. 단축키 E. */}
+          {spaceCanEdit && (
+            <button
+              onClick={onToggleEdit}
+              title={isBodyEditable ? "편집 종료 (E)" : "편집 (E)"}
+              className={`inline-flex items-center gap-1 px-2 py-1 rounded text-[12px] ${
+                isBodyEditable
+                  ? "bg-[#0052cc] text-white hover:bg-[#0747a6]"
+                  : "text-[#42526e] hover:bg-[#ebecf0]"
+              }`}
+            >
+              {isBodyEditable ? (
+                <span>✓</span>
+              ) : (
+                <AppIcon name="edit" size={14} alt="편집" />
+              )}
+              <span>{isBodyEditable ? "완료 (E)" : "편집 (E)"}</span>
+            </button>
+          )}
           {isBodyEditable && (
             <button
               type="button"
@@ -383,6 +386,7 @@ export default function PageHeader({
           <MoreMenu
             page={page}
             space={space}
+            canEdit={spaceCanEdit}
             onDelete={onDelete}
             onMoveClick={onMoveClick}
             onCopyClick={onCopyClick}
@@ -583,6 +587,7 @@ function ActionButton({
 function MoreMenu({
   page,
   space,
+  canEdit,
   onDelete,
   onMoveClick,
   onCopyClick,
@@ -590,6 +595,7 @@ function MoreMenu({
 }: {
   page: PageFull;
   space: SpaceWithPages | null;
+  canEdit: boolean;
   onDelete: () => void;
   onMoveClick?: () => void;
   onCopyClick?: () => void;
@@ -640,8 +646,8 @@ function MoreMenu({
             onClick={() => setOpen(false)}
           />
           <div className="absolute right-0 mt-1 w-48 bg-white border border-[#dfe1e6] rounded shadow-lg z-20 py-1 text-sm">
-            {/* Cycle 53 — 상단에서 옮긴 액션 3개 */}
-            {onMoveClick && (
+            {/* Cycle 53 — 상단에서 옮긴 액션 3개 — 편집 권한 필요 */}
+            {canEdit && onMoveClick && (
               <button
                 className={itemCls}
                 onClick={() => {
@@ -652,7 +658,7 @@ function MoreMenu({
                 ↗ 이동
               </button>
             )}
-            {onCopyClick && (
+            {canEdit && onCopyClick && (
               <button
                 className={itemCls}
                 onClick={() => {
@@ -702,12 +708,8 @@ function MoreMenu({
               🖨️ PDF로 내보내기
             </button>
             <div className="my-1 border-t border-[#dfe1e6]" />
-            {/* Cycle 33 — 공간 홈 페이지 지정. */}
-            {isSpaceHome ? (
-              <div className="w-full text-left px-3 py-1.5 text-[#6b778c] cursor-default">
-                ✓ 공간 홈
-              </div>
-            ) : (
+            {/* Cycle 33 — 공간 홈 페이지 지정. 편집 권한 필요. */}
+            {canEdit && !isSpaceHome && (
               <button className={itemCls} onClick={setAsSpaceHome}>
                 <span className="inline-flex items-center gap-2">
                   <AppIcon name="home" size={14} alt="" />
@@ -715,19 +717,29 @@ function MoreMenu({
                 </span>
               </button>
             )}
-            <div className="my-1 border-t border-[#dfe1e6]" />
-            <button
-              className="w-full text-left px-3 py-1.5 text-[#de350b] hover:bg-[#ffebe6]"
-              onClick={() => {
-                setOpen(false);
-                onDelete();
-              }}
-            >
-              <span className="inline-flex items-center gap-2">
-                <AppIcon name="trash" size={14} alt="" />
-                페이지 삭제
-              </span>
-            </button>
+            {isSpaceHome && (
+              <div className="w-full text-left px-3 py-1.5 text-[#6b778c] cursor-default">
+                ✓ 공간 홈
+              </div>
+            )}
+            {/* 삭제 — 편집 권한 필요 */}
+            {canEdit && (
+              <>
+                <div className="my-1 border-t border-[#dfe1e6]" />
+                <button
+                  className="w-full text-left px-3 py-1.5 text-[#de350b] hover:bg-[#ffebe6]"
+                  onClick={() => {
+                    setOpen(false);
+                    onDelete();
+                  }}
+                >
+                  <span className="inline-flex items-center gap-2">
+                    <AppIcon name="trash" size={14} alt="" />
+                    페이지 삭제
+                  </span>
+                </button>
+              </>
+            )}
           </div>
         </>
       )}

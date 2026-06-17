@@ -11,7 +11,7 @@ import SpaceMemberGroupsPanel from "@/components/SpaceMemberGroupsPanel";
 import SpaceAuditPanel from "@/components/SpaceAuditPanel";
 import SpacePageOrderPanel from "@/components/SpacePageOrderPanel";
 import SpaceSidebarConfigPanel from "@/components/SpaceSidebarConfigPanel";
-import type { SpaceWithPages, SpaceVisibility } from "@/lib/types";
+import type { SpaceWithPages } from "@/lib/types";
 
 // Cycle 74-B~F — 공간 도구. 개요/권한/감사 로그/페이지 순서/사이드바 구성 탭.
 const TABS: { id: string; label: string; enabled: boolean }[] = [
@@ -101,7 +101,6 @@ export default function SpaceSettings({ spaceId }: { spaceId: string }) {
   }, [tabParam]);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [visibility, setVisibility] = useState<SpaceVisibility>("PUBLIC");
   const [icon, setIcon] = useState<string | null>(null);
   const [confirmName, setConfirmName] = useState("");
   // Cycle 75 — 개요 탭: 기본은 보기 모드, '세부 정보 편집' 시에만 입력 활성.
@@ -113,7 +112,6 @@ export default function SpaceSettings({ spaceId }: { spaceId: string }) {
     if (space) {
       setName(space.name);
       setDescription(space.description ?? "");
-      setVisibility((space.visibility as SpaceVisibility) ?? "PUBLIC");
       setIcon(space.icon ?? null);
     }
   }, [space]);
@@ -130,7 +128,6 @@ export default function SpaceSettings({ spaceId }: { spaceId: string }) {
           name: name.trim(),
           description,
           icon,
-          ...(space?.type !== "PERSONAL" ? { visibility } : {}),
         }),
       });
       if (!r.ok) throw new Error("save failed");
@@ -149,7 +146,6 @@ export default function SpaceSettings({ spaceId }: { spaceId: string }) {
     if (!space) return;
     setName(space.name);
     setDescription(space.description ?? "");
-    setVisibility((space.visibility as SpaceVisibility) ?? "PUBLIC");
     setIcon(space.icon ?? null);
   };
 
@@ -264,18 +260,6 @@ export default function SpaceSettings({ spaceId }: { spaceId: string }) {
                     {space.description?.trim() ? space.description : "—"}
                   </div>
                 </div>
-                {space.type !== "PERSONAL" && (
-                  <div>
-                    <div className="text-[12px] font-semibold text-[#42526e]">
-                      공개 범위
-                    </div>
-                    <div className="text-[14px] text-[#172b4d]">
-                      {visibility === "PUBLIC"
-                        ? "전체 공개 — 모든 로그인 사용자 접근"
-                        : "비공개 — 멤버만 접근"}
-                    </div>
-                  </div>
-                )}
               </div>
             </div>
             <div>
@@ -289,7 +273,7 @@ export default function SpaceSettings({ spaceId }: { spaceId: string }) {
             </div>
           </>
         ) : (
-          /* ── 편집 모드 ── 아이콘/이름/설명/공개범위 입력 + 저장/취소. */
+          /* ── 편집 모드 ── 아이콘/이름/설명 입력 + 저장/취소. */
           <>
             <Field label="아이콘">
               <div className="flex items-center gap-3">
@@ -354,26 +338,6 @@ export default function SpaceSettings({ spaceId }: { spaceId: string }) {
                 className="w-full px-2 py-1.5 text-[14px] border border-[#dfe1e6] rounded resize-y focus:outline-none focus:border-[#0052cc]"
               />
             </Field>
-            {space.type !== "PERSONAL" && (
-              <Field label="공개 범위">
-                <select
-                  value={visibility}
-                  onChange={(e) =>
-                    setVisibility(e.target.value as SpaceVisibility)
-                  }
-                  className="px-2 py-1.5 text-[14px] border border-[#dfe1e6] rounded focus:outline-none focus:border-[#0052cc]"
-                >
-                  <option value="PUBLIC">
-                    전체 공개 — 모든 로그인 사용자 접근
-                  </option>
-                  <option value="PRIVATE">비공개 — 멤버만 접근</option>
-                </select>
-                <p className="text-[11px] text-[#6b778c] mt-1">
-                  비공개로 바꾸면 멤버가 아닌 사용자에게는 이 공간의 페이지가
-                  보이지 않습니다. (멤버 관리는 &lsquo;권한&rsquo; 탭)
-                </p>
-              </Field>
-            )}
             <div className="flex items-center gap-2">
               <button
                 type="button"

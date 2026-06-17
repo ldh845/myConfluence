@@ -85,7 +85,7 @@ export default function FullScreenEditor({
   // Cycle 70 — 편집 화면 제목 옆 상태 배지. 변경 권한은 작성자/ADMIN(임시 가드).
   const { user } = useAuth();
   const canEditStatus =
-    !!user && (user.role === "ADMIN" || page.author?.id === user.id);
+    !!user && space?.canEdit === true;
   // 제목은 우리가 별도로 들고 있다가 commit 시점(blur/Enter)에 부모로 흘려보낸다.
   // Cycle 36-followup — TopNav 만들기로 갓 만든 draft는 title="제목 없음"
   // 기본값으로 들어오는데, 그대로 보여주면 사용자가 placeholder처럼 인식해

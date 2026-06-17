@@ -14,18 +14,19 @@ import type { SpaceWithPages } from "@/lib/types";
 // 좌측 sub-nav (모든/사이트/개인/내/보관) + 우측 검색 + 공간 만들기 + 테이블.
 // 사이드바 없는 전체 폭 페이지 ((app)/layout.tsx 가 /spaces 를 분기 처리).
 
-type TabId = "all" | "site" | "my";
+type TabId = "all" | "site" | "personal" | "my";
 
 const TAB_LABELS: Record<TabId, string> = {
   all: "모든 공간",
   site: "사이트 공간",
+  personal: "개인 공간",
   my: "내 공간",
 };
 
-// Cycle 78 — 비활성(준비 중)이던 '개인 공간'/'보관된 공간' 탭 제거(사용자 요청).
 const TABS: { id: TabId; disabled?: boolean }[] = [
   { id: "all" },
   { id: "site" },
+  { id: "personal" },
   { id: "my" },
 ];
 
@@ -74,6 +75,10 @@ function EmptyState({ tab, query }: { tab: TabId; query: string }) {
   let msg: string;
   if (tab === "my") {
     msg = "아직 별표한 공간이 없습니다. 각 공간의 ☆을 클릭해 추가하세요.";
+  } else if (tab === "personal") {
+    msg = query.trim()
+      ? `'${query.trim()}'에 일치하는 개인 공간이 없습니다.`
+      : "개인 공간이 없습니다.";
   } else if (query.trim()) {
     msg = `'${query.trim()}'에 일치하는 공간이 없습니다.`;
   } else {
@@ -119,8 +124,14 @@ function SpacesDirectory() {
     if (tab === "my") {
       // SystemSidebar "내 공간"과 동일 — 별표한 공간 (useStarredSpacesStore).
       base = all.filter((s) => starredIds.includes(s.id));
+    } else if (tab === "site") {
+      // 사이트 공간 — 개인 공간(type=PERSONAL)을 제외한 공간.
+      base = all.filter((s) => s.type !== "PERSONAL");
+    } else if (tab === "personal") {
+      // 개인 공간 — type=PERSONAL 인 공간만.
+      base = all.filter((s) => s.type === "PERSONAL");
     } else {
-      // all / site — 현재 personal space 개념이 없어 동일 데이터.
+      // 모든 공간.
       base = all;
     }
     const needle = q.trim().toLowerCase();
@@ -136,7 +147,7 @@ function SpacesDirectory() {
   const [createOpen, setCreateOpen] = useState(false);
   const handleCreateSpace = () => setCreateOpen(true);
 
-  const showTable = tab === "all" || tab === "site" || tab === "my";
+  const showTable = tab === "all" || tab === "site" || tab === "personal" || tab === "my";
 
   return (
     <div className="flex min-h-full">

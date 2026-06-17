@@ -498,7 +498,7 @@ function ChangePasswordDialog({ onClose }: { onClose: () => void }) {
 }
 
 // Cycle 29 — 공간 드롭다운. 버튼은 "공간"만 표시.
-// 드롭다운: "최근에 사용한 공간" 목록(최대 10) + "공간 목록"(/spaces) + "공간 만들기".
+// 드롭다운: "최근에 사용한 공간" 목록(최대 5) + "공간 목록"(/spaces) + "공간 만들기".
 function SpaceCombobox({ spaces, onSelectSpace, onCreateSpace }: Props) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -519,7 +519,7 @@ function SpaceCombobox({ spaces, onSelectSpace, onCreateSpace }: Props) {
   const recentSpaces = recentEntries
     .map((e) => spaces.find((s) => s.id === e.spaceId))
     .filter((s): s is SpaceWithPages => !!s)
-    .slice(0, 10);
+    .slice(0, 5);
 
   return (
     <div className="relative" ref={ref}>
