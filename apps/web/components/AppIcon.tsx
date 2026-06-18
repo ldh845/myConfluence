@@ -40,6 +40,7 @@ const ICON_SRC = {
   unlock: "/icons/unlock.png",
   // Cycle 84 followup 6 — 공간 도구 진입 아이콘.
   settings: "/icons/settings.png",
+  settingsSliders: "/icons/settings-sliders.png",
   // Cycle 84 followup 8 — 네비/사이드바 아이콘.
   search: "/icons/search.png",
   notification: "/icons/notification.png",
@@ -55,6 +56,7 @@ const ICON_SRC = {
   cellMerge: "/icons/cell_merge.png",
   space: "/icons/space.png",
   tag: "/icons/tag.png",
+  group: "/icons/group.png",
   crossedEye: "/icons/crossed-eye.svg",
 } as const;
 

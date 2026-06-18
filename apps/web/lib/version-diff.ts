@@ -9,6 +9,13 @@ export type DiffLine = {
   text: string;
 };
 
+export type DiffStats = {
+  added: number;
+  removed: number;
+  context: number;
+  total: number;
+};
+
 export function computeLineDiff(
   oldText: string,
   newText: string,
@@ -28,4 +35,17 @@ export function computeLineDiff(
     for (const text of lines) out.push({ type, text });
   }
   return out;
+}
+
+export function countDiffStats(lines: DiffLine[]): DiffStats {
+  const stats: DiffStats = { added: 0, removed: 0, context: 0, total: 0 };
+
+  for (const line of lines) {
+    stats.total += 1;
+    if (line.type === "add") stats.added += 1;
+    if (line.type === "remove") stats.removed += 1;
+    if (line.type === "context") stats.context += 1;
+  }
+
+  return stats;
 }

@@ -110,6 +110,32 @@ export default function AdminUsers() {
     onError: (err) => window.alert(err.message),
   });
 
+  // Cycle 89 — 로컬 전용 계정 삭제.
+  const deleteUser = useMutation<void, Error, string>({
+    mutationFn: async (id) => {
+      const r = await fetch(`/api/admin/users/${id}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (!r.ok) {
+        const body = (await r.json().catch(() => ({}))) as { message?: string };
+        throw new Error(body.message ?? "삭제 실패");
+      }
+    },
+    onSuccess: refresh,
+    onError: (err) => window.alert(err.message),
+  });
+
+  const handleDelete = (u: AdminUser) => {
+    if (
+      !window.confirm(
+        `'${u.name}(@${u.username})' 계정을 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.`
+      )
+    )
+      return;
+    deleteUser.mutate(u.id);
+  };
+
   const changeRole = (u: AdminUser, role: string) => {
     if (role === u.role) return;
     // ADMIN 승격은 권한이 큰 변경이라 확인을 받는다.
@@ -308,6 +334,17 @@ export default function AdminUsers() {
                       >
                         {u.isActive ? "비활성화" : "활성화"}
                       </button>
+                      {!u.isSso && (
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(u)}
+                          disabled={deleteUser.isPending}
+                          className="px-2 py-1 text-[12px] rounded border border-[#dfe1e6] text-[#6b778c] hover:bg-[#ffebe6] hover:text-[#de350b] hover:border-[#ffbdad] disabled:opacity-40"
+                          title="로컬 계정만 삭제 가능"
+                        >
+                          삭제
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>

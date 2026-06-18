@@ -15,21 +15,32 @@ input[type="password"]::-ms-clear {
   display: none;
 }
 
-/* FR-121 (Cycle 21) — 인쇄(PDF) 최적화.
-   본문만 풀폭, 사이드바·툴바·헤더 버튼은 숨김. 표/코드/이미지 페이지 경계 보존. */
+/* 인쇄(PDF) 최적화.
+   본문만 풀폭, 사이드바·툴바·헤더·드롭다운·버튼은 숨김.
+   표/코드/이미지 페이지 경계 보존. */
 @media print {
+  /* UI 요소 숨김 */
   aside,
   .no-print,
   header,
   .editor-toolbar,
   nav,
-  button {
+  button,
+  [role="dialog"],
+  [data-radix-popper-content-wrapper],
+  [data-state="open"],
+  .dropdown-menu,
+  .popover,
+  .tooltip,
+  [data-print-hide] {
     display: none !important;
   }
+  /* 콘텐츠 영역 풀폭 */
   main {
     width: 100% !important;
     max-width: none !important;
-    padding: 16px !important;
+    padding: 40px !important;
+    margin: 0 !important;
     overflow: visible !important;
   }
   body,
@@ -37,19 +48,36 @@ input[type="password"]::-ms-clear {
     background: #fff !important;
     overflow: visible !important;
   }
-  h1,
-  h2,
-  h3 {
+  /* 페이지 제목 명시 */
+  .page-title,
+  h1:first-of-type {
+    font-size: 24px !important;
+    margin-bottom: 16px !important;
+  }
+  /* 페이지 경계 보존 */
+  h1, h2, h3, h4, h5, h6 {
     page-break-after: avoid;
   }
-  pre,
-  table,
-  img,
-  .math-block,
-  .math-block-wrap {
+  pre, table, img, figure,
+  .math-block, .math-block-wrap,
+  .cf-image-figure {
     page-break-inside: avoid;
   }
-  /* 링크 옆에 URL 출력 (단 내부 페이지 링크는 제외) */
+  /* 테이블 테두리 명확화 */
+  table {
+    border-collapse: collapse !important;
+  }
+  th, td {
+    border: 1px solid #dfe1e6 !important;
+    padding: 6px 10px !important;
+  }
+  /* 코드 블록 배경 */
+  pre {
+    background: #f4f5f7 !important;
+    padding: 12px !important;
+    border-radius: 4px !important;
+  }
+  /* 링크 옆에 URL 출력 (외부 링크만) */
   a[href^="http"]::after,
   a[href^="https"]::after {
     content: " (" attr(href) ")";

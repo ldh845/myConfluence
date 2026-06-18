@@ -230,4 +230,37 @@ export class AdminService {
     });
     return { ...updated, locked: false };
   }
+
+  // Cycle 89 — 로컬 전용 계정 삭제.
+  //   SSO/혼합 계정(keycloakId 보유)은 거부 → 다음 OIDC 로그인 때 재생성되므로.
+  //   자기 자신도 거부(셀프 삭제 방지).
+  //   Prisma schema 의 onDelete 규칙에 따라 관련 데이터 자동 정리:
+  //     - SetNull: authoredPages, editedComments 등 (작성자는 null, 콘텐츠 보존)
+  //     - Cascade: spaceMemberships, groupMemberships, apiTokens 등
+  //   개인공간(ownedSpaces)은 별도 처리: 공간 자체는 보존(다른 멤버가 있을 수 있음).
+  async deleteUser(
+    userId: string,
+    requesterId: string,
+  ): Promise<{ id: string; username: string }> {
+    if (userId === requesterId) {
+      throw new BadRequestException({
+        error: 'cannot delete self',
+        message: '자기 자신은 삭제할 수 없습니다.',
+      });
+    }
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException({ error: 'user not found' });
+    }
+    if (user.keycloakId != null) {
+      throw new BadRequestException({
+        error: 'cannot delete sso account',
+        message: 'SSO 계정은 Keycloak에서 관리됩니다. 비활성화를 이용하세요.',
+      });
+    }
+    return this.prisma.user.delete({
+      where: { id: userId },
+      select: { id: true, username: true },
+    });
+  }
 }

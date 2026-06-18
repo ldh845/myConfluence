@@ -3,13 +3,10 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma, type SpaceRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ActivitiesService } from '../activities/activities.service';
-import {
-  SpacePermissionService,
-  type Actor,
-} from './space-permission.service';
+import { SpacePermissionService, type Actor } from './space-permission.service';
 import { DepartmentGroupService } from '../department/department-group.service';
 import { CreateSpaceDto } from './dto/create-space.dto';
 
@@ -53,6 +50,11 @@ export class SpacesService {
     // Cycle L10 (feature/ldh) — 공간 생성 기본 정책(생성자 부서 그룹 EDITOR 부여).
     private readonly deptGroups: DepartmentGroupService,
   ) {}
+
+  private readonly maxSpaceRole = (
+    a: SpaceRole | null,
+    b: SpaceRole | null,
+  ) => this.perms.maxSpaceRole(a, b);
 
   // 모든 공간을 반환하되, 각 공간에 현재 사용자의 canView/canEdit 권한을 추가.
   // 권한이 없는 공간도 목록에 보이지만, FE에서 접근 제한 알림을 표시할 수 있다.
@@ -142,6 +144,74 @@ export class SpacesService {
         },
       },
     });
+  }
+
+async listManagers(id: string) {
+    const rolesById = new Map<string, SpaceRole | null>();
+
+    const putRole = (userId: string, role: SpaceRole | null) => {
+      rolesById.set(userId, this.maxSpaceRole(rolesById.get(userId) ?? null, role) ?? role);
+    };
+
+    const directAdmins = await this.prisma.spaceMember.findMany({
+      where: { spaceId: id, role: 'ADMIN' },
+      orderBy: [{ role: 'asc' }, { createdAt: 'asc' }],
+      select: { userId: true, role: true },
+    });
+    for (const admin of directAdmins) {
+      putRole(admin.userId, admin.role);
+    }
+
+    const adminGroupMembers = await this.prisma.spaceMemberGroup.findMany({
+      where: { spaceId: id, role: 'ADMIN' },
+      select: { groupId: true },
+    });
+
+    if (adminGroupMembers.length > 0) {
+      const groupAdminIds = adminGroupMembers.map((g) => g.groupId);
+      const adminGroupUsers = await this.prisma.user.findMany({
+        where: { groupMemberships: { some: { groupId: { in: groupAdminIds } } } },
+        select: { id: true },
+      });
+      for (const user of adminGroupUsers) {
+        putRole(user.id, 'ADMIN');
+      }
+
+      const directGroupRoles = await this.prisma.spaceMember.findMany({
+        where: { spaceId: id, userId: { in: adminGroupUsers.map((u) => u.id) } },
+        select: { userId: true, role: true },
+      });
+      for (const roleOfUser of directGroupRoles) {
+        putRole(roleOfUser.userId, roleOfUser.role);
+      }
+    }
+
+    // 공간 소유자(ownerId)는 항상 관리자로 간주 — SpaceMember 에 ADMIN 으로
+    // 등록되어 있지 않아도 소유권 자체가 관리 권한의 근거.
+    const space = await this.prisma.space.findUnique({
+      where: { id },
+      select: { ownerId: true },
+    });
+    if (space?.ownerId) {
+      putRole(space.ownerId, 'ADMIN');
+    }
+
+    const managerIds = [...rolesById.entries()]
+      .filter(([, role]) => role === 'ADMIN')
+      .map(([id]) => id);
+    if (managerIds.length === 0) return [];
+
+    const managers = await this.prisma.user.findMany({
+      where: { id: { in: managerIds } },
+      orderBy: [{ id: 'asc' }],
+      select: { id: true, name: true, email: true },
+    });
+    return managers.map((user) => ({
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: rolesById.get(user.id) ?? 'ADMIN',
+    }));
   }
 
   async addMember(
@@ -318,7 +388,9 @@ export class SpacesService {
         select: { id: true },
       });
       if (!page) {
-        throw new BadRequestException({ error: 'page not found in this space' });
+        throw new BadRequestException({
+          error: 'page not found in this space',
+        });
       }
     }
     const count = await this.prisma.spaceShortcut.count({
@@ -484,7 +556,8 @@ export class SpacesService {
       });
       const department = creator?.department?.trim();
       if (!department) return;
-      const group = await this.deptGroups.resolveOrCreateDepartmentGroup(department);
+      const group =
+        await this.deptGroups.resolveOrCreateDepartmentGroup(department);
       if (!group) return;
       await this.prisma.spaceMemberGroup.upsert({
         where: { spaceId_groupId: { spaceId, groupId: group.id } },

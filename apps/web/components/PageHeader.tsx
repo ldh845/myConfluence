@@ -275,7 +275,7 @@ export default function PageHeader({
         </div>
       )}
       {/* Cycle 81 — 브레드크럼 줄: 좌측 브레드크럼 + 제한 버튼, 우측 정렬 액션. */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2" data-print-hide>
         <div className="flex items-center gap-1.5 min-w-0">
           <nav className="min-w-0 overflow-hidden text-[12px] text-[#6b778c] flex items-center gap-1 whitespace-nowrap">
             {space && <span className="shrink-0">{space.name}</span>}
@@ -644,8 +644,9 @@ function MoreMenu({
           <div
             className="fixed inset-0 z-10"
             onClick={() => setOpen(false)}
+            data-print-hide
           />
-          <div className="absolute right-0 mt-1 w-48 bg-white border border-[#dfe1e6] rounded shadow-lg z-20 py-1 text-sm">
+          <div className="absolute right-0 mt-1 w-48 bg-white border border-[#dfe1e6] rounded shadow-lg z-20 py-1 text-sm" data-print-hide>
             {/* Cycle 53 — 상단에서 옮긴 액션 3개 — 편집 권한 필요 */}
             {canEdit && onMoveClick && (
               <button

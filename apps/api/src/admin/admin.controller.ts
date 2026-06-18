@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Patch,
@@ -38,6 +39,8 @@ import { SetRoleDto } from './dto/set-role.dto';
 //   PATCH /admin/users/:id/unlock — failedLoginCount/lockedUntil 리셋
 // Cycle L4 (feature/ldh) — 로컬 전용 계정 역할 변경.
 //   PATCH /admin/users/:id/role — ADMIN/DEVELOPER (SSO/자기 자신 거부)
+// Cycle 89 — 로컬 전용 계정 삭제.
+//   DELETE /admin/users/:id — 로컬 계정만 (SSO 거부, 자기 자신 거부)
 
 @Controller('admin')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -63,6 +66,12 @@ export class AdminController {
   @Post('users')
   createLocalUser(@Body() dto: CreateLocalUserDto) {
     return this.admin.createLocalUser(dto);
+  }
+
+  @Delete('users/:id')
+  deleteUser(@Param('id') id: string, @Req() req: Request) {
+    const requester = (req as Request & { user?: AuthUser }).user!;
+    return this.admin.deleteUser(id, requester.id);
   }
 
   @Patch('users/:id/active')
