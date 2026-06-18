@@ -13,12 +13,12 @@ services:
     logging: *default-logging
     restart: unless-stopped
     environment:
-      POSTGRES_USER: docspace
+      POSTGRES_USER: ${DB_USER:-docspace}
       # Cycle 46 — 비번 외부화. 루트 .env 의 POSTGRES_PASSWORD 필수(:?required → 미설정 시 즉시 실패).
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set (see .env.example)}
-      POSTGRES_DB: docspace
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set (see .env.example)}
+      POSTGRES_DB: ${DB_NAME:-docspace}
     ports:
-      - "5432:5432"
+      - "${DB_PORT:-5432}:5432"
     volumes:
       - docspace_pgdata:/var/lib/postgresql/data
     networks:
@@ -38,9 +38,14 @@ services:
     logging: *default-logging
     restart: unless-stopped
     environment:
-      # 컨테이너 네트워크 안에서는 postgres 서비스명으로 접속.
-      # Cycle 46 — 비번 외부화. ${POSTGRES_PASSWORD} 는 위 postgres 서비스와 동일 값.
-      DATABASE_URL: postgresql://docspace:${POSTGRES_PASSWORD}@postgres:5432/docspace?schema=public
+      # DB 접속 정보 — 개별 변수로 분리. AFS(K8s) 환경에서 Secret 관리 용이.
+      # DATABASE_URL은 Prisma가 env("DATABASE_URL")로 읽으므로 유지하되 조립 방식으로 생성.
+      DB_HOST: ${DB_HOST:-postgres}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_NAME: ${DB_NAME:-docspace}
+      DB_USER: ${DB_USER:-docspace}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set (see .env.example)}
+      DATABASE_URL: postgresql://${DB_USER:-docspace}:${DB_PASSWORD}@${DB_HOST:-postgres}:${DB_PORT:-5432}/${DB_NAME:-docspace}?schema=public
       PORT: "3001"
       USE_REDIS: "false"
       # Keycloak 연동 값 — Cycle 43부터 실사용. 지금은 placeholder.
