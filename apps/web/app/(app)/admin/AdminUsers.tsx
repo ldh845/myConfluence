@@ -13,7 +13,7 @@ import { useAuth } from "@/lib/auth/useAuth";
 //   생성/비번 설정 다이얼로그에 비밀번호 정책 힌트.
 // SSO 계정의 생성/역할은 여전히 Keycloak 이 source — 안내 배너로 병기.
 
-const PASSWORD_HINT = "8자 이상, 영문과 숫자를 각각 1자 이상 포함";
+const PASSWORD_HINT = "4자 이상";
 
 type AdminUser = {
   id: string;
@@ -509,7 +509,7 @@ function CreateLocalUserDialog({
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
-            minLength={8}
+            minLength={4}
             maxLength={200}
             autoComplete="new-password"
             className={inputCls}
@@ -591,7 +591,7 @@ function SetPasswordDialog({
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
-            minLength={8}
+            minLength={4}
             maxLength={200}
             autoComplete="new-password"
             className={inputCls}

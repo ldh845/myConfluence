@@ -457,7 +457,7 @@ function ChangePasswordDialog({ onClose }: { onClose: () => void }) {
                 className="mt-1 w-full px-3 py-2 text-[13px] border border-[#dfe1e6] rounded focus:outline-none focus:border-[#0052cc]"
               />
               <span className="block mt-1 text-[11px] text-[#6b778c]">
-                8자 이상, 영문과 숫자를 각각 1자 이상 포함
+                4자 이상
               </span>
             </label>
             <label className="block">
