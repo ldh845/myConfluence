@@ -6,13 +6,14 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import TopNav from "@/components/TopNav";
 import Sidebar from "@/components/Sidebar";
 import SystemSidebar from "@/components/SystemSidebar";
+import AdminSidebar from "@/components/AdminSidebar";
 import TrashSheet from "@/components/TrashSheet";
 import CreateSpaceDialog from "@/components/CreateSpaceDialog";
 import { useRecentPagesStore } from "@/lib/stores/useRecentPagesStore";
 import { getSpaceHomePageId } from "@/lib/spaceHome";
 import type { PageFull, SpaceWithPages } from "@/lib/types";
 
-// Cycle 28 — TopNav + Sidebar 영속 셸.
+// Cycle 28 — TopNav + 권한별 사이드바 영속 셸.
 // route group "(app)"으로 묶인 모든 페이지가 이 layout 안에서 렌더된다.
 // /login, /share/[token]은 (app) 밖이라 셸이 없다. (Cycle 43: /signup 제거)
 // spaces/space-selection/trash 상태는 셸이 보유 — 라우트 전환에도 그대로 유지된다.
@@ -170,12 +171,15 @@ function AppShell({ children }: { children: React.ReactNode }) {
         </main>
       ) : (
         <div className="flex flex-1 min-h-0">
-          {/* Cycle 29 — 시스템 홈(/home)은 SystemSidebar, 스페이스 뷰는 Sidebar.
-              시스템 홈은 접어도 아이콘 전용 미니 사이드바를 유지한다. */}
-          {pathname === "/home" ? (
+          {pathname === "/admin" ? (
+            <AdminSidebar
+              collapsed={!sidebarOpen}
+              onExpand={() => setSidebarOpen(true)}
+            />
+          ) : pathname === "/home" ? (
             <div className="relative shrink-0">
               <SystemSidebar collapsed={!sidebarOpen} />
-              <button
+ <button
                 onClick={() => setSidebarOpen((v) => !v)}
                 title={sidebarOpen ? "사이드바 접기" : "사이드바 펴기"}
                 aria-label={sidebarOpen ? "사이드바 접기" : "사이드바 펴기"}
@@ -185,7 +189,6 @@ function AppShell({ children }: { children: React.ReactNode }) {
               </button>
             </div>
           ) : (
-            // Cycle 84 followup 9 — Sidebar 자체에 collapsed 모드(아이콘 전용 56px).
             <div className="relative shrink-0">
               <Sidebar
                 space={activeSpace}
@@ -241,7 +244,7 @@ export default function AppShellLayout({
   children: React.ReactNode;
 }) {
   // useSearchParams는 Suspense를 요구. 셸 자체를 Suspense로 감싼다.
-  return (
+    return (
     <Suspense fallback={<div className="h-screen w-screen bg-white" />}>
       <AppShell>{children}</AppShell>
     </Suspense>

@@ -49,6 +49,12 @@ export type SpaceShortcut = {
   target: string; // pageId(INTERNAL_PAGE) 또는 URL(EXTERNAL_URL)
   position: number;
 };
+export type SpaceManagerSummary = {
+  id: string;
+  name: string;
+  email: string | null;
+  role: SpaceRole;
+};
 
 export type SpaceWithPages = {
   id: string;

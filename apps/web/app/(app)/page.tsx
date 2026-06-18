@@ -33,7 +33,7 @@ import type {
   PresenceUser,
   SaveStatus,
 } from "@/components/CollaborativeEditor";
-import type { PageFull, SpaceWithPages } from "@/lib/types";
+import type { PageFull, SpaceManagerSummary, SpaceWithPages } from "@/lib/types";
 import type { Editor } from "@tiptap/react";
 
 const CollaborativeEditor = dynamic(
@@ -89,6 +89,7 @@ export default function HomePage() {
   }, [queryClient]);
 
   const [currentPage, setCurrentPage] = useState<PageFull | null>(null);
+  const [deniedSpaceId, setDeniedSpaceId] = useState<string | null>(null);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [presence, setPresence] = useState<PresenceUser[]>([]);
   // FR-054 (Cycle 26) — 협업 연결 상태(헤더 뱃지/배너용).
@@ -190,11 +191,18 @@ export default function HomePage() {
     const r = await fetch(`/api/pages/${pageId}`);
     if (r.status === 403) {
       setCurrentPage(null);
+      const currentSpaces = spaces ?? [];
+      const pageSpaceId =
+        spaceIdFromUrl ??
+        currentSpaces.find((s) => s.pages.some((p) => p.id === pageId))?.id ??
+        null;
+      setDeniedSpaceId(pageSpaceId);
       setAccessDenied(true);
       return;
     }
     const p = r.ok ? ((await r.json()) as PageFull) : null;
     setCurrentPage(p);
+    setDeniedSpaceId(null);
     setAccessDenied(false);
   }, []);
 
@@ -215,6 +223,7 @@ export default function HomePage() {
     // loadCurrentPage 가 도착하기 전 1프레임 동안 stale한 이전 페이지가
     // FullScreenEditor에 그대로 박혀 "전혀 안 바뀐 듯한 깜빡임"으로 보인다.
     setCurrentPage(null);
+    setDeniedSpaceId(null);
     setAccessDenied(false);
     if (!selectedPageId) {
       return;
@@ -458,20 +467,36 @@ export default function HomePage() {
   }, [currentPage, toggleEditMode]);
 
   // PageHeader breadcrumb / WelcomeBanner / CopyPageDialog가 참조하는 활성 스페이스.
-  // 우선순위: URL의 spaceId > currentPage.spaceId > 첫 스페이스.
+  // 우선순위: 접근 차단이 발생한 페이지가 있던 spaceId > URL의 spaceId > currentPage.spaceId > 첫 스페이스.
   // 빈 스페이스(/?spaceId=Y, currentPage=null)에서도 사용자가 클릭한 그 스페이스를 표시한다.
   const activeSpace = useMemo<SpaceWithPages | null>(
     () => {
-      if (spaceIdFromUrl) {
-        const sp = spaces.find((s) => s.id === spaceIdFromUrl);
+      const preferredSpaceId =
+        deniedSpaceId ?? spaceIdFromUrl ?? currentPage?.spaceId;
+      if (preferredSpaceId) {
+        const sp = spaces.find((s) => s.id === preferredSpaceId);
         if (sp) return sp;
       }
-      return (
-        spaces.find((s) => s.id === currentPage?.spaceId) ?? spaces[0] ?? null
-      );
+      return spaces[0] ?? null;
     },
-    [spaces, currentPage, spaceIdFromUrl],
+    [spaces, currentPage, deniedSpaceId, spaceIdFromUrl],
   );
+  const managerSpaceId =
+    deniedSpaceId ?? spaceIdFromUrl ?? activeSpace?.id ?? null;
+
+  const { data: spaceManagers } = useQuery<SpaceManagerSummary[]>({
+    queryKey: ["space-managers", managerSpaceId],
+    queryFn: async () => {
+      if (!managerSpaceId) return [];
+      const res = await fetch(`/api/spaces/${managerSpaceId}/managers`);
+      if (!res.ok) return [];
+      return (await res.json()) as SpaceManagerSummary[];
+    },
+    enabled:
+      !!managerSpaceId &&
+      (accessDenied || activeSpace?.canView === false || !activeSpace),
+    staleTime: 1000 * 60 * 5,
+  });
 
   // Cycle 34 — FullScreenEditor breadcrumb. 현재 페이지를 제외한 조상 체인.
   // PageHeader.buildBreadcrumb과 같은 BFS-up 로직(페이지 트리에서 parentId를 따라 올라감).
@@ -648,7 +673,38 @@ export default function HomePage() {
                 접근 권한이 없습니다
               </div>
               <div className="text-[13px] text-[#6b778c]">
-                이 공간에 대한 열람 권한이 없습니다. 공간 관리자에게 권한을 요청하세요.
+                이 공간에 대한 열람 권한이 없습니다.
+              </div>
+              <div className="mt-4 rounded-md border border-[#dfe1e6] bg-white px-4 py-3 text-left text-[13px] leading-snug text-[#42526e]">
+                <div className="mb-2 font-medium text-[#172b4d]">
+                  이 공간의 관리자
+                </div>
+                {spaceManagers ? (
+                  spaceManagers?.length > 0 ? (
+                    <ul>
+                      {spaceManagers?.map((manager) => (
+                        <li
+                          key={manager.id}
+                          className="border-t border-[#dfe1e6] pt-2 last:border-b last:pb-2"
+                        >
+                          <div className="flex items-center gap-2">
+                            {manager.name}
+                            <span className="rounded-full bg-[#deebff] px-2 py-0.5 text-[10px] font-medium text-[#0052cc]">
+                              공간 관리자
+                            </span>
+                          </div>
+                          <div className="break-words text-[12px] text-[#6b778c]">
+                            {manager.email ?? '이메일 없음'}
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <div>등록된 관리자가 없습니다.</div>
+                  )
+                ) : (
+                  <div>관리자를 불러오는 중입니다.</div>
+                )}
               </div>
             </div>
           ) :

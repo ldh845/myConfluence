@@ -11,8 +11,8 @@ import AdminGroups from "./AdminGroups";
 // 셸이 자동 적용. ADMIN 만 접근 — 비-ADMIN 진입 시 /home 으로 redirect.
 // 백엔드 RolesGuard 가 이중 가드(데이터 API 가 403 반환).
 //
-// Cycle 48 followup — 좌측 탭 사이드바 제거. 탭 전환은 TopNav 톱니바퀴 드롭다운
-// (?tab=general | ?tab=users) 으로만. 페이지는 useSearchParams 로 초기 탭만 결정.
+// Cycle 48 followup — TopNav 톱니바퀴 드롭다운은 /admin?tab=general|users|groups
+// 로 이동하고, 실제 화면 구성은 AdminSidebar + 선택 항목으로 분리한다.
 
 type Tab = "general" | "users" | "groups";
 const TAB_LABEL: Record<Tab, string> = {
@@ -44,8 +44,8 @@ function AdminPageInner() {
   }
 
   return (
-    <main className="h-full min-h-0 overflow-auto bg-[#f4f5f7]">
-      <div className="max-w-3xl mx-auto p-6">
+    <main className="h-full min-h-0 overflow-y-auto bg-white">
+      <div className="flex min-w-0 flex-col gap-4 p-6">
         <h1 className="text-[20px] font-semibold text-[#172b4d] mb-4">
           {TAB_LABEL[tab]}
         </h1>
