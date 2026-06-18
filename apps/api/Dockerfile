@@ -82,4 +82,10 @@ EXPOSE 3001 1234
 # 기동 시 마이그레이션 적용 후 서버 시작. nest-cli sourceRoot=src 라 엔트리는 dist/src/main.
 # WORKDIR=/app/apps/api 라 node_modules/.bin/prisma 는 apps/api 워크스페이스 bin.
 # npx(못 찾으면 다운로드 시도→무한 대기) 대신 bin 을 직접 호출한다.
-CMD ["sh", "-c", "node_modules/.bin/prisma migrate deploy && node dist/src/main"]
+# 변경 전
+# CMD ["sh", "-c", "node_modules/.bin/prisma migrate deploy && node dist/src/main"]
+
+# 변경 후
+COPY apps/api/entrypoint.sh /app/apps/api/entrypoint.sh
+RUN chmod +x /app/apps/api/entrypoint.sh
+ENTRYPOINT ["/app/apps/api/entrypoint.sh"]
