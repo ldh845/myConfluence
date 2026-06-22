@@ -34,11 +34,15 @@ export class SavesService {
 
   // Cycle 69 — 내 저장 페이지 목록(홈 '나중을 위해 저장' 뷰용). 삭제(휴지통)·
   // 미발행(draft) 페이지는 제외해 조회 엔드포인트 정책과 일치. 최근 저장 순.
-  async listSaved(userId: string) {
+  async listSaved(userId: string, spaceId?: string) {
     const rows = await this.prisma.savedPage.findMany({
       where: {
         userId,
-        page: { deletedAt: null, publishedAt: { not: null } },
+        page: {
+          deletedAt: null,
+          publishedAt: { not: null },
+          ...(spaceId ? { spaceId } : {}),
+        },
       },
       orderBy: { createdAt: 'desc' },
       select: {

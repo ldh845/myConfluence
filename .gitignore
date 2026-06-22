@@ -47,4 +47,5 @@ _tmp/
 _tmp_*
 *.bak
 docspace-mcp/.env.bak
-docspace-mcp/*.bak
+docspace-mcp/*.bak# TypeScript incremental build cache
+*.tsbuildinfo

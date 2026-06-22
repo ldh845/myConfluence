@@ -91,7 +91,9 @@ type Props = {
   onContentChange?: () => void;
   // Cycle 86 fix2 — Ctrl/Cmd+S 단축키 콜백. draft 저장이 아닌 '발행' 등 외부
   //   페이지 액션과 결합되도록 위임. 미지정이면 단축키 비활성.
-  onSaveShortcut?: () => void;
+  //   content 인자로 에디터의 현재 JSON을 전달 — 발행 시 서버 draft 승격 대신
+  //   클라이언트가 권위 있는 본문을 직접 넘길 수 있다.
+  onSaveShortcut?: (content: string) => void;
 };
 
 function resolveWsUrl(): string {
@@ -718,9 +720,11 @@ export default function CollaborativeEditor({
 
     return () => {
       editor.off("update", onUpdate);
+      // 발행 후 unmount 시 cleanup flush가 draftContent를 다시 채우는
+      // phantom-draft 방지. 타이머가 남아있어도 flush 하지 않고 폐기.
+      // (발행 버튼은 editor.getJSON()을 직접 전달하므로 flush 불필요)
       if (timer) {
         clearTimeout(timer);
-        flush();
       }
     };
   }, [editor, editable, pageId, onSaveStatusChange, onContentChange]);
@@ -739,7 +743,11 @@ export default function CollaborativeEditor({
       if (!isS) return;
       e.preventDefault();
       e.stopPropagation();
-      onSaveShortcut();
+      try {
+        onSaveShortcut(JSON.stringify(editor.getJSON()));
+      } catch {
+        onSaveShortcut("");
+      }
     };
     const editorDom = editor.view.dom as HTMLElement;
     editorDom.addEventListener("keydown", onKey, true);

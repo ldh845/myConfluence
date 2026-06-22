@@ -1,22 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import PageCard from "@/components/PageCard";
-import StatusFilterChips, {
-  type StatusToken,
-} from "@/components/StatusFilterChips";
+import Link from "next/link";
 import { relativeTime } from "@/lib/activity-format";
 import type { PageStatus } from "@/lib/types";
 
-// Cycle 51 — 스페이스 사이드바 '페이지' 메뉴 클릭 시 보이는 화면.
-//   /?spaceId=X&view=pages 에서 마운트. 그 공간의 페이지를 updatedAt desc 로
-//   카드 리스트로 표시. draft / 휴지통 제외는 백엔드 recent() 가 보장.
-//   페이지네이션: '더 보기' 버튼(offset += LIMIT).
-// Cycle 71 — 상태 필터(다중) 추가. ?status= 쿼리로 URL 동기화(새로고침/뒤로
-//   가기 시 유지), 서버사이드 필터(recent ?status=) — 오프셋 페이징과 일관.
+// 스페이스 '페이지' 뷰 — 좌우 배치: 저장한 페이지(좌) + 최근 변경(우).
+// /?spaceId=X&view=pages 에서 마운트.
 
-const LIMIT = 10;
+const LIMIT = 20;
 
 type RecentPage = {
   id: string;
@@ -29,140 +21,176 @@ type RecentPage = {
   lastEditor?: { id: string; name: string } | null;
 };
 
+type SavedPage = {
+  id: string;
+  title: string;
+  status?: PageStatus | null;
+  spaceId: string;
+  spaceName: string;
+};
+
 type Props = {
   spaceId: string;
   spaceName?: string;
 };
 
-const VALID: ReadonlySet<string> = new Set([
-  "TODO",
-  "IN_PROGRESS",
-  "DONE",
-  "NONE",
-]);
+type UserGroup = {
+  userId: string;
+  userName: string;
+  pages: RecentPage[];
+  latestAt: string;
+};
 
 export default function SpacePagesView({ spaceId, spaceName }: Props) {
-  const router = useRouter();
-  const searchParams = useSearchParams();
   const [pages, setPages] = useState<RecentPage[]>([]);
-  const [hasMore, setHasMore] = useState(true);
+  const [saved, setSaved] = useState<SavedPage[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // URL ?status= 가 단일 출처. 선택된 토큰 배열 derive.
-  const statusParam = searchParams.get("status") ?? "";
-  const selected = useMemo(
-    () =>
-      statusParam
-        .split(",")
-        .map((s) => s.trim())
-        .filter((s) => VALID.has(s)) as StatusToken[],
-    [statusParam],
-  );
-
   const load = useCallback(
-    async (offset: number, append: boolean) => {
+    async () => {
       setLoading(true);
       try {
-        const statusQs = statusParam
-          ? `&status=${encodeURIComponent(statusParam)}`
-          : "";
-        const r = await fetch(
-          `/api/pages/recent?spaceId=${encodeURIComponent(spaceId)}&limit=${LIMIT}&offset=${offset}${statusQs}`,
-          { credentials: "include" },
-        );
-        const data: RecentPage[] = r.ok ? await r.json() : [];
-        setPages((prev) => (append ? [...prev, ...data] : data));
-        setHasMore(data.length === LIMIT);
+        const [pagesRes, savedRes] = await Promise.all([
+          fetch(
+            `/api/pages/recent?spaceId=${encodeURIComponent(spaceId)}&limit=${LIMIT}`,
+            { credentials: "include" },
+          ),
+          fetch(`/api/saves?spaceId=${encodeURIComponent(spaceId)}`, {
+            credentials: "include",
+          }),
+        ]);
+        const pagesData: RecentPage[] = pagesRes.ok ? await pagesRes.json() : [];
+        const savedData: SavedPage[] = savedRes.ok ? await savedRes.json() : [];
+        setPages(pagesData);
+        setSaved(savedData);
       } finally {
         setLoading(false);
       }
     },
-    [spaceId, statusParam],
+    [spaceId],
   );
 
-  // spaceId / 필터 변경 시 초기화 + 첫 페이지 로드.
   useEffect(() => {
-    setPages([]);
-    setHasMore(true);
-    load(0, false);
+    load();
   }, [load]);
 
-  const onLoadMore = () => {
-    if (!loading) load(pages.length, true);
-  };
-
-  // 필터 변경 → URL 갱신(spaceId/view 유지). searchParams 변경이 load 를 재구동.
-  const onFilterChange = (next: StatusToken[]) => {
-    const params = new URLSearchParams();
-    params.set("spaceId", spaceId);
-    params.set("view", "pages");
-    if (next.length) params.set("status", next.join(","));
-    router.replace(`/?${params.toString()}`);
-  };
-
-  const filtering = selected.length > 0;
+  // lastEditor(없으면 author) 기준으로 사용자별 그룹화
+  const groups = useMemo(() => {
+    const map = new Map<string, UserGroup>();
+    for (const p of pages) {
+      const editor = p.lastEditor ?? p.author;
+      const uid = editor?.id ?? "__unknown__";
+      const uname = editor?.name ?? "알 수 없음";
+      let group = map.get(uid);
+      if (!group) {
+        group = { userId: uid, userName: uname, pages: [], latestAt: p.updatedAt };
+        map.set(uid, group);
+      }
+      group.pages.push(p);
+      if (p.updatedAt > group.latestAt) group.latestAt = p.updatedAt;
+    }
+    return Array.from(map.values()).sort((a, b) =>
+      b.latestAt.localeCompare(a.latestAt),
+    );
+  }, [pages]);
 
   return (
-    <div className="max-w-[880px] px-6 pt-6 pb-16">
+    <div className="px-6 pt-6 pb-16">
       <div className="mb-4">
         <h1 className="text-[22px] font-semibold text-[#172b4d]">
           {spaceName ? `${spaceName} · 페이지` : "페이지"}
         </h1>
       </div>
 
-      {/* Cycle 71 — 상태 필터 칩. */}
-      <div className="mb-4">
-        <StatusFilterChips selected={selected} onChange={onFilterChange} />
-      </div>
-
-      {pages.length === 0 && !loading && (
+      {pages.length === 0 && saved.length === 0 && !loading && (
         <div className="mt-4 text-[13px] text-[#6b778c] border border-dashed border-[#dfe1e6] rounded p-6 text-center">
-          {filtering
-            ? "선택한 상태의 페이지가 없습니다."
-            : "이 공간에 아직 페이지가 없습니다."}
+          이 공간에 아직 페이지가 없습니다.
         </div>
       )}
 
-      <div className="space-y-2">
-        {pages.map((p) => {
-          const editorName = p.lastEditor?.name ?? p.author?.name;
-          const subtitle = editorName
-            ? `${relativeTime(p.updatedAt)} · ${editorName}`
-            : relativeTime(p.updatedAt);
-          return (
-            <PageCard
-              key={p.id}
-              id={p.id}
-              title={p.title}
-              subtitle={subtitle}
-              icon="📄"
-              status={p.status}
-            />
-          );
-        })}
-      </div>
+      {(pages.length > 0 || saved.length > 0) && (
+        <div className="flex gap-8 items-start">
+          {/* 좌: 나중을 위해 저장 */}
+          <div className="flex-1 min-w-0">
+            <h2 className="text-[14px] font-semibold text-[#42526e] mb-2">
+              ☆ 나중을 위해 저장
+            </h2>
+            {saved.length === 0 ? (
+              <div className="text-[12px] text-[#6b778c]">
+                저장한 페이지가 없습니다. 페이지 상단의 ☆ 버튼을 눌러 추가하세요.
+              </div>
+            ) : (
+              <div className="space-y-0.5">
+                {saved.map((p) => (
+                  <Link
+                    key={p.id}
+                    href={`/?pageId=${p.id}`}
+                    className="flex items-center gap-2 py-1.5 px-2 rounded hover:bg-[#f4f5f7] text-[13px] text-[#0052cc] hover:underline"
+                  >
+                    <span className="text-[#6b778c]">📄</span>
+                    <span className="truncate">{p.title}</span>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </div>
 
-      {loading && pages.length === 0 && (
+          {/* 구분선 */}
+          <div className="w-px self-stretch bg-[#dfe1e6]" />
+
+          {/* 우: 최근 변경 */}
+          <div className="flex-1 min-w-0">
+            <h2 className="text-[14px] font-semibold text-[#42526e] mb-2">
+              최근 변경
+            </h2>
+            {groups.length === 0 ? (
+              <div className="text-[12px] text-[#6b778c]">
+                최근 변경된 페이지가 없습니다.
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {groups.map((group) => (
+                  <div key={group.userId}>
+                    {/* 사용자 헤더 */}
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <div className="w-6 h-6 rounded-full bg-[#0052cc] text-white flex items-center justify-center text-[10px] font-semibold shrink-0">
+                        {group.userName.charAt(0)}
+                      </div>
+                      <span className="text-[13px] font-semibold text-[#172b4d]">
+                        {group.userName}
+                      </span>
+                    </div>
+
+                    {/* 해당 사용자가 수정한 페이지 목록 */}
+                    <div className="ml-8 space-y-0.5">
+                      {group.pages.map((p) => (
+                        <div
+                          key={p.id}
+                          className="flex items-center gap-2 py-1 px-2 rounded hover:bg-[#f4f5f7] group"
+                        >
+                          <span className="text-[12px] text-[#6b778c]">📄</span>
+                          <Link
+                            href={`/?pageId=${p.id}`}
+                            className="text-[13px] text-[#0052cc] hover:underline truncate flex-1"
+                          >
+                            {p.title}
+                          </Link>
+                          <span className="text-[11px] text-[#6b778c] whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity">
+                            {relativeTime(p.updatedAt)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {loading && pages.length === 0 && saved.length === 0 && (
         <div className="text-[12px] text-[#6b778c] mt-4">불러오는 중...</div>
-      )}
-
-      {hasMore && pages.length > 0 && (
-        <div className="mt-6 flex justify-center">
-          <button
-            type="button"
-            onClick={onLoadMore}
-            disabled={loading}
-            className="px-4 py-2 text-[13px] border border-[#dfe1e6] rounded hover:bg-[#f4f5f7] disabled:opacity-50"
-          >
-            {loading ? "불러오는 중..." : "더 보기"}
-          </button>
-        </div>
-      )}
-
-      {!hasMore && pages.length > 0 && (
-        <p className="text-[11px] text-[#6b778c] mt-6 text-center">
-          모든 페이지를 불러왔습니다.
-        </p>
       )}
     </div>
   );

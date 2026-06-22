@@ -643,10 +643,11 @@ export default function HomePage() {
         onPresenceChange={setPresence}
         onSelectAncestor={selectPage}
         onContentChange={() => setHasDraft(true)}
-        // Cycle 86 fix3 — Ctrl/Cmd+S → 페이지 발행. 발행 노트 없이 즉시(서버가 draft 승격).
-        //   발행 버튼의 disabled 조건과 동일하게 가드.
-        onSaveShortcut={() => {
-          if (hasDraft && !publish.isPending) handlePublish();
+        // Cycle 86 fix3 — Ctrl/Cmd+S → 페이지 발행.
+        //   CollaborativeEditor가 에디터 JSON content를 전달하므로
+        //   서버 draft 승격 대신 클라이언트가 권위 있는 본문을 직접 넘김.
+        onSaveShortcut={(editorContent: string) => {
+          if (hasDraft && !publish.isPending) handlePublish(editorContent);
         }}
       />
     );
@@ -767,9 +768,9 @@ export default function HomePage() {
                   onEditor={setEditor}
                   onConnectionStateChange={setConnectionState}
                   // Cycle 86 fix2 — 본문에서 Ctrl/Cmd+S → 페이지 발행(handlePublish).
-                  //   발행 버튼의 disabled 조건(!hasDraft || publishing) 과 동일하게 가드.
-                  onSaveShortcut={() => {
-                    if (hasDraft && !publish.isPending) handlePublish();
+                  //   CollaborativeEditor가 에디터 JSON content를 전달.
+                  onSaveShortcut={(editorContent: string) => {
+                    if (hasDraft && !publish.isPending) handlePublish(editorContent);
                   }}
                 />
                 {/* Cycle 63 followup — 조회 화면에서 다이어그램/첨부파일 별도
