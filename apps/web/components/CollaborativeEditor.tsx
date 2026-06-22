@@ -886,6 +886,44 @@ function EditorContentWithCursorStyles({ editor }: { editor: Editor }) {
           user-select: none;
           white-space: nowrap;
         }
+        /* Heading sizes — Tailwind preflight resets all h1~h6 to inherit,
+           so we must explicitly set sizes here inside the editor scope. */
+        .ProseMirror h1 {
+          font-size: 28px !important;
+          font-weight: 700 !important;
+          margin: 1.4em 0 0.6em !important;
+          color: #172b4d !important;
+        }
+        .ProseMirror h2 {
+          font-size: 22px !important;
+          font-weight: 700 !important;
+          margin: 1.3em 0 0.5em !important;
+          color: #172b4d !important;
+        }
+        .ProseMirror h3 {
+          font-size: 18px !important;
+          font-weight: 600 !important;
+          margin: 1.2em 0 0.4em !important;
+          color: #172b4d !important;
+        }
+        .ProseMirror h4 {
+          font-size: 16px !important;
+          font-weight: 600 !important;
+          margin: 1.1em 0 0.3em !important;
+          color: #172b4d !important;
+        }
+        .ProseMirror h5 {
+          font-size: 14px !important;
+          font-weight: 600 !important;
+          margin: 1.1em 0 0.3em !important;
+          color: #172b4d !important;
+        }
+        .ProseMirror h6 {
+          font-size: 13px !important;
+          font-weight: 600 !important;
+          margin: 1.1em 0 0.3em !important;
+          color: #5e6c84 !important;
+        }
       `}</style>
       <EditorContent editor={editor} />
     </>

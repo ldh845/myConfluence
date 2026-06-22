@@ -9,6 +9,7 @@ import SystemSidebar from "@/components/SystemSidebar";
 import AdminSidebar from "@/components/AdminSidebar";
 import TrashSheet from "@/components/TrashSheet";
 import CreateSpaceDialog from "@/components/CreateSpaceDialog";
+import type { AppLauncherItem } from "@/components/LauncherMenuButton";
 import { useRecentPagesStore } from "@/lib/stores/useRecentPagesStore";
 import { getSpaceHomePageId } from "@/lib/spaceHome";
 import type { PageFull, SpaceWithPages } from "@/lib/types";
@@ -35,6 +36,14 @@ function AppShell({ children }: { children: React.ReactNode }) {
       const r = await fetch("/api/spaces");
       if (!r.ok) return [];
       return (await r.json()) as SpaceWithPages[];
+    },
+  });
+  const { data: launcherItems = [] } = useQuery<AppLauncherItem[]>({
+    queryKey: ["admin-launchers"],
+    queryFn: async () => {
+      const r = await fetch("/api/admin/launchers", { credentials: "include" });
+      if (!r.ok) return [];
+      return (await r.json()) as AppLauncherItem[];
     },
   });
   const spaces = spacesData ?? [];
@@ -164,6 +173,7 @@ function AppShell({ children }: { children: React.ReactNode }) {
         activeSpaceId={activeSpace?.id ?? null}
         onSelectSpace={handleSelectSpace}
         onCreateSpace={handleCreateSpace}
+        launcherItems={launcherItems}
       />
       {isFullWidth ? (
         <main className="flex-1 min-w-0 overflow-auto bg-white">
