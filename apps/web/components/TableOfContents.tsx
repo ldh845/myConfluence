@@ -5,13 +5,11 @@ import { useEffect, useState } from "react";
 
 // FR-039 — heading 기반 자동 목차.
 // editor.state.doc.descendants 로 모든 heading 노드를 순회해 level/text/pos
-// 를 모은 뒤, 클릭 시 setTextSelection(pos).scrollIntoView() 로 점프한다.
-// heading id를 부여하지 않는 이유: 한국어 슬러그 충돌/안정성 회피 + Yjs로
-// 동시 편집되는 마크다운 본문에 sync 안 되는 메타 속성을 추가하지 않기 위함.
+// 를 모은 뒤, 클릭 시 해당 위치로 스크롤한다.
 
 type TOCItem = {
   key: string;
-  level: 1 | 2 | 3 | 4;
+  level: 1 | 2 | 3 | 4 | 5 | 6;
   text: string;
   pos: number;
 };
@@ -21,6 +19,8 @@ const INDENT: Record<TOCItem["level"], string> = {
   2: "pl-3",
   3: "pl-6",
   4: "pl-9",
+  5: "pl-12",
+  6: "pl-[3.75rem]",
 };
 
 export default function TableOfContents({ editor }: { editor: Editor | null }) {
@@ -36,7 +36,7 @@ export default function TableOfContents({ editor }: { editor: Editor | null }) {
       editor.state.doc.descendants((node, pos) => {
         if (node.type.name !== "heading") return;
         const level = node.attrs.level as number;
-        if (![1, 2, 3, 4].includes(level)) return;
+        if (![1, 2, 3, 4, 5, 6].includes(level)) return;
         const text = node.textContent.trim();
         if (!text) return;
         next.push({
@@ -61,7 +61,35 @@ export default function TableOfContents({ editor }: { editor: Editor | null }) {
 
   const jumpTo = (pos: number) => {
     if (!editor) return;
-    editor.chain().focus().setTextSelection(pos).scrollIntoView().run();
+    // 조회 모드(contenteditable=false)에서는 setNodeSelection 이 동작하지 않으므로
+    // ProseMirror view 의 DOM 노드를 직접 찾아 scrollIntoView 한다.
+    const { view } = editor;
+    try {
+      // view.nodeDOM(pos) 는 해당 pos 의 노드 DOM 요소를 반환한다.
+      // heading 노드의 시작 pos 이면 <h1>~<h6> 요소를 정확히 반환.
+      const dom = view.nodeDOM(pos);
+      if (dom instanceof HTMLElement) {
+        dom.scrollIntoView({ behavior: "smooth", block: "start" });
+        return;
+      }
+    } catch {
+      // nodeDOM 실패 시 fallback
+    }
+    // fallback: domAtPos 로 위치를 찾아 가까운 heading 요소 탐색
+    try {
+      const domAtPos = view.domAtPos(pos);
+      const el =
+        domAtPos.node instanceof Text
+          ? domAtPos.node.parentElement
+          : (domAtPos.node as HTMLElement);
+      if (el) {
+        const heading = el.closest("h1,h2,h3,h4,h5,h6") ?? el;
+        heading.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    } catch {
+      // 최종 fallback: 에디터 API
+      editor.chain().focus().setNodeSelection(pos).scrollIntoView().run();
+    }
   };
 
   return (

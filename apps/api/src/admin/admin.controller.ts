@@ -17,6 +17,8 @@ import { Roles } from '../auth/roles.decorator';
 import type { AuthUser } from '../auth/auth.service';
 import { AdminService } from './admin.service';
 import { UpdateConfigDto } from './dto/update-config.dto';
+import { CreateAppLauncherItemDto, UpdateAppLauncherItemsDto } from './dto/app-launcher.dto';
+import { BadRequestException } from '@nestjs/common';
 import { SetLocalPasswordDto } from './dto/set-local-password.dto';
 import { CreateLocalUserDto } from './dto/create-local-user.dto';
 import { SetActiveDto } from './dto/set-active.dto';
@@ -66,6 +68,48 @@ export class AdminController {
   @Post('users')
   createLocalUser(@Body() dto: CreateLocalUserDto) {
     return this.admin.createLocalUser(dto);
+  }
+
+  @Get('launchers')
+  @Roles()
+  getLaunchers() {
+    return this.admin.getLaunchers();
+  }
+
+  @Put('launchers')
+  replaceLaunchers(@Body() items: any[]) {
+    // Validate each item has required fields
+    if (!Array.isArray(items)) {
+      throw new BadRequestException('요청 본문은 배열이어야 합니다.');
+    }
+    for (const item of items) {
+      if (!item.name || typeof item.name !== 'string' || !item.name.trim()) {
+        throw new BadRequestException('각 항목의 이름은 필수입니다.');
+      }
+      if (!item.url || typeof item.url !== 'string' || !item.url.trim()) {
+        throw new BadRequestException('각 항목의 URL은 필수입니다.');
+      }
+    }
+    return this.admin.replaceLaunchers(
+      items.map((item: any, index: number) => ({
+        name: item.name.trim(),
+        url: item.url.trim(),
+        position: index,
+      })),
+    );
+  }
+
+  @Patch('launchers/:id')
+  updateLauncher(
+    @Param('id') id: string,
+    @Body() dto: UpdateAppLauncherItemsDto,
+  ) {
+    return this.admin.updateLauncher(id, dto);
+  }
+
+  @Delete('launchers/:id')
+  deleteLauncher(@Param('id') id: string) {
+    return this.admin.deleteLauncher(id);
   }
 
   @Delete('users/:id')

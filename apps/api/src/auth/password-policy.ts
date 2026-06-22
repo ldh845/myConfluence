@@ -1,14 +1,14 @@
 import { BadRequestException } from '@nestjs/common';
 
-// Cycle L3 (feature/ldh) — 비밀번호 정책 단일 출처.
+// 비밀번호 정책 단일 출처.
 // 계정 생성(POST /admin/users)·관리자 비번 설정(local-password)·셀프 변경
 // (PATCH /auth/me/password) 세 경로가 모두 이 함수를 통과한다. DTO 는 길이 상한만
-// 막고, 실제 정책(최소 길이·구성)은 여기서 단일하게 검증한다.
+// 막고, 실제 정책(최소 길이)은 여기서 단일하게 검증한다.
 //
-// 정책: 최소 8자 + 영문자 1자 이상 + 숫자 1자 이상.
+// 정책: 최소 4자.
 
-export const PASSWORD_MIN_LENGTH = 8;
-export const PASSWORD_POLICY_HINT = '8자 이상, 영문과 숫자를 각각 1자 이상 포함';
+export const PASSWORD_MIN_LENGTH = 4;
+export const PASSWORD_POLICY_HINT = '4자 이상';
 
 export type PasswordPolicyResult = { ok: boolean; message?: string };
 
@@ -19,12 +19,6 @@ export function validatePasswordPolicy(password: string): PasswordPolicyResult {
       ok: false,
       message: `비밀번호는 ${PASSWORD_MIN_LENGTH}자 이상이어야 합니다.`,
     };
-  }
-  if (!/[A-Za-z]/.test(password)) {
-    return { ok: false, message: '비밀번호에 영문자를 1자 이상 포함해야 합니다.' };
-  }
-  if (!/[0-9]/.test(password)) {
-    return { ok: false, message: '비밀번호에 숫자를 1자 이상 포함해야 합니다.' };
   }
   return { ok: true };
 }
