@@ -626,7 +626,11 @@ export default function CollaborativeEditor({
       if (cancelled || seededRef.current === pageId) return;
       seededRef.current = pageId;
       const frag = ydoc.getXmlFragment("default");
-      if (frag.length === 0 && initialMarkdown) {
+      // 이중 가드: Yjs fragment 가 비어 있고, 에디터 본문도 비어 있을 때만 seed.
+      //   에디터에 이미 내용이 있으면 IndexedDB/서버에서 로드된 것이므로
+      //   재삽입하지 않아 본문 중복을 방지한다.
+      const editorEmpty = editor.isEmpty;
+      if (frag.length === 0 && editorEmpty && initialMarkdown) {
         // Cycle 57 — JSON / markdown 자동 분기.
         editor.commands.setContent(parseContent(initialMarkdown), false);
       }

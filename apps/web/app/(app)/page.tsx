@@ -256,14 +256,17 @@ export default function HomePage() {
   // Cycle 84 followup 4 — draftContent 가 published content 와 동일하면 '실질적
   //   변경 없음' 으로 간주(false). 발행 직후 에디터 unmount cleanup 이 동일 내용을
   //   draft 로 다시 PATCH 하는 phantom-draft 경우를 흡수.
+  // ★ 편집 모드에서는 hasDraft를 끄지 않음 — 사용자가 계속 편집 중이면
+  //   업데이트 버튼이 활성 상태여야 함. 조회 모드(발행 직후)에서만 리셋.
   useEffect(() => {
     if (!currentPage) {
       setHasDraft(false);
       return;
     }
+    if (isBodyEditable) return; // 편집 중에는 hasDraft 유지
     const dc = currentPage.draftContent;
     setHasDraft(dc != null && dc !== currentPage.content);
-  }, [currentPage]);
+  }, [currentPage, isBodyEditable]);
 
   // 자동저장 성공 → draft 존재. (currentPage는 자동저장으로 갱신되지 않으므로
   // saveStatus 전이로 보강한다.)
