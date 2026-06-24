@@ -16,10 +16,6 @@ import SpaceAvatar from "@/components/SpaceAvatar";
 
 type SubItem = { id: string; label: string };
 
-const DISCOVER_ITEMS: SubItem[] = [
-  { id: "updates", label: "모든 변경사항" },
-];
-
 const MYWORK_ITEMS: SubItem[] = [
   { id: "recent", label: "최근 작업" },
   { id: "visited", label: "최근 방문" },
@@ -39,13 +35,7 @@ function ViewIcon({ id }: { id: string }) {
     strokeLinejoin: "round" as const,
   };
   switch (id) {
-    case "updates": // 모든 변경사항 — activity
-      return (
-        <svg {...common}>
-          <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
-        </svg>
-      );
-    case "recent": // 최근 작업 — edit
+case "recent": // 최근 작업 — edit
       return (
         <svg {...common}>
           <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
@@ -111,7 +101,7 @@ export default function SystemSidebar({
 }) {
   const router = useRouter();
   const params = useSearchParams();
-  const currentView = params.get("view") ?? "updates";
+  const currentView = params.get("view") ?? "recent";
 
   const { data: spacesData } = useQuery<SpaceWithPages[]>({
     queryKey: ["spaces"],
@@ -135,7 +125,7 @@ export default function SystemSidebar({
 
   // ── 접힌 모드 — 아이콘 전용 (56px) ─────────────────────────────────────
   if (collapsed) {
-    const allItems = [...DISCOVER_ITEMS, ...MYWORK_ITEMS];
+    const allItems = [...MYWORK_ITEMS];
     return (
       <aside className="w-14 shrink-0 bg-[#f4f5f7] border-r border-[#dfe1e6] h-full overflow-y-auto flex flex-col items-center py-3 gap-1 pb-12">
         {allItems.map((item) => {
@@ -180,17 +170,7 @@ export default function SystemSidebar({
   // ── 펼친 모드 — 라벨 포함 (260px) ──────────────────────────────────────
   return (
     <aside className="w-[260px] shrink-0 bg-[#f4f5f7] border-r border-[#dfe1e6] h-full overflow-y-auto flex flex-col">
-      {/* 발견 */}
-      <SectionHeader>발견</SectionHeader>
-      <div className="px-2 space-y-0.5">
-        {DISCOVER_ITEMS.map((s) => (
-          <SubItemLink key={s.id} view={s.id} active={currentView === s.id}>
-            {s.label}
-          </SubItemLink>
-        ))}
-      </div>
-
-      {/* 내 작업 */}
+{/* 내 작업 */}
       <SectionHeader>내 작업</SectionHeader>
       <div className="px-2 space-y-0.5">
         {MYWORK_ITEMS.map((s) => (

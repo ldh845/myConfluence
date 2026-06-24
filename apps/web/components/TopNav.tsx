@@ -13,12 +13,14 @@ import SpaceAvatar from "@/components/SpaceAvatar";
 import CreatePageDialog from "@/components/CreatePageDialog";
 import NotificationBellButton from "@/components/NotificationBellButton";
 import AppIcon from "@/components/AppIcon";
+import LauncherMenuButton, { type AppLauncherItem } from "@/components/LauncherMenuButton";
 
 type Props = {
   spaces: SpaceWithPages[];
   activeSpaceId: string | null;
   onSelectSpace: (id: string) => void;
   onCreateSpace: () => void;
+  launcherItems: AppLauncherItem[];
 };
 
 export default function TopNav({
@@ -26,7 +28,9 @@ export default function TopNav({
   activeSpaceId,
   onSelectSpace,
   onCreateSpace,
+  launcherItems,
 }: Props) {
+  const { user } = useAuth();
   // Cycle 31 — 검색 오버레이. 검색창 클릭 또는 Ctrl/Cmd+K 로 열림.
   const [searchOpen, setSearchOpen] = useState(false);
 
@@ -43,6 +47,7 @@ export default function TopNav({
 
   return (
     <header className="relative z-50 h-14 shrink-0 flex items-center gap-4 px-4 bg-white border-b border-[#dfe1e6]">
+      <LauncherMenuButton items={launcherItems} isAdmin={user?.role === "ADMIN"} />
       {/* FR-130 (Cycle 22) — 로고 클릭 시 홈으로. /home에 이미 있을 때도 full reload. */}
       <a
         href="/home"
@@ -59,12 +64,12 @@ export default function TopNav({
         <div className="shrink-0">
           <AppIcon name="space" size={28} alt="DocSpace" />
         </div>
-        <span className="font-semibold text-[#172b4d] whitespace-nowrap">
-          Doc<span className="text-[#0052cc]">Space</span>
-        </span>
-      </a>
+<span className="font-semibold text-[#172b4d] whitespace-nowrap">
+            Doc<span className="text-[#0052cc]">Space</span>
+          </span>
+        </a>
 
-      <nav className="flex items-center gap-1 text-sm text-[#172b4d]">
+        <nav className="flex items-center gap-1 text-sm text-[#172b4d]">
         <SpaceCombobox
           spaces={spaces}
           activeSpaceId={activeSpaceId}
@@ -142,7 +147,7 @@ function AdminGearButton() {
 
   if (user?.role !== "ADMIN") return null;
 
-  const go = (tab: "general" | "users" | "groups") => {
+  const go = (tab: "general" | "users" | "groups" | "launcher") => {
     setOpen(false);
     router.push(`/admin?tab=${tab}`);
   };
@@ -457,7 +462,7 @@ function ChangePasswordDialog({ onClose }: { onClose: () => void }) {
                 className="mt-1 w-full px-3 py-2 text-[13px] border border-[#dfe1e6] rounded focus:outline-none focus:border-[#0052cc]"
               />
               <span className="block mt-1 text-[11px] text-[#6b778c]">
-                8자 이상, 영문과 숫자를 각각 1자 이상 포함
+                4자 이상
               </span>
             </label>
             <label className="block">
@@ -499,7 +504,17 @@ function ChangePasswordDialog({ onClose }: { onClose: () => void }) {
 
 // Cycle 29 — 공간 드롭다운. 버튼은 "공간"만 표시.
 // 드롭다운: "최근에 사용한 공간" 목록(최대 5) + "공간 목록"(/spaces) + "공간 만들기".
-function SpaceCombobox({ spaces, onSelectSpace, onCreateSpace }: Props) {
+function SpaceCombobox({
+  spaces,
+  activeSpaceId,
+  onSelectSpace,
+  onCreateSpace,
+}: {
+  spaces: SpaceWithPages[];
+  activeSpaceId: string | null;
+  onSelectSpace: (id: string) => void;
+  onCreateSpace: () => void;
+}) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 

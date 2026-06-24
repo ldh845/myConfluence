@@ -20,6 +20,10 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useIdentity } from "@/lib/useIdentity";
 import PageVersionDiff from "@/components/PageVersionDiff";
+import {
+  contentToPreview,
+  contentToReadableLines,
+} from "@/lib/content-text";
 
 // FR-061 / FR-063 — 페이지 버전 히스토리 + 원복 다이얼로그.
 // 비교(FR-062), 보관 정책(FR-064)은 다음 사이클.
@@ -127,6 +131,11 @@ export default function PageVersionHistory({
               // 목록은 version DESC. 직전 버전은 한 칸 뒤(i+1).
               const previous = data[i + 1];
               const isOldest = !previous;
+              const contentLines = contentToReadableLines(v.content);
+              const oldContentLines = contentToReadableLines(previous?.content ?? "");
+              const contentText = contentLines.join("\n");
+              const oldContentText = oldContentLines.join("\n");
+              const contentChars = contentLines.reduce((sum, line) => sum + line.length, 0);
               return (
                 <article
                   key={v.id}
@@ -154,9 +163,13 @@ export default function PageVersionHistory({
                   )}
                   {v.content && (
                     <p className="mt-2 text-[12px] text-[#42526e] whitespace-pre-wrap line-clamp-3">
-                      {v.content.slice(0, 100)}
-                      {v.content.length > 100 ? "…" : ""}
+                      {contentToPreview(v.content)}
                     </p>
+                  )}
+                  {contentChars > 0 && (
+                    <div className="mt-1 text-[11px] text-[#6b778c]">
+                      본문 약 {contentChars.toLocaleString()}자 분석
+                    </div>
                   )}
                   <div className="mt-2 flex justify-end gap-1.5">
                     <button
@@ -184,8 +197,10 @@ export default function PageVersionHistory({
                       </div>
                     ) : (
                       <PageVersionDiff
-                        oldContent={previous.content}
-                        newContent={v.content}
+                        oldTitle={previous.title}
+                        newTitle={v.title}
+                        oldText={oldContentText}
+                        newText={contentText}
                       />
                     ))}
                 </article>

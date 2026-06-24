@@ -452,6 +452,19 @@ model AppConfig {
   updatedAt        DateTime @updatedAt
 }
 
+// Cycle L1 (feature/ldh) — 전사 바로가기/응용 프로그램 탐색기 항목.
+// 관리자만 추가/수정/삭제/순서를 변경하며, logged-in user는 관리자 설정 목록만 조회한다.
+model AppLauncherItem {
+  id          String   @id @default(cuid())
+  name        String
+  url         String
+  position    Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([position])
+}
+
 // Cycle 53 — '나중을 위해 저장' (Confluence Save for later).
 // 사용자 한 명이 같은 페이지를 한 번만 저장(@@id composite). 토글은 idempotent
 // upsert/deleteMany. 페이지 / 사용자 삭제 시 함께 정리(Cascade — 본인 데이터).

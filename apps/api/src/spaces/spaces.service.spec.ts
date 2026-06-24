@@ -23,30 +23,49 @@ describe('SpacesService — members (Cycle 74-C)', () => {
   let prismaMock: {
     spaceMember: {
       findUnique: jest.Mock;
+      findMany: jest.Mock;
       count: jest.Mock;
       update: jest.Mock;
       delete: jest.Mock;
       upsert: jest.Mock;
     };
-    user: { findUnique: jest.Mock };
+    spaceMemberGroup: { findMany: jest.Mock };
+    group: { findMany: jest.Mock };
+    user: {
+      findUnique: jest.Mock;
+      findMany: jest.Mock;
+    };
   };
 
   beforeEach(async () => {
     prismaMock = {
       spaceMember: {
         findUnique: jest.fn(),
+        findMany: jest.fn(),
         count: jest.fn(),
         update: jest.fn().mockResolvedValue({}),
         delete: jest.fn().mockResolvedValue({}),
         upsert: jest.fn().mockResolvedValue({}),
       },
-      user: { findUnique: jest.fn().mockResolvedValue({ id: 'u-1' }) },
+      spaceMemberGroup: { findMany: jest.fn() },
+      group: { findMany: jest.fn() },
+      user: {
+        findUnique: jest.fn().mockResolvedValue({ id: 'u-1' }),
+        findMany: jest.fn(),
+      },
     };
     const permsMock = {
       // canManage 통과로 가정(권한 매트릭스는 space-permission spec 이 검증).
       assertCanManage: jest.fn().mockResolvedValue({
         space: { id: 's', visibility: 'PUBLIC', ownerId: null },
         role: 'ADMIN',
+      }),
+      maxSpaceRole: jest.fn((
+        a: 'ADMIN' | 'EDITOR' | 'VIEWER' | null,
+        b: 'ADMIN' | 'EDITOR' | 'VIEWER' | null,
+      ) => {
+        const rank = { null: 0, VIEWER: 1, EDITOR: 2, ADMIN: 3 };
+        return rank[b] > rank[a] ? b : a;
       }),
     };
     const module: TestingModule = await Test.createTestingModule({
@@ -119,9 +138,55 @@ describe('SpacesService — members (Cycle 74-C)', () => {
       service.updateMemberRole('s', 'nope', 'VIEWER', ADMIN),
     ).rejects.toBeInstanceOf(NotFoundException);
   });
+
+  it('listManagers → SpaceMember와 SpaceMemberGroup 관리자를 반환', async () => {
+    prismaMock.spaceMember.findMany
+      .mockResolvedValueOnce([
+        { userId: 'u-admin', role: 'ADMIN' },
+        { userId: 'u-editor', role: 'EDITOR' },
+      ])
+      .mockResolvedValueOnce([{ userId: 'u-editor', role: 'EDITOR' }]);
+    prismaMock.spaceMemberGroup.findMany.mockResolvedValueOnce([
+      { groupId: 'g-admin' },
+    ]);
+    prismaMock.user.findMany
+      .mockResolvedValueOnce([{ id: 'u-admin' }, { id: 'u-editor' }])
+      .mockResolvedValueOnce([
+        { id: 'u-admin', name: 'Admin', email: 'admin@example.test' },
+        { id: 'u-editor', name: 'Editor', email: null },
+      ]);
+
+    const result = await service.listManagers('s');
+
+    expect(prismaMock.spaceMember.findMany).toHaveBeenCalledWith({
+      where: { spaceId: 's', role: 'ADMIN' },
+      orderBy: [{ role: 'asc' }, { createdAt: 'asc' }],
+      select: { userId: true, role: true },
+    });
+    expect(prismaMock.spaceMemberGroup.findMany).toHaveBeenCalledWith({
+      where: { spaceId: 's', role: 'ADMIN' },
+      select: { groupId: true },
+    });
+    expect(prismaMock.user.findMany).toHaveBeenCalledWith({
+      where: {
+        groupMemberships: {
+          some: { groupId: { in: ['g-admin'] } },
+        },
+      },
+      select: { id: true },
+    });
+    expect(prismaMock.user.findMany).toHaveBeenLastCalledWith({
+      where: { id: { in: ['u-admin', 'u-editor'] } },
+      orderBy: [{ id: 'asc' }],
+      select: { id: true, name: true, email: true },
+    });
+    expect(result).toEqual([
+      { id: 'u-admin', name: 'Admin', email: 'admin@example.test', role: 'ADMIN' },
+      { id: 'u-editor', name: 'Editor', email: null, role: 'ADMIN' },
+    ]);
+  });
 });
 
-// Cycle 74-F — 사이드바 바로가기: 외부 URL 스킴 검증 + reorder.
 describe('SpacesService — shortcuts (Cycle 74-F)', () => {
   let service: SpacesService;
   let prismaMock: {
@@ -386,7 +451,10 @@ describe('SpacesService — create 부서 기본 정책 (Cycle L10)', () => {
       // create 의 트랜잭션은 통째로 모킹(콜백 미실행) — 부서 정책 분기만 검증.
       $transaction: jest
         .fn()
-        .mockResolvedValue({ space: { id: 'sp-new' }, homePage: { id: 'hp', title: 'Main Page' } }),
+        .mockResolvedValue({
+          space: { id: 'sp-new' },
+          homePage: { id: 'hp', title: 'Main Page' },
+        }),
     };
     deptMock = {
       resolveOrCreateDepartmentGroup: jest
@@ -397,7 +465,10 @@ describe('SpacesService — create 부서 기본 정책 (Cycle L10)', () => {
       providers: [
         SpacesService,
         { provide: PrismaService, useValue: prismaMock },
-        { provide: ActivitiesService, useValue: { log: jest.fn().mockResolvedValue(undefined) } },
+        {
+          provide: ActivitiesService,
+          useValue: { log: jest.fn().mockResolvedValue(undefined) },
+        },
         {
           provide: SpacePermissionService,
           useValue: { assertCanManage: jest.fn() },
@@ -411,7 +482,9 @@ describe('SpacesService — create 부서 기본 정책 (Cycle L10)', () => {
   it('기본(옵션 미지정) + 생성자 department 있음 → 부서 그룹 EDITOR 부여', async () => {
     prismaMock.user.findUnique.mockResolvedValue({ department: '플랫폼' });
     await service.create({ name: '새 공간' }, ACTOR);
-    expect(deptMock.resolveOrCreateDepartmentGroup).toHaveBeenCalledWith('플랫폼');
+    expect(deptMock.resolveOrCreateDepartmentGroup).toHaveBeenCalledWith(
+      '플랫폼',
+    );
     expect(prismaMock.spaceMemberGroup.upsert).toHaveBeenCalledWith({
       where: { spaceId_groupId: { spaceId: 'sp-new', groupId: 'g-dept' } },
       update: {},
@@ -421,7 +494,10 @@ describe('SpacesService — create 부서 기본 정책 (Cycle L10)', () => {
 
   it('applyDepartmentDefault:false → 부서 그룹 부여 안 함', async () => {
     prismaMock.user.findUnique.mockResolvedValue({ department: '플랫폼' });
-    await service.create({ name: '새 공간', applyDepartmentDefault: false }, ACTOR);
+    await service.create(
+      { name: '새 공간', applyDepartmentDefault: false },
+      ACTOR,
+    );
     expect(deptMock.resolveOrCreateDepartmentGroup).not.toHaveBeenCalled();
     expect(prismaMock.spaceMemberGroup.upsert).not.toHaveBeenCalled();
   });

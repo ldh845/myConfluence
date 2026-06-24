@@ -10,13 +10,15 @@ import {
 } from "@/components/ui/dialog";
 import {
   STATUS_COLORS,
+  isStatusColor,
   type StatusColorKey,
 } from "@/lib/tiptap/status-badge";
-import AppIcon from "@/components/AppIcon";
+import { useEditorUiStore } from "@/lib/stores/useEditorUiStore";
 
 // Cycle 85 — '상태' 매크로 삽입 다이얼로그.
 //   좌측: 제목 입력 + 색상 선택. 우측: 미리보기(새로고침 버튼).
 //   '삽입' 클릭 시 editor 에 statusBadge 노드 삽입.
+// Cycle 89 — 더블클릭 편집 지원: editingStatusAttrs 있으면 기존 노드 업데이트.
 
 const COLOR_KEYS: StatusColorKey[] = [
   "gray",
@@ -36,6 +38,9 @@ export default function StatusMacroDialog({
   onOpenChange: (v: boolean) => void;
   editor: Editor | null;
 }) {
+  const editingAttrs = useEditorUiStore((s) => s.editingStatusAttrs);
+  const isEditing = !!editingAttrs;
+
   const [text, setText] = useState("");
   const [color, setColor] = useState<StatusColorKey>("gray");
   // 미리보기 새로고침용 — 키 변경으로 강제 리렌더.
@@ -43,25 +48,53 @@ export default function StatusMacroDialog({
 
   useEffect(() => {
     if (open) {
-      setText("");
-      setColor("gray");
+      if (editingAttrs) {
+        // 편집 모드: 기존 값으로 프리필
+        setText(editingAttrs.text);
+        setColor(isStatusColor(editingAttrs.color) ? editingAttrs.color : "gray");
+      } else {
+        setText("");
+        setColor("gray");
+      }
       setPreviewKey(0);
     }
-  }, [open]);
+  }, [open, editingAttrs]);
 
   const c = STATUS_COLORS[color];
 
-  const insert = () => {
+  const submit = () => {
     const t = text.trim();
     if (!t || !editor) return;
-    editor
-      .chain()
-      .focus()
-      .insertContent({
-        type: "statusBadge",
-        attrs: { text: t, color },
-      })
-      .run();
+
+    if (isEditing && editingAttrs) {
+      // 편집: 기존 노드 속성 업데이트
+      const { pos } = editingAttrs;
+      editor
+        .chain()
+        .focus()
+        .command(({ tr }) => {
+          const node = tr.doc.nodeAt(pos);
+          if (node && node.type.name === "statusBadge") {
+            tr.setNodeMarkup(pos, undefined, {
+              ...node.attrs,
+              text: t,
+              color,
+            });
+          }
+          return true;
+        })
+        .run();
+    } else {
+      // 삽입: 새 노드 추가
+      editor
+        .chain()
+        .focus()
+        .insertContent({
+          type: "statusBadge",
+          attrs: { text: t, color },
+        })
+        .run();
+    }
     onOpenChange(false);
   };
 
@@ -69,7 +102,7 @@ export default function StatusMacroDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>상태 매크로</DialogTitle>
+          <DialogTitle>{isEditing ? "상태 매크로 편집" : "상태 매크로"}</DialogTitle>
         </DialogHeader>
 
         <div className="flex gap-4">
@@ -86,7 +119,7 @@ export default function StatusMacroDialog({
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
                     e.preventDefault();
-                    insert();
+                    submit();
                   }
                 }}
                 maxLength={40}
@@ -142,7 +175,6 @@ export default function StatusMacroDialog({
                 className="inline-flex items-center gap-1 px-2 py-0.5 rounded-[3px] text-[11px] font-semibold uppercase tracking-wide leading-none"
                 style={{ backgroundColor: c.bg, color: c.text }}
               >
-                <AppIcon name="tag" size={12} alt="상태" />
                 {text.trim() || "상태"}
               </span>
             </div>
@@ -159,11 +191,11 @@ export default function StatusMacroDialog({
           </button>
           <button
             type="button"
-            onClick={insert}
+            onClick={submit}
             disabled={!text.trim() || !editor}
             className="px-3 py-1.5 text-[12px] rounded bg-[#0052cc] text-white hover:bg-[#0747a6] disabled:bg-[#a5adba] disabled:cursor-not-allowed"
           >
-            삽입
+            {isEditing ? "수정" : "삽입"}
           </button>
         </div>
       </DialogContent>

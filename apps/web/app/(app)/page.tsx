@@ -33,7 +33,7 @@ import type {
   PresenceUser,
   SaveStatus,
 } from "@/components/CollaborativeEditor";
-import type { PageFull, SpaceWithPages } from "@/lib/types";
+import type { PageFull, SpaceManagerSummary, SpaceWithPages } from "@/lib/types";
 import type { Editor } from "@tiptap/react";
 
 const CollaborativeEditor = dynamic(
@@ -89,6 +89,7 @@ export default function HomePage() {
   }, [queryClient]);
 
   const [currentPage, setCurrentPage] = useState<PageFull | null>(null);
+  const [deniedSpaceId, setDeniedSpaceId] = useState<string | null>(null);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [presence, setPresence] = useState<PresenceUser[]>([]);
   // FR-054 (Cycle 26) — 협업 연결 상태(헤더 뱃지/배너용).
@@ -190,11 +191,18 @@ export default function HomePage() {
     const r = await fetch(`/api/pages/${pageId}`);
     if (r.status === 403) {
       setCurrentPage(null);
+      const currentSpaces = spaces ?? [];
+      const pageSpaceId =
+        spaceIdFromUrl ??
+        currentSpaces.find((s) => s.pages.some((p) => p.id === pageId))?.id ??
+        null;
+      setDeniedSpaceId(pageSpaceId);
       setAccessDenied(true);
       return;
     }
     const p = r.ok ? ((await r.json()) as PageFull) : null;
     setCurrentPage(p);
+    setDeniedSpaceId(null);
     setAccessDenied(false);
   }, []);
 
@@ -215,6 +223,7 @@ export default function HomePage() {
     // loadCurrentPage 가 도착하기 전 1프레임 동안 stale한 이전 페이지가
     // FullScreenEditor에 그대로 박혀 "전혀 안 바뀐 듯한 깜빡임"으로 보인다.
     setCurrentPage(null);
+    setDeniedSpaceId(null);
     setAccessDenied(false);
     if (!selectedPageId) {
       return;
@@ -247,14 +256,17 @@ export default function HomePage() {
   // Cycle 84 followup 4 — draftContent 가 published content 와 동일하면 '실질적
   //   변경 없음' 으로 간주(false). 발행 직후 에디터 unmount cleanup 이 동일 내용을
   //   draft 로 다시 PATCH 하는 phantom-draft 경우를 흡수.
+  // ★ 편집 모드에서는 hasDraft를 끄지 않음 — 사용자가 계속 편집 중이면
+  //   업데이트 버튼이 활성 상태여야 함. 조회 모드(발행 직후)에서만 리셋.
   useEffect(() => {
     if (!currentPage) {
       setHasDraft(false);
       return;
     }
+    if (isBodyEditable) return; // 편집 중에는 hasDraft 유지
     const dc = currentPage.draftContent;
     setHasDraft(dc != null && dc !== currentPage.content);
-  }, [currentPage]);
+  }, [currentPage, isBodyEditable]);
 
   // 자동저장 성공 → draft 존재. (currentPage는 자동저장으로 갱신되지 않으므로
   // saveStatus 전이로 보강한다.)
@@ -458,20 +470,36 @@ export default function HomePage() {
   }, [currentPage, toggleEditMode]);
 
   // PageHeader breadcrumb / WelcomeBanner / CopyPageDialog가 참조하는 활성 스페이스.
-  // 우선순위: URL의 spaceId > currentPage.spaceId > 첫 스페이스.
+  // 우선순위: 접근 차단이 발생한 페이지가 있던 spaceId > URL의 spaceId > currentPage.spaceId > 첫 스페이스.
   // 빈 스페이스(/?spaceId=Y, currentPage=null)에서도 사용자가 클릭한 그 스페이스를 표시한다.
   const activeSpace = useMemo<SpaceWithPages | null>(
     () => {
-      if (spaceIdFromUrl) {
-        const sp = spaces.find((s) => s.id === spaceIdFromUrl);
+      const preferredSpaceId =
+        deniedSpaceId ?? spaceIdFromUrl ?? currentPage?.spaceId;
+      if (preferredSpaceId) {
+        const sp = spaces.find((s) => s.id === preferredSpaceId);
         if (sp) return sp;
       }
-      return (
-        spaces.find((s) => s.id === currentPage?.spaceId) ?? spaces[0] ?? null
-      );
+      return spaces[0] ?? null;
     },
-    [spaces, currentPage, spaceIdFromUrl],
+    [spaces, currentPage, deniedSpaceId, spaceIdFromUrl],
   );
+  const managerSpaceId =
+    deniedSpaceId ?? spaceIdFromUrl ?? activeSpace?.id ?? null;
+
+  const { data: spaceManagers } = useQuery<SpaceManagerSummary[]>({
+    queryKey: ["space-managers", managerSpaceId],
+    queryFn: async () => {
+      if (!managerSpaceId) return [];
+      const res = await fetch(`/api/spaces/${managerSpaceId}/managers`);
+      if (!res.ok) return [];
+      return (await res.json()) as SpaceManagerSummary[];
+    },
+    enabled:
+      !!managerSpaceId &&
+      (accessDenied || activeSpace?.canView === false || !activeSpace),
+    staleTime: 1000 * 60 * 5,
+  });
 
   // Cycle 34 — FullScreenEditor breadcrumb. 현재 페이지를 제외한 조상 체인.
   // PageHeader.buildBreadcrumb과 같은 BFS-up 로직(페이지 트리에서 parentId를 따라 올라감).
@@ -618,10 +646,11 @@ export default function HomePage() {
         onPresenceChange={setPresence}
         onSelectAncestor={selectPage}
         onContentChange={() => setHasDraft(true)}
-        // Cycle 86 fix3 — Ctrl/Cmd+S → 페이지 발행. 발행 노트 없이 즉시(서버가 draft 승격).
-        //   발행 버튼의 disabled 조건과 동일하게 가드.
-        onSaveShortcut={() => {
-          if (hasDraft && !publish.isPending) handlePublish();
+        // Cycle 86 fix3 — Ctrl/Cmd+S → 페이지 발행.
+        //   CollaborativeEditor가 에디터 JSON content를 전달하므로
+        //   서버 draft 승격 대신 클라이언트가 권위 있는 본문을 직접 넘김.
+        onSaveShortcut={(editorContent: string) => {
+          if (hasDraft && !publish.isPending) handlePublish(editorContent);
         }}
       />
     );
@@ -648,7 +677,38 @@ export default function HomePage() {
                 접근 권한이 없습니다
               </div>
               <div className="text-[13px] text-[#6b778c]">
-                이 공간에 대한 열람 권한이 없습니다. 공간 관리자에게 권한을 요청하세요.
+                이 공간에 대한 열람 권한이 없습니다.
+              </div>
+              <div className="mt-4 rounded-md border border-[#dfe1e6] bg-white px-4 py-3 text-left text-[13px] leading-snug text-[#42526e]">
+                <div className="mb-2 font-medium text-[#172b4d]">
+                  이 공간의 관리자
+                </div>
+                {spaceManagers ? (
+                  spaceManagers?.length > 0 ? (
+                    <ul>
+                      {spaceManagers?.map((manager) => (
+                        <li
+                          key={manager.id}
+                          className="border-t border-[#dfe1e6] pt-2 last:border-b last:pb-2"
+                        >
+                          <div className="flex items-center gap-2">
+                            {manager.name}
+                            <span className="rounded-full bg-[#deebff] px-2 py-0.5 text-[10px] font-medium text-[#0052cc]">
+                              공간 관리자
+                            </span>
+                          </div>
+                          <div className="break-words text-[12px] text-[#6b778c]">
+                            {manager.email ?? '이메일 없음'}
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <div>등록된 관리자가 없습니다.</div>
+                  )
+                ) : (
+                  <div>관리자를 불러오는 중입니다.</div>
+                )}
               </div>
             </div>
           ) :
@@ -711,9 +771,9 @@ export default function HomePage() {
                   onEditor={setEditor}
                   onConnectionStateChange={setConnectionState}
                   // Cycle 86 fix2 — 본문에서 Ctrl/Cmd+S → 페이지 발행(handlePublish).
-                  //   발행 버튼의 disabled 조건(!hasDraft || publishing) 과 동일하게 가드.
-                  onSaveShortcut={() => {
-                    if (hasDraft && !publish.isPending) handlePublish();
+                  //   CollaborativeEditor가 에디터 JSON content를 전달.
+                  onSaveShortcut={(editorContent: string) => {
+                    if (hasDraft && !publish.isPending) handlePublish(editorContent);
                   }}
                 />
                 {/* Cycle 63 followup — 조회 화면에서 다이어그램/첨부파일 별도

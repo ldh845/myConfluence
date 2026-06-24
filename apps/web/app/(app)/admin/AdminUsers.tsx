@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth/useAuth";
 
@@ -13,7 +13,8 @@ import { useAuth } from "@/lib/auth/useAuth";
 //   생성/비번 설정 다이얼로그에 비밀번호 정책 힌트.
 // SSO 계정의 생성/역할은 여전히 Keycloak 이 source — 안내 배너로 병기.
 
-const PASSWORD_HINT = "8자 이상, 영문과 숫자를 각각 1자 이상 포함";
+const PASSWORD_HINT = "4자 이상";
+const PAGE_SIZE = 15;
 
 type AdminUser = {
   id: string;
@@ -51,9 +52,20 @@ export default function AdminUsers() {
   const [showCreate, setShowCreate] = useState(false);
   // 비밀번호 설정/초기화 대상 사용자 (null = 닫힘).
   const [pwTarget, setPwTarget] = useState<AdminUser | null>(null);
+  const [page, setPage] = useState(0);
 
-  const refresh = () =>
+  const refresh = () => {
+    setPage(0);
     queryClient.invalidateQueries({ queryKey: ["admin-users"] });
+  };
+
+  const totalCount = data?.length ?? 0;
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages - 1);
+  const paged = useMemo(() => {
+    if (!data) return [];
+    return data.slice(safePage * PAGE_SIZE, safePage * PAGE_SIZE + PAGE_SIZE);
+  }, [data, safePage]);
 
   const setActive = useMutation<void, Error, { id: string; isActive: boolean }>(
     {
@@ -109,6 +121,32 @@ export default function AdminUsers() {
     onSuccess: refresh,
     onError: (err) => window.alert(err.message),
   });
+
+  // Cycle 89 — 로컬 전용 계정 삭제.
+  const deleteUser = useMutation<void, Error, string>({
+    mutationFn: async (id) => {
+      const r = await fetch(`/api/admin/users/${id}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (!r.ok) {
+        const body = (await r.json().catch(() => ({}))) as { message?: string };
+        throw new Error(body.message ?? "삭제 실패");
+      }
+    },
+    onSuccess: refresh,
+    onError: (err) => window.alert(err.message),
+  });
+
+  const handleDelete = (u: AdminUser) => {
+    if (
+      !window.confirm(
+        `'${u.name}(@${u.username})' 계정을 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.`
+      )
+    )
+      return;
+    deleteUser.mutate(u.id);
+  };
 
   const changeRole = (u: AdminUser, role: string) => {
     if (role === u.role) return;
@@ -189,7 +227,7 @@ export default function AdminUsers() {
               </tr>
             </thead>
             <tbody>
-              {data.map((u) => (
+              {paged.map((u) => (
                 <tr key={u.id} className="border-t border-[#dfe1e6]">
                   <td className="px-3 py-2 text-[#172b4d]">
                     {u.name}
@@ -308,6 +346,17 @@ export default function AdminUsers() {
                       >
                         {u.isActive ? "비활성화" : "활성화"}
                       </button>
+                      {!u.isSso && (
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(u)}
+                          disabled={deleteUser.isPending}
+                          className="px-2 py-1 text-[12px] rounded border border-[#dfe1e6] text-[#6b778c] hover:bg-[#ffebe6] hover:text-[#de350b] hover:border-[#ffbdad] disabled:opacity-40"
+                          title="로컬 계정만 삭제 가능"
+                        >
+                          삭제
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -316,6 +365,47 @@ export default function AdminUsers() {
           </table>
         )}
       </div>
+
+      {/* 페이지네이션 */}
+      {totalCount > PAGE_SIZE && (
+        <div className="flex items-center justify-between text-[12px] text-[#42526e]">
+          <span>
+            전체 {totalCount}명 · {safePage + 1}/{totalPages} 페이지
+          </span>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              disabled={safePage === 0}
+              onClick={() => setPage(safePage - 1)}
+              className="px-2 py-1 rounded border border-[#dfe1e6] hover:bg-[#f4f5f7] disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              ◀ 이전
+            </button>
+            {Array.from({ length: totalPages }, (_, i) => (
+              <button
+                key={i}
+                type="button"
+                onClick={() => setPage(i)}
+                className={`w-7 h-7 rounded text-[12px] ${
+                  i === safePage
+                    ? "bg-[#0052cc] text-white font-semibold"
+                    : "hover:bg-[#f4f5f7] text-[#42526e]"
+                }`}
+              >
+                {i + 1}
+              </button>
+            ))}
+            <button
+              type="button"
+              disabled={safePage >= totalPages - 1}
+              onClick={() => setPage(safePage + 1)}
+              className="px-2 py-1 rounded border border-[#dfe1e6] hover:bg-[#f4f5f7] disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              다음 ▶
+            </button>
+          </div>
+        </div>
+      )}
 
       {showCreate && (
         <CreateLocalUserDialog
@@ -472,7 +562,7 @@ function CreateLocalUserDialog({
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
-            minLength={8}
+            minLength={4}
             maxLength={200}
             autoComplete="new-password"
             className={inputCls}
@@ -554,7 +644,7 @@ function SetPasswordDialog({
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
-            minLength={8}
+            minLength={4}
             maxLength={200}
             autoComplete="new-password"
             className={inputCls}

@@ -42,6 +42,78 @@ export class AdminService {
     });
   }
 
+  getLaunchers() {
+    return this.prisma.appLauncherItem.findMany({
+      where: { id: { not: 'singleton' } },
+      orderBy: [{ position: 'asc' }, { name: 'asc' }],
+    });
+  }
+
+  replaceLaunchers(items: { name: string; url: string; position?: number }[]) {
+    console.log('[AdminService] replaceLaunchers called with:', JSON.stringify(items));
+    return this.prisma.$transaction(async (tx) => {
+      await tx.appLauncherItem.deleteMany({
+        where: { id: { not: 'singleton' } },
+      });
+
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        console.log(`[AdminService] Creating item ${i}:`, JSON.stringify(item));
+        await tx.appLauncherItem.create({
+          data: {
+            name: item.name?.trim() || `바로가기 ${i + 1}`,
+            url: item.url?.trim() || 'https://example.com',
+            position: i,
+          },
+        });
+      }
+
+      return this.getLaunchers();
+    });
+  }
+
+  async updateLauncher(id: string, dto: { id?: string; name?: string; url?: string; position?: number }) {
+    const existing = await this.prisma.appLauncherItem.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundException({ error: 'launcher item not found' });
+
+    const name = (dto.name ?? existing.name).trim();
+    const url = dto.url ?? existing.url;
+    if (!name) throw new BadRequestException({ error: 'name is required' });
+    if (!url) throw new BadRequestException({ error: 'url is required' });
+
+    return this.prisma.appLauncherItem.update({
+      where: { id },
+      data: { name, url },
+      select: { id: true, name: true, url: true, position: true },
+    });
+  }
+
+  async deleteLauncher(id: string) {
+    if (id === 'singleton') {
+      throw new BadRequestException({
+        error: 'cannot delete default item',
+        message: '기본 항목은 삭제할 수 없습니다.',
+      });
+    }
+
+    const deleted = await this.prisma.appLauncherItem.delete({ where: { id } });
+    const orderedIds = await this.prisma.appLauncherItem.findMany({
+      orderBy: { position: 'asc' },
+      select: { id: true, name: true, url: true, position: true },
+    });
+    await this.prisma.$transaction((tx) =>
+      Promise.all(
+        orderedIds.map((item, index) =>
+          tx.appLauncherItem.update({
+            where: { id: item.id },
+            data: { position: index },
+          }),
+        ),
+      ),
+    );
+    return deleted;
+  }
+
   // Cycle L2 (feature/ldh) — 응답에 isActive + 계정 유형 플래그를 포함한다.
   //   hasLocalPassword: passwordHash 보유 여부(로컬 로그인 가능). 해시 자체는 비노출.
   //   isSso: keycloakId 보유 여부(SSO 연결). 둘 다 true 면 '혼합' 계정.
@@ -229,5 +301,38 @@ export class AdminService {
       select: { id: true, username: true },
     });
     return { ...updated, locked: false };
+  }
+
+  // Cycle 89 — 로컬 전용 계정 삭제.
+  //   SSO/혼합 계정(keycloakId 보유)은 거부 → 다음 OIDC 로그인 때 재생성되므로.
+  //   자기 자신도 거부(셀프 삭제 방지).
+  //   Prisma schema 의 onDelete 규칙에 따라 관련 데이터 자동 정리:
+  //     - SetNull: authoredPages, editedComments 등 (작성자는 null, 콘텐츠 보존)
+  //     - Cascade: spaceMemberships, groupMemberships, apiTokens 등
+  //   개인공간(ownedSpaces)은 별도 처리: 공간 자체는 보존(다른 멤버가 있을 수 있음).
+  async deleteUser(
+    userId: string,
+    requesterId: string,
+  ): Promise<{ id: string; username: string }> {
+    if (userId === requesterId) {
+      throw new BadRequestException({
+        error: 'cannot delete self',
+        message: '자기 자신은 삭제할 수 없습니다.',
+      });
+    }
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException({ error: 'user not found' });
+    }
+    if (user.keycloakId != null) {
+      throw new BadRequestException({
+        error: 'cannot delete sso account',
+        message: 'SSO 계정은 Keycloak에서 관리됩니다. 비활성화를 이용하세요.',
+      });
+    }
+    return this.prisma.user.delete({
+      where: { id: userId },
+      select: { id: true, username: true },
+    });
   }
 }
