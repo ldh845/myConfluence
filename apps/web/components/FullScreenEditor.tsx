@@ -58,8 +58,9 @@ type Props = {
   onSelectAncestor?: (id: string) => void;
   // Cycle 84 followup 5 — 사용자가 첫 입력을 한 직후(즉, 발행할 변경이 생긴 직후) 호출.
   onContentChange?: () => void;
-  // Cycle 86 fix3 — Ctrl/Cmd+S 단축키 콜백(즉시 발행 등). CollaborativeEditor 로 그대로 전달.
-  onSaveShortcut?: () => void;
+  // Cycle 86 fix3 — Ctrl/Cmd+S 단축키 콜백(즉시 발행 등).
+  //   CollaborativeEditor가 에디터 JSON content를 함께 전달.
+  onSaveShortcut?: (content: string) => void;
 };
 
 export default function FullScreenEditor({

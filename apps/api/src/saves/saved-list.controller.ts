@@ -1,4 +1,4 @@
-import { Controller, Get, Req, UseGuards } from '@nestjs/common';
+import { Controller, Get, Query, Req, UseGuards } from '@nestjs/common';
 import type { Request } from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { SavesService } from './saves.service';
@@ -11,7 +11,7 @@ export class SavedListController {
   constructor(private readonly saves: SavesService) {}
 
   @Get()
-  list(@Req() req: Request) {
-    return this.saves.listSaved(req.user!.id);
+  list(@Req() req: Request, @Query('spaceId') spaceId?: string) {
+    return this.saves.listSaved(req.user!.id, spaceId);
   }
 }
