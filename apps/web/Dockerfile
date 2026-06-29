@@ -38,7 +38,7 @@ RUN npm config set registry ${NEXUS_NPM_URL} && \
 COPY apps/web apps/web
 
 # 빌드타임 주입 값 (compose 에서 build.args 로 전달)
-ARG API_HOST=localhost
+ARG API_HOST=amadeus-docspace-api-dev
 ARG API_PORT=3001
 ARG NEXT_PUBLIC_WS_URL
 ENV API_HOST=$API_HOST
