@@ -41,9 +41,11 @@ COPY apps/web apps/web
 ARG API_HOST=amadeus-docspace-api-dev
 ARG API_PORT=3001
 ARG NEXT_PUBLIC_WS_URL
+ARG NEXT_PUBLIC_OAUTH2_LOGIN_URL
 ENV API_HOST=$API_HOST
 ENV API_PORT=$API_PORT
 ENV NEXT_PUBLIC_WS_URL=$NEXT_PUBLIC_WS_URL
+ENV NEXT_PUBLIC_OAUTH2_LOGIN_URL=$NEXT_PUBLIC_OAUTH2_LOGIN_URL
 
 # npm workspaces 는 워크스페이스(apps/web) 의존성의 실행 바이너리(next)를 해당
 # 워크스페이스의 node_modules/.bin 에 링크한다(패키지 본체만 루트로 hoist).

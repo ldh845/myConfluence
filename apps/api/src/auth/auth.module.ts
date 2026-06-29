@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
@@ -10,6 +10,7 @@ import { ApiTokenStrategy } from './api-token.strategy';
 import { ApiTokenService } from './api-token.service';
 import { ApiTokenScopeInterceptor } from './api-token-scope.interceptor';
 import { ApiTokensController } from './api-tokens.controller';
+import { Oauth2ProxyMiddleware } from './oauth2-proxy.middleware';
 import { DepartmentGroupModule } from '../department/department-group.module';
 
 @Module({
@@ -42,9 +43,21 @@ import { DepartmentGroupModule } from '../department/department-group.module';
     JwtStrategy,
     ApiTokenStrategy,
     ApiTokenService,
+    Oauth2ProxyMiddleware,
     { provide: APP_INTERCEPTOR, useClass: ApiTokenScopeInterceptor },
   ],
   // AdminModule(/admin/api-tokens)이 ApiTokenService 를 주입받을 수 있게 export.
   exports: [AuthService, ApiTokenService],
 })
-export class AuthModule {}
+export class AuthModule implements NestModule {
+  constructor(private readonly config: ConfigService) {}
+
+  configure(consumer: MiddlewareConsumer): void {
+    // AUTH_MODE=oauth2-proxy 일 때만 미들웨어 활성화.
+    // 미설정 또는 다른 값이면 기존 OIDC/로컬 로그인 흐름 유지.
+    const authMode = this.config.get<string>('AUTH_MODE', '').toLowerCase();
+    if (authMode === 'oauth2-proxy') {
+      consumer.apply(Oauth2ProxyMiddleware).forRoutes('*');
+    }
+  }
+}
