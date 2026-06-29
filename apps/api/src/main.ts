@@ -18,7 +18,10 @@ async function bootstrap() {
   // Cycle L4 followup (feature/ldh) — 권한/세션 응답의 디스크 캐시 잔재 차단.
   // 모든 JSON API 응답에 Cache-Control: no-store (파일 다운로드 라우트는 제외).
   app.use(noStore);
-  app.enableCors({ origin: 'http://localhost:3000', credentials: true });
+  app.enableCors({
+    origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
+    credentials: true,
+  });
   app.useGlobalPipes(
     new ValidationPipe({ whitelist: true, transform: true }),
   );

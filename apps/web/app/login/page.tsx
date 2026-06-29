@@ -53,8 +53,14 @@ function LoginPageInner() {
   }, []);
 
   const startSso = () => {
-    // OIDC authorization code 흐름 — 서버가 Keycloak 으로 302 리다이렉트한다.
-    window.location.href = "/api/auth/oidc/login";
+    // AUTH_MODE=oauth2-proxy 환경에서는 oauth2-proxy 표준 로그인 경로로 이동.
+    // 그 외(기본)는 기존 OIDC authorization code 흐름.
+    const oauth2LoginUrl = process.env.NEXT_PUBLIC_OAUTH2_LOGIN_URL;
+    if (oauth2LoginUrl) {
+      window.location.href = oauth2LoginUrl;
+    } else {
+      window.location.href = "/api/auth/oidc/login";
+    }
   };
 
   const submitLocal = async (e: FormEvent) => {
