@@ -12,6 +12,9 @@ import type { NextRequest } from "next/server";
 // /login 으로 redirect → 비로그인 상태로 옛 내용이 복원되는 경로를 제거.
 // 트레이드오프: 정상 사용자도 뒤로가기 시 bfcache 즉시 복원 대신 일반 로딩을 거친다
 // (보안/정확성 우선). 공개 페이지(/login)·정적 자산(_next 등)은 적용 제외.
+//
+// Cycle L-AFS — K8s oauth2-proxy 무상태 모드 지원.
+//   Ingress가 주입한 X-Auth-Request-* 헤더로 인증 판정 + API 프록시 요청에 전달.
 
 const PUBLIC_PATHS = new Set(["/login"]);
 const PUBLIC_PREFIXES = ["/share/", "/api/", "/_next/", "/static/", "/icons/"];
@@ -25,15 +28,42 @@ export function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
+  // 인증 판정:
+  //   - 상태ful: docspace_session 쿠키 존재
+  //   - 무상태(K8s oauth2-proxy): X-Auth-Request-User 헤더 존재
+  // 둘 중 하나라도 있으면 인증된 것으로 판단.
   const cookie = req.cookies.get("docspace_session");
-  if (!cookie) {
+  const oauth2User = req.headers.get("x-auth-request-user");
+  if (!cookie && !oauth2User) {
     const url = req.nextUrl.clone();
     url.pathname = "/login";
     url.searchParams.set("next", pathname);
     return NextResponse.redirect(url);
   }
+
+  // K8s oauth2-proxy 무상태 모드: Ingress가 주입한 인증 헤더를
+  // downstream(Next.js rewrites → API) 요청에도 전달.
+  // Next.js rewrites(/api/* → API 서비스)는 서버 간 요청이므로
+  // 브라우저→Ingress 헤더가 자동 전달되지 않는다.
+  // NextResponse.next({ request }) 로 요청 헤더를 수정하면
+  // rewrites가 해당 헤더를 포함하여 API로 프록시한다.
+  const requestHeaders = new Headers(req.headers);
+  if (oauth2User) {
+    requestHeaders.set("x-auth-request-user", oauth2User);
+    const preferredUsername = req.headers.get("x-auth-request-preferred-username");
+    if (preferredUsername) {
+      requestHeaders.set("x-auth-request-preferred-username", preferredUsername);
+    }
+    const userGroup = req.headers.get("x-auth-request-user-group");
+    if (userGroup) {
+      requestHeaders.set("x-auth-request-user-group", userGroup);
+    }
+  }
+
   // 인증된 보호 라우트 통과 — 캐시에 남기지 않는다(뒤로가기 잔상 차단).
-  const res = NextResponse.next();
+  const res = NextResponse.next({
+    request: { headers: requestHeaders },
+  });
   res.headers.set("Cache-Control", "no-store");
   return res;
 }
