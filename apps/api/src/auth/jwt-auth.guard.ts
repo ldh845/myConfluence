@@ -8,5 +8,9 @@ import { AuthGuard } from '@nestjs/passport';
 //   토큰 인증 시 req.user 는 쿠키 인증과 동일한 AuthUser 형태 → 기존 RolesGuard /
 //   SpacePermissionService(L5~L10)가 라우트 변경 없이 그대로 동작한다.
 //   쿠키 전용이어야 하는 라우트(토큰 관리)는 CookieAuthGuard 를 쓴다.
+// Cycle L-AFS (feature/ldh) — oauth2-proxy 무상태 전략 추가.
+//   K8s Ingress 에서 oauth2-proxy 가 주입한 헤더가 있으면 oauth2-proxy 전략이 인증.
+//   헤더 없으면 fail → 다음 전략(jwt → api-token)으로 자연 위임.
+//   AUTH_MODE 분기 불필요 — 헤더 존재 여부로 자동 분기.
 @Injectable()
-export class JwtAuthGuard extends AuthGuard(['jwt', 'api-token']) {}
+export class JwtAuthGuard extends AuthGuard(['oauth2-proxy', 'jwt', 'api-token']) {}
