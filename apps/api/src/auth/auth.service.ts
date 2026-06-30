@@ -100,6 +100,14 @@ export class AuthService {
     return user ? this.sanitize(user) : null;
   }
 
+  // K8s oauth2-proxy 무상태 전략용 경량 조회.
+  //   keycloakId(sub)로 기존 사용자를 찾아 AuthUser 로 반환.
+  //   없으면 null → 호출부(Oauth2ProxyStrategy)가 findOrCreateOidcUser 로 폴백.
+  async findByKeycloakId(keycloakId: string): Promise<AuthUser | null> {
+    const user = await this.prisma.user.findUnique({ where: { keycloakId } });
+    return user ? this.sanitize(user) : null;
+  }
+
   // Cycle L1 (feature/ldh) — 로컬 로그인(SSO 병행).
   // Cycle 43 이 경로/UI 만 제거하고 User.passwordHash 컬럼은 남겨뒀으므로, 그 위에
   // 자체 로그인을 재개한다. 성공 시 OIDC 콜백과 동일한 issueToken 으로 docspace_session

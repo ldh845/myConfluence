@@ -1,4 +1,4 @@
-import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
@@ -7,10 +7,10 @@ import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { JwtStrategy } from './jwt.strategy';
 import { ApiTokenStrategy } from './api-token.strategy';
+import { Oauth2ProxyStrategy } from './oauth2-proxy.strategy';
 import { ApiTokenService } from './api-token.service';
 import { ApiTokenScopeInterceptor } from './api-token-scope.interceptor';
 import { ApiTokensController } from './api-tokens.controller';
-import { Oauth2ProxyMiddleware } from './oauth2-proxy.middleware';
 import { DepartmentGroupModule } from '../department/department-group.module';
 
 @Module({
@@ -38,26 +38,18 @@ import { DepartmentGroupModule } from '../department/department-group.module';
   // Cycle L-API-3 — 스코프 enforcement 인터셉터를 전역 등록(APP_INTERCEPTOR).
   //   토큰 인증이 req 에 심은 authVia/tokenScope 로 READ 토큰의 쓰기를 403 차단.
   //   쿠키 인증·public 라우트엔 authVia 가 없어 no-op.
+  // Cycle L-AFS — oauth2-proxy 무상태 전략 등록. 헤더 있으면 자동 인증,
+  //   없으면 fail → 다음 전략(jwt/api-token)으로 위임. AUTH_MODE 분기 불필요.
+  //   기존 Oauth2ProxyMiddleware(상태ful 쿠키 발급)는 제거 — strategy 가 대체.
   providers: [
     AuthService,
     JwtStrategy,
     ApiTokenStrategy,
+    Oauth2ProxyStrategy,
     ApiTokenService,
-    Oauth2ProxyMiddleware,
     { provide: APP_INTERCEPTOR, useClass: ApiTokenScopeInterceptor },
   ],
   // AdminModule(/admin/api-tokens)이 ApiTokenService 를 주입받을 수 있게 export.
   exports: [AuthService, ApiTokenService],
 })
-export class AuthModule implements NestModule {
-  constructor(private readonly config: ConfigService) {}
-
-  configure(consumer: MiddlewareConsumer): void {
-    // AUTH_MODE=oauth2-proxy 일 때만 미들웨어 활성화.
-    // 미설정 또는 다른 값이면 기존 OIDC/로컬 로그인 흐름 유지.
-    const authMode = this.config.get<string>('AUTH_MODE', '').toLowerCase();
-    if (authMode === 'oauth2-proxy') {
-      consumer.apply(Oauth2ProxyMiddleware).forRoutes('*');
-    }
-  }
-}
+export class AuthModule {}
