@@ -41,7 +41,7 @@ COPY apps/web apps/web
 ARG API_HOST=amadeus-docspace-api-dev
 ARG API_PORT=3001
 ARG NEXT_PUBLIC_WS_URL
-ARG NEXT_PUBLIC_OAUTH2_LOGIN_URL=http://oauth2proxy-stage.a-sol.samsungsmartwork.net/oauth2/start?rd=https://docspace-dev.a-sol.samsungsmartwork.net/home
+ARG NEXT_PUBLIC_OAUTH2_LOGIN_URL=http://oauth2proxy-stage.a-sol.samsungsmartwork.net/oauth2/start?rd=http://docspace-dev.a-sol.samsungsmartwork.net/home
 ENV API_HOST=$API_HOST
 ENV API_PORT=$API_PORT
 ENV NEXT_PUBLIC_WS_URL=$NEXT_PUBLIC_WS_URL
